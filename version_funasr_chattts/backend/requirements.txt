@@ -1,0 +1,20 @@
+# Flask 服务
+flask>=3.0.0
+flask-socketio>=5.3.0
+flask-cors>=4.0.0
+python-socketio>=5.10.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# ASR - FunASR
+funasr>=1.0.0
+modelscope>=1.10.0
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# TTS - ChatTTS
+ChatTTS>=0.2.0
+numpy>=1.24.0
+scipy>=1.10.0
+soundfile>=0.12.0
+pydub>=0.25.1
