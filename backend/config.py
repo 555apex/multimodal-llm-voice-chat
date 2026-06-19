@@ -31,4 +31,4 @@ class Config:
     AUDIO_CHANNELS = 1
 
     # ── 服务端口 ──
-    PORT = int(os.getenv('PORT', 5000))
+    PORT = int(os.getenv('PORT', 5001))
