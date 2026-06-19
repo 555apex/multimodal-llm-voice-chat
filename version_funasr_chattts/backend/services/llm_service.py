@@ -2,6 +2,7 @@ import requests
 import json
 import logging
 from config import Config
+from skills.traffic_assistant import get_system_prompt, detect_function_call
 
 logger = logging.getLogger(__name__)
 
@@ -16,11 +17,11 @@ class LLMService:
         self.model = Config.LLM_MODEL
         self.provider = Config.LLM_PROVIDER
 
-        # 系统提示词
-        self.system_prompt = """你是一个友好、专业的AI助手。请用简洁、自然的语言回答用户的问题。
-如果用户用中文提问，请用中文回答；如果用英文提问，请用英文回答。"""
+        # 系统提示词 - 道路交通信息智能问答助手
+        self.system_prompt = get_system_prompt()
 
         logger.info(f'LLM 服务初始化: provider={self.provider}, model={self.model}, url={self.api_url}')
+        logger.info(f'已加载道路交通信息智能问答助手 Skills')
 
     def chat_stream(self, messages):
         """

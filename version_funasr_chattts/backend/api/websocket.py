@@ -3,6 +3,7 @@ from flask import request
 from services.asr_service import ASRService
 from services.llm_service import LLMService
 from services.tts_service import TTSService
+from skills.traffic_assistant import get_greeting, detect_function_call, FUNCTION_PORTS
 import logging
 import re
 import threading
@@ -166,6 +167,10 @@ def register_handlers(socketio):
         logger.info(f'客户端已连接: {client_id}')
         emit('connected', {'status': 'ok'})
 
+        # 发送开场白
+        greeting = get_greeting()
+        emit('greeting', {'content': greeting})
+
     @socketio.on('disconnect')
     def handle_disconnect():
         """客户端断开"""
@@ -258,6 +263,17 @@ def process_text_message(client_id, text):
 
     # 添加助手回复到历史
     client_histories[client_id].append({'role': 'assistant', 'content': full_response})
+
+    # 检测功能调用标记
+    function_calls = detect_function_call(full_response)
+    if function_calls:
+        logger.info(f'检测到功能调用: {function_calls}')
+        for func_name in function_calls:
+            if func_name in FUNCTION_PORTS:
+                emit('function_call', {
+                    'function': func_name,
+                    'config': FUNCTION_PORTS[func_name]
+                })
 
     emit('text_complete', {'content': full_response})
     emit('audio_done', {'success': True})

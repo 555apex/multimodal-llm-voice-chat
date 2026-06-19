@@ -92,6 +92,26 @@ export const useChatStore = defineStore('chat', () => {
       console.log('WebSocket 已断开')
     })
 
+    // 接收开场白
+    socket.value.on('greeting', (data) => {
+      console.log('收到开场白')
+      messages.value.push({
+        role: 'assistant',
+        content: data.content,
+        isGreeting: true
+      })
+    })
+
+    // 接收功能调用通知
+    socket.value.on('function_call', (data) => {
+      console.log('功能调用:', data.function)
+      functionCalls.value.push({
+        function: data.function,
+        config: data.config,
+        timestamp: Date.now()
+      })
+    })
+
     // 接收 LLM 流式文本
     socket.value.on('text_chunk', (data) => {
       isGenerating.value = true
@@ -206,6 +226,7 @@ export const useChatStore = defineStore('chat', () => {
     isSpeaking,
     isAutoRead,
     volume,
+    functionCalls,
     sendTextMessage,
     sendAudioMessage,
     toggleAutoRead,
