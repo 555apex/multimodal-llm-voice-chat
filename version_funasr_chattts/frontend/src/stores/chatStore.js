@@ -18,6 +18,9 @@ export const useChatStore = defineStore('chat', () => {
   const isAutoRead = ref(true)      // 朗读开关
   const volume = ref(0.8)           // 音量
 
+  // 功能调用记录
+  const functionCalls = ref([])
+
   // 音量变化时实时调节当前播放音频
   watch(volume, (newVol) => {
     if (currentAudioEl.value) {

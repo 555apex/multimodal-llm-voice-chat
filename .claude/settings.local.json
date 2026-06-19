@@ -8,7 +8,10 @@
       "Bash(python app.py)",
       "Bash(curl -s http://localhost:5000/health)",
       "Bash(npm run *)",
-      "Bash(curl -s http://localhost:3000)"
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
