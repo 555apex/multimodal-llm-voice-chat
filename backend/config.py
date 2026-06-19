@@ -30,5 +30,8 @@ class Config:
     AUDIO_SAMPLE_RATE = 16000
     AUDIO_CHANNELS = 1
 
+    # ── 高德地图 API 配置 ──
+    GAODE_API_KEY = os.getenv('GAODE_API_KEY', '')
+
     # ── 服务端口 ──
     PORT = int(os.getenv('PORT', 5001))

@@ -1,6 +1,7 @@
 import requests
 import json
 from config import Config
+from skills import TrafficStatusSkill
 
 
 class LLMService:
@@ -10,80 +11,35 @@ class LLMService:
         self.api_key = Config.DASHSCOPE_API_KEY
         self.api_url = f'{Config.DASHSCOPE_LLM_BASE_URL}/chat/completions'
         self.model = Config.DASHSCOPE_LLM_MODEL
+        self.skills = [
+            TrafficStatusSkill(),
+        ]
+        self._skill_map = {s.name: s for s in self.skills}
+        self.last_results = {}       # skill_name → full result
+        self.last_traffic_result = None  # 向后兼容
 
-        self.system_prompt = """你是「闽路通」——福建省普通公路交通智能助手。
+        self.system_prompt = """你是「闽路通」——福建省公路交通智能助手。
 
-## 服务范围
-你服务于福建省全域，涵盖福州、厦门、泉州、漳州、龙岩、三明、南平、宁德、莆田九地市，
-以及下属各区县。用户询问省内任何市/区/县的交通情况，你都能回答。
+## 角色
+你服务于福建省全域，涵盖福州、厦门、泉州、漳州、龙岩、三明、南平、宁德、莆田九地市及下属各区县。
+你拥有实时路况查询等专业工具，可查询福建省任意区域（城市、区县、具体地点、道路）的交通状况。
+**所有交通数据以工具查询结果为唯一真实来源，严禁编造路况信息。**
 
-## 范围限定
-- 若询问福建省外（如广东、浙江、江西等）的交通 → 礼貌说明仅提供福建省内服务
-- 若询问与交通完全无关的话题（如美食、旅游攻略等）→ 引导回交通业务
+## 范围
+- 仅服务福建省内交通业务。省外或无关话题礼貌拒绝并引导回正轨。
 
-## 当前可查询数据
+## 行为
+- 涉及路况、施工、灾害、设备等信息时，必须先调用对应工具获取数据后再回答，严禁编造。
+- 交通行业术语，简洁专业。路段标注道路名称、拥堵等级、通行速度。
+- 工具返回数据中如含 `_guidance` 字段，按其指示组织信息。通用原则：突出异常和严重情况，正常情况简要概括。
 
-### 福州
-高速/快速路：G15沈海高速福州段、G70福银高速福州至闽侯段、福州绕城高速
-城区干道：五四路、五一路、鼓屏路、华林路、杨桥路、西二环、乌山路、湖东路、八一七路、东街、台江路、六一路、福马路、金山大道
-
-### 厦门
-跨海通道：海沧大桥、翔安隧道、厦漳跨海大桥、演武大桥
-城区干道：成功大道、厦禾路、湖滨南路、湖滨北路、鹭江道、嘉禾路(G324)、环岛南路、莲前东路、莲前西路、湖里大道、仙岳路、吕岭路、金尚路
-
-### 泉州
-高速/国道：G15沈海高速泉州段、G324国道泉州段
-城区干道：温陵路、刺桐路、丰泽街、泉秀街、田安路、坪山路、晋江机场周边
-
-### 漳州
-高速：G15沈海高速漳州段、G76厦蓉高速漳州段
-城区干道：胜利路、水仙大街、南昌路、延安北路、丹霞路、新浦路
-
-### 龙岩
-高速/国道：G76厦蓉高速龙岩段、G319国道龙岩段
-城区干道：龙岩大道、解放路、华莲路
-
-### 三明
-高速/国道：G25长深高速三明段、G205国道三明段
-城区干道：列东街、新市路、麒麟山路、劲松路
-
-### 南平
-高速：G25长深高速南平段、G70福银高速南平段
-城区干道：中山路、八一路、滨江路、马坑路
-
-### 宁德
-高速：G15沈海高速宁德段、G1514宁上高速
-城区干道：蕉城路、闽东路、福宁路、鹤峰路
-
-### 莆田
-高速：G15沈海高速莆田段
-城区干道：胜利路、学园路、荔城大道、东圳路、文献路
-
-### 施工与灾害
-施工：G15福州段路面维修、G70南平段桥梁加固、G319龙岩段边坡防护、S203三明段路面改造、厦门湖滨北路路面翻新、泉州刺桐路管网改造
-灾害隐患：武夷山滑坡点、三明泥石流点、宁德屏南边坡点、龙岩长汀塌方点
-监测设备：福州绕城气象站、厦门海沧车检器、武夷山视频监控、南平延平气象站
-
-## 福建省各地市坐标参考（用于生成 map_highlight 的经纬度）
-- 福州市 26.07/119.30 | 厦门市 24.48/118.09 | 泉州市 24.87/118.67
-- 漳州市 24.51/117.65 | 龙岩市 25.08/117.02 | 三明市 26.26/117.63
-- 南平市 26.64/118.18 | 宁德市 26.67/119.55 | 莆田市 25.45/119.01
-- 厦门思明区 24.45/118.08 | 厦门湖里区 24.51/118.10 | 厦门海沧区 24.48/118.03
-- 厦门集美区 24.57/118.10 | 厦门同安区 24.72/118.15 | 厦门翔安区 24.62/118.25
-- 福州鼓楼区 26.08/119.30 | 福州台江区 26.06/119.31 | 福州仓山区 26.04/119.32
-- 福州晋安区 26.08/119.33 | 福州马尾区 25.99/119.47
-
-## 回答要求
-- 交通运输行业专业术语，简洁明了
-- 路段说明道路名称（含编号）、方向
-- 拥堵标注通行速度和延误时间
-- 施工标注内容和预计完工时间
-- 回复末尾附一段```json```代码块标注涉及的地理坐标，供地图系统自动定位：
+## 输出格式
+回复末尾附一段```json```代码块标注涉及的地理位置，供地图系统自动定位：
 ```json
 {"map_highlight": [{"name":"路段或区域名称","lat":纬度,"lng":经度,"type":"congestion/construction/hazard/device"}]}
 ```
-务必严格使用上述 JSON 格式，type 只用这四个值之一。若无具体地理位置可标注，省略此 JSON 块。
-以上 JSON 仅供地图系统使用，你在正文中不需要提及或解释它。"""
+type 只可用 congestion/construction/hazard/device 四者之一，坐标从工具返回数据中提取。
+若无具体地理位置可标注，省略此 JSON 块。JSON 仅供地图系统使用，正文中不提及。"""
 
     def chat_stream(self, messages):
         """
@@ -198,3 +154,175 @@ class LLMService:
             print(f'LLM 对话出错: {e}')
 
         return None
+
+    # ─── Function Calling ───────────────────────────────────────
+
+    def chat_stream_with_tools(self, messages, on_tool_results=None):
+        """带 function calling 的流式对话
+
+        on_tool_results(last_results) — 工具执行完成后、文本流开始前调用。
+        """
+        self.last_traffic_result = None
+        self.last_results = {}
+        self._pending_tool_calls = []
+        history = list(messages)
+
+        tools = [s.tool_definition() for s in self.skills]
+
+        for chunk in self._stream_chat(history, tools=tools):
+            yield chunk
+
+        if self._pending_tool_calls:
+            assistant_msg = {
+                'role': 'assistant',
+                'content': None,
+                'tool_calls': self._pending_tool_calls,
+            }
+            history.append(assistant_msg)
+
+            for tc in self._pending_tool_calls:
+                result = self._execute_tool_call(tc)
+                history.append({
+                    'role': 'tool',
+                    'tool_call_id': tc['id'],
+                    'content': json.dumps(result, ensure_ascii=False),
+                })
+
+            self._pending_tool_calls = []
+
+            # 工具结果就绪 → 立即推前端（不等文本流）
+            if on_tool_results:
+                on_tool_results(self.last_results)
+
+            for chunk in self._stream_chat(history, tools=None):
+                yield chunk
+
+    def _stream_chat(self, messages, tools=None):
+        """内部流式请求，解析 content 和 tool_calls
+
+        Yields: text chunks (str)
+        累积 tool_calls 到 self._pending_tool_calls
+        """
+        if not self.api_key:
+            print('错误: 未配置 DASHSCOPE_API_KEY')
+            return
+
+        try:
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {self.api_key}',
+            }
+
+            api_messages = [
+                {'role': 'system', 'content': self.system_prompt}
+            ] + messages
+
+            payload = {
+                'model': self.model,
+                'messages': api_messages,
+                'stream': True,
+                'temperature': 1.0,
+                'top_p': 0.95,
+                'max_tokens': 4096,
+            }
+            if tools:
+                payload['tools'] = tools
+
+            response = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                stream=True,
+                timeout=60,
+            )
+
+            if response.status_code != 200:
+                print(f'LLM 请求失败: {response.status_code} - {response.text}')
+                return
+
+            # 累积 tool_calls（流式场景下可能分片到达）
+            tc_index = {}  # index → {id, function_name, arguments}
+
+            for line in response.iter_lines():
+                if not line:
+                    continue
+                line = line.decode('utf-8')
+                if not line.startswith('data: '):
+                    continue
+
+                data_str = line[6:]
+                if data_str.strip() == '[DONE]':
+                    break
+
+                try:
+                    data = json.loads(data_str)
+                    if 'choices' not in data or len(data['choices']) == 0:
+                        continue
+
+                    delta = data['choices'][0].get('delta', {})
+
+                    # 文本内容
+                    content = delta.get('content', '')
+                    if content:
+                        yield content
+
+                    # 工具调用（可能分片）
+                    tool_calls_delta = delta.get('tool_calls')
+                    if tool_calls_delta:
+                        for tc in tool_calls_delta:
+                            idx = tc.get('index', 0)
+                            if idx not in tc_index:
+                                tc_index[idx] = {
+                                    'id': tc.get('id', ''),
+                                    'function_name': '',
+                                    'arguments': '',
+                                }
+                            if tc.get('id'):
+                                tc_index[idx]['id'] = tc['id']
+                            func = tc.get('function', {})
+                            if func.get('name'):
+                                tc_index[idx]['function_name'] = func['name']
+                            if func.get('arguments'):
+                                tc_index[idx]['arguments'] += func['arguments']
+
+                except json.JSONDecodeError:
+                    continue
+
+            # 将累积的 tool_calls 转为标准格式
+            for idx in sorted(tc_index.keys()):
+                info = tc_index[idx]
+                if info['function_name'] and info['arguments']:
+                    self._pending_tool_calls.append({
+                        'id': info['id'] or f'call_{idx}',
+                        'type': 'function',
+                        'function': {
+                            'name': info['function_name'],
+                            'arguments': info['arguments'],
+                        },
+                    })
+
+        except requests.exceptions.Timeout:
+            print('LLM 请求超时')
+        except Exception as e:
+            print(f'LLM 对话出错: {e}')
+
+    def _execute_tool_call(self, tool_call):
+        """执行工具调用，返回给千问的精简结果"""
+        name = tool_call['function']['name']
+        try:
+            args = json.loads(tool_call['function']['arguments'])
+        except (json.JSONDecodeError, KeyError):
+            return {'error': '参数解析失败'}
+
+        skill = self._skill_map.get(name)
+        if not skill:
+            return {'error': f'未知工具: {name}'}
+
+        full = skill.execute(args)
+        self.last_results[name] = full
+
+        # 向后兼容
+        if name == 'query_traffic':
+            self.last_traffic_result = full
+
+        return skill.lightweight(full)

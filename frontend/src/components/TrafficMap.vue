@@ -9,6 +9,9 @@ import { dataSource } from '../data/roadDataSource.js'
 
 const props = defineProps({
   highlight: { type: Array, default: () => [] },
+  realtimeTraffic: { type: Array, default: () => [] },
+  trafficCenter: { type: Array, default: null },
+  trafficRadius: { type: Number, default: 0 },
   visible: { type: Boolean, default: false }
 })
 
@@ -21,6 +24,7 @@ let markerLayer = null
 let polylineLayer = null
 let deviceLayer = null
 let highlightGroup = null
+let realtimeLayer = null
 let initialized = false
 
 const congestionColors = { high: '#e74c3c', medium: '#f39c12', low: '#27ae60' }
@@ -45,26 +49,22 @@ const initMap = () => {
     attributionControl: true,
   }).setView(center, 8)
 
-  // 多源瓦片：国内访问不稳定时自动回退
+  // 高德瓦片（GCJ-02 坐标系，与 API polyline 天然对齐）
   const tileSources = [
     {
-      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png',
-      attr: '© CartoDB | © OSM',
-      maxZoom: 18
+      url: 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}',
+      attr: '© 高德地图',
+      maxZoom: 18,
+      subdomains: ['1', '2', '3', '4'],
     },
     {
-      url: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-      attr: '© OSM Germany',
-      maxZoom: 18
+      url: 'https://wprd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x={x}&y={y}&z={z}',
+      attr: '© 高德地图',
+      maxZoom: 18,
+      subdomains: ['1', '2', '3', '4'],
     },
-    {
-      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      attr: '© OSM',
-      maxZoom: 18
-    }
   ]
 
-  // 当前使用哪个源
   let tileIndex = 0
   const tileConfig = tileSources[0]
   const tileLayer = L.tileLayer(tileConfig.url, {
@@ -72,10 +72,10 @@ const initMap = () => {
     updateWhenIdle: false,
     updateWhenZooming: false,
     attribution: tileConfig.attr,
+    subdomains: tileConfig.subdomains || 'abc',
     errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
   }).addTo(map)
 
-  // 瓦片加载失败时自动切换到备源
   tileLayer.on('tileerror', () => {
     if (tileIndex < tileSources.length - 1) {
       tileIndex++
@@ -83,6 +83,7 @@ const initMap = () => {
       tileLayer.setUrl(next.url)
       tileLayer.options.attribution = next.attr
       tileLayer.options.maxZoom = next.maxZoom
+      tileLayer.options.subdomains = next.subdomains || 'abc'
       console.log('瓦片源切换至:', next.url)
     }
   })
@@ -241,8 +242,9 @@ watch(() => props.highlight, (items) => {
     }
   })
 
-  // 自适应缩放：刚好框住所有标记路段
-  if (matchedLats.length > 0) {
+  // 缩放：仅当没有 traffic_data 时才用 highlight 坐标（兜底）
+  // 有 traffic_data 时缩放由 realtimeTraffic watch 负责，highlight 只画标记
+  if (matchedLats.length > 0 && (!props.realtimeTraffic || props.realtimeTraffic.length === 0)) {
     const minLat = Math.min(...matchedLats), maxLat = Math.max(...matchedLats)
     const minLng = Math.min(...matchedLngs), maxLng = Math.max(...matchedLngs)
     const bounds = L.latLngBounds([[minLat, minLng], [maxLat, maxLng]])
@@ -251,8 +253,66 @@ watch(() => props.highlight, (items) => {
       setTimeout(() => {
         if (!map) return
         map.invalidateSize()
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true, duration: 1.0 })
-      }, 400)
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true, duration: 0.6 })
+      }, 80)
+    })
+  }
+}, { deep: true })
+
+// 实时路况渲染（高德 API 返回的精确 polyline）
+const statusColor = { '畅通': '#27ae60', '缓行': '#f39c12', '拥堵': '#e74c3c', '严重拥堵': '#c0392b' }
+const statusWeight = { '畅通': 3, '缓行': 4, '拥堵': 6, '严重拥堵': 7 }
+
+watch(() => props.realtimeTraffic, (roads) => {
+  if (!map) return
+  if (realtimeLayer) realtimeLayer.clearLayers()
+  if (!realtimeLayer) realtimeLayer = L.layerGroup().addTo(map)
+  if (!roads || roads.length === 0) return
+
+  if (!props.visible) emit('update:visible', true)
+
+  const allLats = []
+  const allLngs = []
+
+  roads.forEach(road => {
+    const polyline = road.polyline
+    if (!polyline || polyline.length < 2) return
+
+    const color = statusColor[road.status] || '#7f8c8d'
+    const weight = statusWeight[road.status] || 3
+
+    L.polyline(polyline, {
+      color, weight, opacity: 0.8,
+    })
+      .bindPopup(`<b>${road.name}</b><br>状态: ${road.status}<br>速度: ${road.speed}<br>方向: ${road.direction}`)
+      .addTo(realtimeLayer)
+
+    polyline.forEach(([lat, lng]) => { allLats.push(lat); allLngs.push(lng) })
+  })
+
+  // 缩放：优先用 center+radius（精确对应查询范围），否则用 polyline 范围兜底
+  if (props.trafficCenter && props.trafficRadius) {
+    const [clat, clng] = props.trafficCenter
+    const half = props.trafficRadius / 111000  // 米 → 度（近似）
+    const bounds = L.latLngBounds([[clat - half, clng - half], [clat + half, clng + half]])
+    nextTick(() => {
+      setTimeout(() => {
+        if (!map) return
+        map.invalidateSize()
+        map.fitBounds(bounds, { padding: [20, 20], maxZoom: 15, animate: true, duration: 0.6 })
+      }, 80)
+    })
+  } else if (allLats.length > 0) {
+    const minLat = Math.min(...allLats), maxLat = Math.max(...allLats)
+    const minLng = Math.min(...allLngs), maxLng = Math.max(...allLngs)
+    const bounds = L.latLngBounds([[minLat, minLng], [maxLat, maxLng]])
+
+    nextTick(() => {
+      setTimeout(() => {
+        if (!map) return
+        map.invalidateSize()
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true, duration: 0.6 })
+      }, 80)
     })
   }
 }, { deep: true })
@@ -265,7 +325,7 @@ watch(() => props.highlight, (items) => {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,.06);
-  background: #f0f0f0;
+  background: #a3c8db;
 }
 
 :deep(.custom-marker) {

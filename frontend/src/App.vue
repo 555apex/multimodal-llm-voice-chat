@@ -10,7 +10,7 @@
         <ChatWindow :messages="messages" :autoRead="autoRead" :audioCharPos="audioCharPos" />
       </div>
       <div class="map-column">
-        <TrafficMap :highlight="mapHighlight" :visible="true" />
+        <TrafficMap :highlight="mapHighlight" :realtimeTraffic="trafficRoads" :trafficCenter="trafficCenter" :trafficRadius="trafficRadius" :visible="true" />
       </div>
     </main>
 
@@ -41,6 +41,9 @@ const isProcessing = computed(() => chatStore.isProcessing)
 const isSpeaking = computed(() => chatStore.isSpeaking)
 const audioCharPos = computed(() => chatStore.audioCharPos)
 const mapHighlight = computed(() => chatStore.mapHighlight)
+const trafficRoads = computed(() => chatStore.trafficRoads)
+const trafficCenter = computed(() => chatStore.trafficCenter)
+const trafficRadius = computed(() => chatStore.trafficRadius)
 
 const volume = computed({ get: () => chatStore.volume, set: (v) => chatStore.volume = v })
 const autoRead = computed({ get: () => chatStore.autoRead, set: (v) => chatStore.autoRead = v })

@@ -89,70 +89,86 @@ def process_text_message(client_id, text, auto_read):
         w.start()
 
     full_response = ''
-    char_buffer = ''
-    tts_buffer = ''
-    tts_char_start = 0
-    chunk_index = 0
+    pending = ''        # 等待完整的句子
+    sent_texts = set()  # 去重
+    tts_index = 0
+    first_sentence = True
 
-    def flush_tts():
-        nonlocal tts_buffer, tts_char_start, chunk_index
+    def send_sentence(text):
+        nonlocal tts_index, first_sentence
         if not auto_read:
-            tts_buffer = ''
             return
-        if tts_buffer.strip():
-            tts_queue.put((tts_buffer.strip(), chunk_index, tts_char_start))
-            chunk_index += 1
-            tts_buffer = ''
-            tts_char_start = len(full_response) - len(char_buffer)
+        text = text.strip()
+        if not text or text in sent_texts:
+            return
+        # 首句不足 20 字 → 攒到下一句合并发（防止 TTS0 过短）
+        if first_sentence and len(text) < 20:
+            pending = text
+            first_sentence = False
+            return
+        first_sentence = False
+        sent_texts.add(text)
+        char_pos = sum(len(s) for s in sent_texts) - len(text)
+        tts_queue.put((text, tts_index, char_pos))
+        print(f'[TTS-{tts_index}] 入队 {len(text)} 字: {text[:30]}...')
+        tts_index += 1
+
+    def emit_frontend(results):
+        """工具结果就绪 → 不等文本流，立即推前端地图"""
+        for skill_name, full_result in results.items():
+            skill = llm_service._skill_map.get(skill_name)
+            if not skill:
+                continue
+            frontend = skill.frontend_data(full_result)
+            if frontend and frontend.get('roads'):
+                _socketio.emit('traffic_data', {
+                    'city': frontend.get('area', frontend.get('city', '')),
+                    'summary': frontend.get('summary', ''),
+                    'roads': frontend['roads'],
+                    'center': frontend.get('center'),
+                    'query_radius': frontend.get('query_radius'),
+                }, room=client_id)
+                n_roads = len(frontend['roads'])
+                print(f'[Skill:{skill_name}] 提前推送 {n_roads} 条道路数据')
 
     try:
         json_started = False
-        for chunk in llm_service.chat_stream(client_histories[client_id]):
+        for chunk in llm_service.chat_stream_with_tools(
+            client_histories[client_id],
+            on_tool_results=emit_frontend,
+        ):
             if chunk:
                 full_response += chunk
 
-                # 检测到 JSON 块开始 → 停止发送 text_chunk（前端不显示 JSON）
                 if not json_started and '```json' in full_response:
                     json_started = True
 
                 if not json_started:
                     emit('text_chunk', {'content': chunk, 'is_final': False})
 
-                char_buffer += chunk
+                # 如果首句被攒了，把攒的文本拼到新的 pending 中
+                if not first_sentence and pending and pending not in sent_texts:
+                    chunk = pending + chunk
+                    pending = ''
+
+                pending += chunk
                 time.sleep(0.06)
 
                 while True:
-                    m = re.search(r'[^。！？\n，；]+[。！？\n，；]', char_buffer)
+                    m = re.match(r'(.+?[。！？\n])\s*(.*)', pending)
                     if not m:
-                        if len(char_buffer) > 80:
-                            if not tts_buffer:
-                                tts_char_start = len(full_response) - len(char_buffer)
-                            tts_buffer += char_buffer.strip()
-                            char_buffer = ''
+                        if len(pending) > 80:
+                            fm = re.match(r'(.+?[，；])\s*(.*)', pending)
+                            if fm:
+                                send_sentence(fm.group(1))
+                                pending = fm.group(2)
+                                continue
                         break
-                    clause = m.group().strip()
-                    if clause:
-                        if not tts_buffer:
-                            tts_char_start = len(full_response) - len(char_buffer)
-                        tts_buffer += clause
-                    char_buffer = char_buffer[m.end():]
+                    send_sentence(m.group(1))
+                    pending = m.group(2)
 
-                cc = len(re.findall(r'[。！？，；]', tts_buffer))
-                if chunk_index == 0:
-                    if cc >= 2 and len(tts_buffer) >= 20:
-                        flush_tts()
-                elif chunk_index == 1:
-                    if cc >= 3:
-                        flush_tts()
-                else:
-                    if cc >= 4 or len(tts_buffer) >= 200:
-                        flush_tts()
-
-        if char_buffer.strip():
-            if not tts_buffer:
-                tts_char_start = len(full_response) - len(char_buffer)
-            tts_buffer += char_buffer.strip()
-        flush_tts()
+        if pending.strip():
+            send_sentence(pending)
 
     finally:
         for _ in workers:
