@@ -24,14 +24,16 @@ tts_semaphore = threading.Semaphore(2)
 GREETING = """您好！我是**闽路通**，福建省公路交通智能助手。
 
 我可以帮您：
-**实时路况** — 查询全省九地市任意区域的道路通行状态
-**态势研判** — 分析拥堵分布，评估路网运行态势
-**精准定位** — 支持城市、区县、具体地点或道路名查询
+
+🚗 **路况查询** — 实时查询道路通行状态、拥堵情况
+📊 **态势研判** — 分析交通流量、预测拥堵时段
+🚦 **调度辅助** — 提供疏导建议、信号优化方案
+📈 **数据问询** — 查询历史数据、统计报表
 
 您可以直接用语音或文字问我，例如：
-"厦门市路况怎么样？"
-"福州站附近堵不堵？"
-"成功大道现在什么情况？"
+• "厦门市路况怎么样？"
+• "福州站附近堵不堵？"
+• "成功大道现在什么情况？"
 
 请问有什么可以帮您的？"""
 
@@ -164,6 +166,7 @@ def process_text_message(client_id, text, auto_read):
                     'roads': frontend['roads'],
                     'center': frontend.get('center'),
                     'query_radius': frontend.get('query_radius'),
+                    'bounds': frontend.get('bounds'),
                 }, room=client_id)
                 n_roads = len(frontend['roads'])
                 logger.info(f'[Skill:{skill_name}] 提前推送 {n_roads} 条道路数据')

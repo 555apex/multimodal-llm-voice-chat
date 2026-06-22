@@ -13,6 +13,7 @@ export const useChatStore = defineStore('chat', () => {
   const trafficRoads = ref([])
   const trafficCenter = ref(null)
   const trafficRadius = ref(0)
+  const trafficBounds = ref(null)
 
   // 朗读开关 + 音量（移到 store 中，支持实时响应）
   const autoRead = ref(true)
@@ -23,9 +24,9 @@ export const useChatStore = defineStore('chat', () => {
   let nextIndex = 0
   let audioUnlocked = false
 
-  // ── 实时响应：朗读开关关闭 → 立即停止当前音频 ──
+  // ── 朗读开关：关闭时停止播放 + 清空队列，打开时可恢复 ──
   watch(autoRead, (val) => {
-    if (!val && currentAudio) {
+    if (!val) {
       stopAudio()
     }
   })
@@ -104,6 +105,7 @@ export const useChatStore = defineStore('chat', () => {
     })
 
     socket.value.on('audio', (data) => {
+      if (!autoRead.value) return  // 朗读已关闭，拒绝新音频入队
       if (!data.url) return
       if (audioQueue.value.some(a => a.index === data.index)) return
       audioQueue.value.push({ url: data.url, index: data.index, char_pos: data.char_pos || 0 })
@@ -127,6 +129,7 @@ export const useChatStore = defineStore('chat', () => {
       trafficRoads.value = data.roads || []
       trafficCenter.value = data.center || null
       trafficRadius.value = data.query_radius || 0
+      trafficBounds.value = data.bounds || null
     })
   }
 
@@ -173,5 +176,5 @@ export const useChatStore = defineStore('chat', () => {
 
   initSocket()
 
-  return { messages, isProcessing, isSpeaking, audioCharPos, mapHighlight, trafficRoads, trafficCenter, trafficRadius, autoRead, volume, sendTextMessage, sendAudioMessage }
+  return { messages, isProcessing, isSpeaking, audioCharPos, mapHighlight, trafficRoads, trafficCenter, trafficRadius, trafficBounds, autoRead, volume, sendTextMessage, sendAudioMessage }
 })
