@@ -90,9 +90,13 @@ class TrafficStatusSkill(BaseSkill):
         data = self._call_traffic(lat, lng, radius)
         if not data:
             return {
-                'error': 'API 失败',
+                'error': '无路况数据',
                 'area': area,
-                'summary': f'暂时无法获取「{area}」的实时路况，请稍后重试',
+                'summary': (
+                    f'「{area}」周边暂未覆盖实时路况监测数据。'
+                    f'该区域可能为新建区域、偏远郊区或监测设备尚未部署。'
+                    f'请告知用户可尝试查询附近主要城区（如区县中心）的交通情况。'
+                ),
             }
         result = self._format(data, label)
         result['center'] = [lat, lng]
@@ -288,6 +292,43 @@ class TrafficStatusSkill(BaseSkill):
             print(f'[CityCenter] {city_name} 失败: {e}')
             return None
 
+    def _get_city_boundary(self, city_name):
+        """获取城市行政区划矩形 (minLng, minLat, maxLng, maxLat)，含缓存"""
+        global _rect_cache
+        key = f'boundary_{city_name}'
+        if key in _rect_cache:
+            return _rect_cache[key]
+
+        params = {
+            'key': self.api_key,
+            'keywords': city_name,
+            'extensions': 'all',
+            'subdistrict': '0',
+        }
+        try:
+            resp = requests.get(self.district_url, params=params, timeout=5)
+            data = resp.json()
+            districts = data.get('districts', [])
+            if not districts:
+                return None
+            polyline = districts[0].get('polyline', '')
+            if not polyline:
+                return None
+            lngs, lats = [], []
+            for segment in polyline.split('|'):
+                for pair in segment.split(';'):
+                    parts = pair.split(',')
+                    if len(parts) >= 2:
+                        lngs.append(float(parts[0]))
+                        lats.append(float(parts[1]))
+            if not lngs:
+                return None
+            rect = (min(lngs), min(lats), max(lngs), max(lats))
+            _rect_cache[key] = rect
+            return rect
+        except Exception:
+            return None
+
     # ── 城市级区县采样（普适所有城市，采样点保证在陆地） ──
 
     def _get_district_centers(self, city_name):
@@ -335,12 +376,16 @@ class TrafficStatusSkill(BaseSkill):
 
         seen = set()
         all_roads = []
+        active_lats = []  # 有路数据的区县中心坐标
+        active_lngs = []
 
         for lat, lng, dist_name in centers:
             data = self._call_traffic(lat, lng, radius)
             if not data:
                 continue
+            has_roads = False
             for r in data.get('trafficinfo', {}).get('roads', []):
+                has_roads = True
                 name = r.get('name', '')
                 if name and name not in seen:
                     seen.add(name)
@@ -353,6 +398,9 @@ class TrafficStatusSkill(BaseSkill):
                         'direction': r.get('direction', ''),
                         'polyline': polyline,
                     })
+            if has_roads:
+                active_lats.append(lat)
+                active_lngs.append(lng)
 
         if not all_roads:
             return None
@@ -364,12 +412,20 @@ class TrafficStatusSkill(BaseSkill):
         parts = [f'{v} 条{k}' for k, v in status_count.items()]
         summary = f"共 {len(all_roads)} 条道路" + ('，其中 ' + '、'.join(parts) if parts else '')
 
-        city_center = self._get_city_center(city_name)
-        print(f'[DistrictSample] {city_name}: {len(centers)} 区县采样 r={radius}m → {len(all_roads)} 条道路（去重后）')
+        # 视图范围：只框住有路数据的区县中心 + 采样半径 padding
+        bounds = None
+        if active_lats:
+            pad = radius / 111000  # 采样半径 → 度数 padding
+            bounds = [
+                [min(active_lats) - pad, min(active_lngs) - pad],
+                [max(active_lats) + pad, max(active_lngs) + pad],
+            ]
+
+        print(f'[DistrictSample] {city_name}: {len(centers)} 区县采样 r={radius}m '
+              f'→ {len(all_roads)} 条道路, active={len(active_lats)} 区县（去重后）')
         return {
             'area': city_name, 'roads': all_roads, 'summary': summary, 'total': len(all_roads),
-            'center': [city_center[0], city_center[1]] if city_center else None,
-            'query_radius': 30000,  # 城市级大视口
+            'bounds': bounds,
         }
 
     # ── 格式化 ──────────────────────────────────────────
@@ -403,13 +459,12 @@ class TrafficStatusSkill(BaseSkill):
         roads = result.get('roads', [])
         light['_focus'] = self._build_focus(roads)
         light['_guidance'] = (
-            '按以下结构组织回答：'
-            '1. 一句总览（如"全市路网平稳，N处拥堵"）'
-            '2. 有拥堵/缓行 → 按严重度逐个列出详情（路名、速度、方向）'
-            '3. 然后按 _focus 分组简述：跨海通道/桥梁→高速/快速路→主要干道。'
-            '   每组一句话带过（如"跨海通道方面：海沧大桥、翔安隧道均畅通"），不要逐条展开。'
-            '4. 末尾一句"其余路段通行正常"概括未提及道路。'
-            '全部畅通时也不逐条列出小路，用 _focus 分组简述即可。'
+            '1. 先给一句总览，用 🔴🟡🟢 标注整体状态。'
+            '2. 如果有拥堵或缓行路段 → 用表格列出（道路|方向|速度|状况），逐条展开。'
+            '3. 然后按 _focus 分组简述：跨海通道→高速快速路→主要干道。'
+            '   有异常报异常，全畅通则一句话带过（如"跨海通道均畅通"）。'
+            '4. 全畅通时不画表格、不逐条列路名，用 _focus 分组简述即可。'
+            '5. 如有拥堵可给绕行建议，无拥堵则"其余路段通行正常"收尾。'
         )
         return light
 

@@ -5,9 +5,12 @@ import queue
 import traceback
 import re
 import time
+import logging
 from services.asr_service import ASRService
 from services.llm_service import LLMService
 from services.tts_service import TTSService
+
+logger = logging.getLogger(__name__)
 
 asr_service = ASRService()
 llm_service = LLMService()
@@ -18,6 +21,38 @@ _socketio = None
 
 tts_semaphore = threading.Semaphore(2)
 
+GREETING = """您好！我是**闽路通**，福建省公路交通智能助手。
+
+我可以帮您：
+
+🚗 **路况查询** — 实时查询道路通行状态、拥堵情况
+📊 **态势研判** — 分析交通流量、预测拥堵时段
+🚦 **调度辅助** — 提供疏导建议、信号优化方案
+📈 **数据问询** — 查询历史数据、统计报表
+
+您可以直接用语音或文字问我，例如：
+• "厦门市路况怎么样？"
+• "福州站附近堵不堵？"
+• "成功大道现在什么情况？"
+
+请问有什么可以帮您的？"""
+
+
+def strip_markdown_for_tts(text):
+    """去除 markdown 格式，用于 TTS 合成"""
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    text = re.sub(r'_(.+?)_', r'\1', text)
+    text = re.sub(r'`[^`]*`', '', text)
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^>\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^[\s]*[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^[\s]*\d+\.\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{2,}', '\n', text)
+    return text.strip()
+
 
 def register_handlers(socketio):
     global _socketio
@@ -27,15 +62,16 @@ def register_handlers(socketio):
     def handle_connect():
         client_id = request.sid
         client_histories[client_id] = []
-        print(f'客户端已连接: {client_id}')
+        logger.info(f'客户端已连接: {client_id}')
         emit('connected', {'status': 'ok'})
+        emit('greeting', {'content': GREETING})
 
     @socketio.on('disconnect')
     def handle_disconnect():
         client_id = request.sid
         if client_id in client_histories:
             del client_histories[client_id]
-        print(f'客户端已断开: {client_id}')
+        logger.info(f'客户端已断开: {client_id}')
 
     @socketio.on('message')
     def handle_message(data):
@@ -56,14 +92,14 @@ def register_handlers(socketio):
                 emit('error', {'content': f'未知消息类型: {msg_type}'})
         except Exception as e:
             traceback.print_exc()
-            print(f'处理消息时出错: {e}')
+            logger.error(f'处理消息时出错: {e}')
 
 
 def process_text_message(client_id, text, auto_read):
     if client_id not in client_histories:
         client_histories[client_id] = []
     client_histories[client_id].append({'role': 'user', 'content': text})
-    print(f'[消息] auto_read={auto_read}')
+    logger.info(f'auto_read={auto_read}')
 
     tts_queue = queue.Queue()
 
@@ -73,16 +109,19 @@ def process_text_message(client_id, text, auto_read):
             if item is None:
                 break
             chunk_text, idx, char_pos = item
-            print(f'[TTS-{idx}] 合成 {len(chunk_text)} 字: {chunk_text[:25]}...')
+            clean = strip_markdown_for_tts(chunk_text)
+            if not clean:
+                continue
+            logger.info(f'[TTS-{idx}] 合成 {len(clean)} 字: {clean[:25]}...')
             with tts_semaphore:
-                audio_url = tts_service.synthesize(chunk_text)
+                audio_url = tts_service.synthesize(clean)
             if audio_url:
                 _socketio.emit('audio', {
                     'url': audio_url, 'index': idx, 'char_pos': char_pos
                 }, room=client_id)
-                print(f'[TTS-{idx}] 完成')
+                logger.info(f'[TTS-{idx}] 完成')
             else:
-                print(f'[TTS-{idx}] 失败')
+                logger.warning(f'[TTS-{idx}] 失败')
 
     workers = [threading.Thread(target=tts_worker, daemon=True) for _ in range(2)]
     for w in workers:
@@ -110,7 +149,7 @@ def process_text_message(client_id, text, auto_read):
         sent_texts.add(text)
         char_pos = sum(len(s) for s in sent_texts) - len(text)
         tts_queue.put((text, tts_index, char_pos))
-        print(f'[TTS-{tts_index}] 入队 {len(text)} 字: {text[:30]}...')
+        logger.info(f'[TTS-{tts_index}] 入队 {len(text)} 字: {text[:30]}...')
         tts_index += 1
 
     def emit_frontend(results):
@@ -127,9 +166,10 @@ def process_text_message(client_id, text, auto_read):
                     'roads': frontend['roads'],
                     'center': frontend.get('center'),
                     'query_radius': frontend.get('query_radius'),
+                    'bounds': frontend.get('bounds'),
                 }, room=client_id)
                 n_roads = len(frontend['roads'])
-                print(f'[Skill:{skill_name}] 提前推送 {n_roads} 条道路数据')
+                logger.info(f'[Skill:{skill_name}] 提前推送 {n_roads} 条道路数据')
 
     try:
         json_started = False

@@ -1,26 +1,80 @@
 # Python
 __pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
 env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # Environment
 .env
 .env.local
+.env.*.local
 
-# Node
-node_modules/
-dist/
-.vite/
+# Logs
+*.log
+logs/
 
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
+# Models (large files)
+*.pt
+*.bin
+*.safetensors
+*.onnx
+*.pb
+*.h5
+*.ckpt
+
+# Audio files
+*.wav
+*.mp3
+*.ogg
+
+# Temp files
+*.tmp
+*.temp
+temp/
+
+# Cache
+.cache/
+*.cache
+
+# Build
+dist/
+build/
+*.egg
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+version_funasr_chattts.zip

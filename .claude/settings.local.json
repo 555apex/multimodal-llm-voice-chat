@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk -F/ '{ print $\\(NF-1\\) \"\\\\t\" $0 }')",
+      "Bash(sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)",
+      "Bash(command *)",
+      "Bash(pip install *)",
+      "Bash(python app.py)",
+      "Bash(curl -s http://localhost:5000/health)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:3000)"
+    ]
+  }
+}
