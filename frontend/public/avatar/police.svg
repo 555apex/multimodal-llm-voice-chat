@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 280" width="200" height="280">
+  <!-- 背景 -->
+  <rect width="200" height="280" fill="none"/>
+
+  <!-- 腿部 -->
+  <rect x="72" y="210" width="22" height="55" rx="8" fill="#1a1a2e"/>
+  <rect x="106" y="210" width="22" height="55" rx="8" fill="#1a1a2e"/>
+
+  <!-- 鞋子 -->
+  <ellipse cx="83" cy="265" rx="16" ry="8" fill="#1a1a1a"/>
+  <ellipse cx="117" cy="265" rx="16" ry="8" fill="#1a1a1a"/>
+
+  <!-- 身体 - 蓝色短袖警服 -->
+  <path d="M 65 130 Q 65 120 75 115 L 125 115 Q 135 120 135 130 L 140 210 L 60 210 Z" fill="#1e3a5f"/>
+
+  <!-- 绿色马甲 -->
+  <path d="M 70 130 L 75 115 L 90 115 L 90 135 L 70 135 Z" fill="#2d5a27" stroke="#1a3a18" stroke-width="1"/>
+  <path d="M 130 130 L 125 115 L 110 115 L 110 135 L 130 135 Z" fill="#2d5a27" stroke="#1a3a18" stroke-width="1"/>
+  <path d="M 70 135 L 130 135 L 135 210 L 65 210 Z" fill="#2d5a27" stroke="#1a3a18" stroke-width="1"/>
+
+  <!-- 马甲拉链 -->
+  <line x1="100" y1="115" x2="100" y2="210" stroke="#1a3a18" stroke-width="2"/>
+
+  <!-- 口袋 -->
+  <rect x="75" y="155" width="20" height="15" rx="2" fill="none" stroke="#1a3a18" stroke-width="1"/>
+  <rect x="105" y="155" width="20" height="15" rx="2" fill="none" stroke="#1a3a18" stroke-width="1"/>
+
+  <!-- 反光条 -->
+  <rect x="70" y="175" width="60" height="4" rx="1" fill="#ffd700"/>
+  <rect x="70" y="195" width="60" height="4" rx="1" fill="#ffd700"/>
+
+  <!-- 肩章 -->
+  <path d="M 65 120 L 55 115 L 55 130 L 65 125 Z" fill="#ffd700"/>
+  <path d="M 135 120 L 145 115 L 145 130 L 135 125 Z" fill="#ffd700"/>
+
+  <!-- 脖子 -->
+  <rect x="88" y="100" width="24" height="18" fill="#fdbcb4"/>
+
+  <!-- 头部 -->
+  <circle cx="100" cy="75" r="38" fill="#fdbcb4"/>
+
+  <!-- 帽子 - 黑白配色 -->
+  <ellipse cx="100" cy="42" rx="42" ry="12" fill="#1a1a1a"/>
+  <rect x="62" y="30" width="76" height="18" rx="4" fill="#f5f5f5"/>
+  <rect x="58" y="42" width="84" height="8" fill="#1a1a1a"/>
+
+  <!-- 帽徽 -->
+  <circle cx="100" cy="38" r="7" fill="#ffd700"/>
+  <text x="100" y="41" text-anchor="middle" font-size="8" fill="#1a1a1a" font-weight="bold">警</text>
+
+  <!-- 眼睛 -->
+  <g id="eyes">
+    <circle cx="85" cy="70" r="5" fill="#2c3e50"/>
+    <circle cx="115" cy="70" r="5" fill="#2c3e50"/>
+    <circle cx="87" cy="68" r="2" fill="#fff"/>
+    <circle cx="117" cy="68" r="2" fill="#fff"/>
+  </g>
+
+  <!-- 眉毛 -->
+  <path d="M 78 62 Q 85 58 92 62" stroke="#2c3e50" stroke-width="2" fill="none"/>
+  <path d="M 108 62 Q 115 58 122 62" stroke="#2c3e50" stroke-width="2" fill="none"/>
+
+  <!-- 鼻子 -->
+  <ellipse cx="100" cy="80" rx="4" ry="3" fill="#e8a090"/>
+
+  <!-- 嘴巴 (闭合状态) -->
+  <g id="mouth-closed">
+    <path d="M 90 90 Q 100 96 110 90" stroke="#c0392b" stroke-width="2" fill="none"/>
+  </g>
+
+  <!-- 嘴巴 (张开状态 - 用于动画) -->
+  <g id="mouth-open" style="display: none;">
+    <ellipse cx="100" cy="92" rx="8" ry="6" fill="#c0392b"/>
+    <ellipse cx="100" cy="90" rx="6" ry="3" fill="#fff"/>
+  </g>
+
+  <!-- 腮红 -->
+  <circle cx="78" cy="82" r="5" fill="#ffb6c1" opacity="0.4"/>
+  <circle cx="122" cy="82" r="5" fill="#ffb6c1" opacity="0.4"/>
+
+  <!-- 手臂 -->
+  <path d="M 60 130 Q 40 150 35 180" stroke="#1e3a5f" stroke-width="18" fill="none" stroke-linecap="round"/>
+  <path d="M 140 130 Q 160 150 165 180" stroke="#1e3a5f" stroke-width="18" fill="none" stroke-linecap="round"/>
+
+  <!-- 手 -->
+  <circle cx="35" cy="180" r="10" fill="#fdbcb4"/>
+  <circle cx="165" cy="180" r="10" fill="#fdbcb4"/>
+
+  <!-- 指挥棒 (右手) -->
+  <rect x="162" y="165" width="5" height="35" rx="2" fill="#e74c3c"/>
+  <circle cx="164" cy="165" r="4" fill="#ff6b6b"/>
+
+  <!-- 对讲机 (左肩) -->
+  <rect x="52" y="125" width="8" height="12" rx="2" fill="#333"/>
+  <line x1="56" y1="125" x2="56" y2="118" stroke="#333" stroke-width="2"/>
+
+  <!-- 警徽 (胸口) -->
+  <circle cx="100" cy="145" r="6" fill="#ffd700"/>
+  <text x="100" y="148" text-anchor="middle" font-size="6" fill="#1a1a1a" font-weight="bold">POLICE</text>
+</svg>
