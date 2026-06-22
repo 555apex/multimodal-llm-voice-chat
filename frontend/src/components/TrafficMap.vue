@@ -12,6 +12,7 @@ const props = defineProps({
   realtimeTraffic: { type: Array, default: () => [] },
   trafficCenter: { type: Array, default: null },
   trafficRadius: { type: Number, default: 0 },
+  trafficBounds: { type: Array, default: null },
   visible: { type: Boolean, default: false }
 })
 
@@ -290,8 +291,17 @@ watch(() => props.realtimeTraffic, (roads) => {
     polyline.forEach(([lat, lng]) => { allLats.push(lat); allLngs.push(lng) })
   })
 
-  // 缩放：优先用 center+radius（精确对应查询范围），否则用 polyline 范围兜底
-  if (props.trafficCenter && props.trafficRadius) {
+  // 缩放：层级优先级：bounds(城市级) > center+radius(POI级) > polyline范围(兜底)
+  if (props.trafficBounds) {
+    const bounds = L.latLngBounds(props.trafficBounds)
+    nextTick(() => {
+      setTimeout(() => {
+        if (!map) return
+        map.invalidateSize()
+        map.fitBounds(bounds, { padding: [20, 20], maxZoom: 13, animate: true, duration: 0.6 })
+      }, 80)
+    })
+  } else if (props.trafficCenter && props.trafficRadius) {
     const [clat, clng] = props.trafficCenter
     const half = props.trafficRadius / 111000  // 米 → 度（近似）
     const bounds = L.latLngBounds([[clat - half, clng - half], [clat + half, clng + half]])

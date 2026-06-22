@@ -1,171 +1,287 @@
 <template>
-  <div class="chat-window" ref="chatContainer" @scroll="onScroll">
+  <div class="chat-window" ref="chatContainer">
     <div class="messages-list">
-      <div v-for="(msg, i) in messages" :key="i" class="message-item" :class="msg.role">
-        <div class="message-avatar">{{ msg.role === 'user' ? '🧑' : '🤖' }}</div>
+      <div
+        v-for="(msg, index) in messages"
+        :key="index"
+        class="message-item"
+        :class="msg.role"
+      >
+        <div class="message-avatar">
+          {{ msg.role === 'user' ? '🧑' : '🤖' }}
+        </div>
         <div class="message-content">
           <div class="message-role">
             {{ msg.role === 'user' ? '用户' : '助手' }}
             <span v-if="msg.type === 'voice'" class="voice-badge">🎤 语音</span>
           </div>
-          <div class="message-text" v-html="renderContent(msg)"></div>
+          <div v-if="msg.role === 'assistant' && !msg.content" class="message-text">
+            <span class="typing-cursor">|</span>
+          </div>
+          <div v-else class="message-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
         </div>
       </div>
     </div>
-
-    <!-- 回到底部按钮（用户上滑后出现）-->
-    <button v-if="showScrollBtn" class="scroll-bottom-btn" @click="gotoBottom">
-      ↓ 回到底部
-    </button>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { marked } from 'marked'
+import markedKatex from 'marked-katex-extension'
+import 'katex/dist/katex.min.css'
+
+// 配置 marked + KaTeX
+marked.use(markedKatex({
+  throwOnError: false,
+  output: 'html',
+}))
+
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+})
 
 const props = defineProps({
-  messages: { type: Array, default: () => [] },
-  autoRead: { type: Boolean, default: true },
-  audioCharPos: { type: Number, default: 0 }
+  messages: {
+    type: Array,
+    default: () => []
+  }
 })
 
 const chatContainer = ref(null)
-const userScrolledUp = ref(false)
-const showScrollBtn = ref(false)
-let programmaticScroll = false  // 程序化滚动标志，防止误判用户介入
 
-const isAtBottom = () => {
-  const el = chatContainer.value
-  if (!el) return true
-  return el.scrollHeight - el.scrollTop - el.clientHeight < 50
+// 渲染 markdown（含数学公式）
+function renderMarkdown(content) {
+  if (!content) return ''
+  try {
+    return marked.parse(content)
+  } catch (e) {
+    // 解析失败时返回原文
+    return content
+  }
 }
 
-const scrollToBottom = () => {
-  const el = chatContainer.value
-  if (!el) return
-  programmaticScroll = true
-  el.scrollTop = el.scrollHeight
-}
-
-const scrollToRatio = (ratio) => {
-  const el = chatContainer.value
-  if (!el) return
-  const msgs = el.querySelectorAll('.message-item.assistant')
-  const lastMsg = msgs[msgs.length - 1]
-  if (!lastMsg) { scrollToBottom(); return }
-  const msgTop = lastMsg.offsetTop
-  const msgHeight = lastMsg.offsetHeight
-  const target = msgTop + ratio * msgHeight - el.clientHeight * 0.3
-  programmaticScroll = true
-  el.scrollTop = Math.max(0, Math.min(target, el.scrollHeight - el.clientHeight))
-}
-
-const renderContent = (msg) => {
-  if (!msg.content) return '<span class="typing-cursor">|</span>'
-  let html = msg.content
-  // 转义 HTML 防 XSS
-  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  // **粗体**
-  html = html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-  // 编号列表
-  html = html.replace(/^(\d+)\.\s\*\*(.+?)\*\*/gm, '<div><b>$1. $2</b></div>')
-  html = html.replace(/^(\d+)\.\s(.+)/gm, '<div>$1. $2</div>')
-  // 无序列表
-  html = html.replace(/^[-*]\s(.+)/gm, '<div>• $1</div>')
-  // 换行
-  html = html.replace(/\n/g, '<br>')
-  return html
-}
-
-const gotoBottom = () => {
-  userScrolledUp.value = false
-  showScrollBtn.value = false
-  nextTick(scrollToBottom)
-}
-
-// ── 用户滚动检测 ──
-
-let scrollTimer = null
-const onScroll = () => {
-  // 程序触发的滚动，忽略
-  if (programmaticScroll) { programmaticScroll = false; return }
-  clearTimeout(scrollTimer)
-  scrollTimer = setTimeout(() => {
-    if (isAtBottom()) {
-      userScrolledUp.value = false
-      showScrollBtn.value = false
-    } else {
-      userScrolledUp.value = true
-      showScrollBtn.value = true
-    }
-  }, 150)
-}
-
-// ── 新对话：重置状态，滚到底 ──
-
-watch(() => props.messages.length, () => {
-  userScrolledUp.value = false
-  showScrollBtn.value = false
-  nextTick(scrollToBottom)
-})
-
-// ── 内容更新时的滚动策略 ──
-
+// 自动滚动到底部
 watch(
-  () => {
-    // 只监听最后一条消息的内容变化
-    const last = props.messages[props.messages.length - 1]
-    return last?.content ?? ''
-  },
-  () => {
-    if (userScrolledUp.value) return  // 用户上滑了，不打扰
-
-    if (props.autoRead) {
-      // 朗读模式：不跟文字更新（跟音频走）
-    } else {
-      // 非朗读模式：文字更新就跟到底
-      nextTick(scrollToBottom)
+  () => props.messages.length,
+  async () => {
+    await nextTick()
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
     }
   }
 )
 
-// ── 朗读模式：音频进度驱动滚动 ──
-
-watch(() => props.audioCharPos, (pos) => {
-  if (!props.autoRead) return
-  if (pos < 0) return                  // 初始值 -1，跳过
-  if (userScrolledUp.value) return
-
-  const last = props.messages[props.messages.length - 1]
-  if (!last || last.role !== 'assistant' || !last.content) return
-  nextTick(() => scrollToRatio(pos / last.content.length))
-})
+// 监听内容变化也要滚动
+watch(
+  () => props.messages.map(m => m.content).join(''),
+  async () => {
+    await nextTick()
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+    }
+  }
+)
 </script>
 
 <style scoped>
 .chat-window {
-  flex: 1; overflow-y: auto; padding: 16px; background: white;
-  border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
-  overflow-anchor: none; position: relative;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
-.messages-list { display: flex; flex-direction: column; gap: 16px; }
-.message-item { display: flex; gap: 12px; padding: 12px; border-radius: 8px; }
-.message-item.user { background-color: #f0f7ff; }
-.message-item.assistant { background-color: #f9f9f9; }
-.message-avatar { font-size: 24px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.message-content { flex: 1; min-width: 0; }
-.message-role { font-size: 12px; color: #999; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
-.voice-badge { font-size: 11px; background: #e8f4fd; color: #4a90d9; padding: 1px 6px; border-radius: 4px; }
-.message-text { font-size: 14px; line-height: 1.6; word-wrap: break-word; white-space: pre-wrap; }
-.typing-cursor { display: inline-block; animation: blink .8s infinite; color: #4a90d9; font-weight: bold; }
-@keyframes blink { 0%,50%{opacity:1} 51%,100%{opacity:0} }
 
-/* 回到底部按钮 */
-.scroll-bottom-btn {
-  position: sticky; bottom: 12px; left: 50%; transform: translateX(-50%);
-  padding: 8px 20px; background: #4a90d9; color: white; border-radius: 20px;
-  font-size: 13px; box-shadow: 0 2px 8px rgba(74,144,217,.3);
-  cursor: pointer; z-index: 10; transition: all .2s;
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
-.scroll-bottom-btn:hover { background: #357abd; transform: translateX(-50%) scale(1.05); }
+
+.message-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.message-item.user {
+  background-color: #f0f7ff;
+}
+
+.message-item.assistant {
+  background-color: #f9f9f9;
+}
+
+.message-avatar {
+  font-size: 24px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-role {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voice-badge {
+  font-size: 11px;
+  background: #e8f4fd;
+  color: #4a90d9;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.message-text {
+  font-size: 14px;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+.typing-cursor {
+  display: inline-block;
+  animation: blink 0.8s infinite;
+  color: #4a90d9;
+  font-weight: bold;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* Markdown 渲染样式 */
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
+  margin: 12px 0 6px 0;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.markdown-body :deep(h1) { font-size: 1.4em; }
+.markdown-body :deep(h2) { font-size: 1.2em; }
+.markdown-body :deep(h3) { font-size: 1.1em; }
+
+.markdown-body :deep(p) {
+  margin: 6px 0;
+}
+
+.markdown-body :deep(pre) {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.markdown-body :deep(code) {
+  background: #f0f0f0;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.markdown-body :deep(pre code) {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
+.markdown-body :deep(blockquote) {
+  border-left: 3px solid #4a90d9;
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: #666;
+  background: #f8f9fa;
+  border-radius: 0 4px 4px 0;
+}
+
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 6px 0;
+  padding-left: 24px;
+}
+
+.markdown-body :deep(li) {
+  margin: 3px 0;
+}
+
+.markdown-body :deep(table) {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid #ddd;
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.markdown-body :deep(th) {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.markdown-body :deep(a) {
+  color: #4a90d9;
+  text-decoration: none;
+}
+
+.markdown-body :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.markdown-body :deep(hr) {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 12px 0;
+}
+
+.markdown-body :deep(img) {
+  max-width: 100%;
+  border-radius: 4px;
+}
+
+/* KaTeX 数学公式样式 */
+.markdown-body :deep(.katex) {
+  font-size: 1.1em;
+}
+
+.markdown-body :deep(.katex-display) {
+  margin: 12px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-body :deep(.katex-display > .katex) {
+  font-size: 1.2em;
+}
 </style>

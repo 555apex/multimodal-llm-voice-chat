@@ -2,6 +2,9 @@ from flask import Flask
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from config import Config
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(name)s] %(levelname)s: %(message)s')
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -15,9 +18,9 @@ register_handlers(socketio)
 
 @app.route('/health')
 def health_check():
-    return {'status': 'ok', 'message': '语音聊天系统后端运行中'}
+    return {'status': 'ok', 'message': '闽路通 v2.0 后端运行中'}
 
 if __name__ == '__main__':
-    print(f"启动语音聊天系统后端...")
-    print(f"服务地址: http://localhost:{Config.PORT}")
+    logging.info('闽路通 v2.0 启动中...')
+    logging.info(f'服务地址: http://localhost:{Config.PORT}')
     socketio.run(app, host='0.0.0.0', port=Config.PORT, debug=Config.DEBUG, use_reloader=False, allow_unsafe_werkzeug=True)
