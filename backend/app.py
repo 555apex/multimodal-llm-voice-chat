@@ -1,4 +1,5 @@
-from flask import Flask
+import os
+from flask import Flask, send_file
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from config import Config
@@ -19,6 +20,14 @@ register_handlers(socketio)
 @app.route('/health')
 def health_check():
     return {'status': 'ok', 'message': '闽路通 v2.0 后端运行中'}
+
+@app.route('/audio/<path:filename>')
+def serve_audio(filename):
+    """提供本地 TTS 音频文件"""
+    filepath = os.path.join(os.path.dirname(__file__), filename)
+    if not os.path.exists(filepath):
+        return {'error': 'File not found'}, 404
+    return send_file(filepath, mimetype='audio/mpeg')
 
 if __name__ == '__main__':
     logging.info('闽路通 v2.0 启动中...')

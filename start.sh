@@ -28,9 +28,11 @@ trap cleanup INT TERM
 # ── 后端 ──
 echo -e "${CYAN}[1/2] 启动后端 (Flask + Socket.IO, 端口 5001)...${NC}"
 cd "$BACKEND"
-# 自动安装依赖（如需要）
-pip install -r requirements.txt -q 2>/dev/null || true
-python app.py &
+# 使用 llm-road conda 环境
+PYTHON="$(conda info --base)/envs/llm-road/bin/python"
+PIP="$(conda info --base)/envs/llm-road/bin/pip"
+$PIP install -r requirements.txt -q 2>/dev/null || true
+$PYTHON app.py &
 BACKEND_PID=$!
 sleep 2
 

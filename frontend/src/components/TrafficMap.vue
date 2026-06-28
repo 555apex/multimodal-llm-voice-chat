@@ -168,7 +168,10 @@ const toggleBaseLayers = (show) => {
   })
 }
 
-// LLM 高亮 → 匹配路名到 mock 数据，绘制实际道路线条
+// 高亮拥堵/缓行路段（数据从 API + LLM 综合）
+const hlOutline = { '严重拥堵': '#7f0000', '拥堵': '#7f0000', '缓行': '#7f4d00' }
+const hlColors = { '严重拥堵': '#c0392b', '拥堵': '#e74c3c', '缓行': '#e67e22' }
+
 watch(() => props.highlight, (items) => {
   if (!map) return
   if (highlightGroup) highlightGroup.clearLayers()
@@ -176,93 +179,22 @@ watch(() => props.highlight, (items) => {
 
   if (!props.visible) emit('update:visible', true)
 
-  const allSegments = dataSource.getCongestionSegments()
-  const allSites = dataSource.getConstructionSites()
-  const allHazards = dataSource.getHazardPoints()
-  const allDevices = dataSource.getDeviceStatus()
-
-  const matchedLats = []
-  const matchedLngs = []
-  const typeColors = { congestion: '#e74c3c', construction: '#f39c12', hazard: '#c0392b', device: '#2980b9' }
-
   items.forEach(item => {
-    if (!item.lat || !item.lng) return
-    const color = typeColors[item.type] || '#e74c3c'
-    let drawn = false
+    const polyline = item.polyline
+    if (!polyline || polyline.length === 0) return
+    const color = hlColors[item.status] || '#e74c3c'
+    const outline = hlOutline[item.status] || '#7f0000'
 
-    // 尝试匹配路段名 → 绘制真实道路线条
-    if (item.type === 'congestion') {
-      const seg = allSegments.find(s => item.name.includes(s.name) || s.name.includes(item.name))
-      if (seg) {
-        L.polyline(seg.latlngs, { color, weight: 6, opacity: 0.85 })
-          .bindPopup(`<b>${seg.name}</b><br>${seg.desc}<br>速度: ${seg.speed}`)
-          .addTo(highlightGroup)
-        seg.latlngs.forEach(([lat, lng]) => { matchedLats.push(lat); matchedLngs.push(lng) })
-        drawn = true
-      }
-    }
-
-    // 匹配施工点
-    if (item.type === 'construction') {
-      const site = allSites.find(s => item.name.includes(s.name) || s.name.includes(item.name))
-      if (site) {
-        L.circleMarker([site.lat, site.lng], { radius: 10, color, fillColor: color, fillOpacity: 0.5, weight: 3 })
-          .bindPopup(`<b>${site.name}</b><br>${site.desc}`).addTo(highlightGroup)
-        matchedLats.push(site.lat); matchedLngs.push(site.lng)
-        drawn = true
-      }
-    }
-
-    // 匹配灾害点
-    if (item.type === 'hazard') {
-      const h = allHazards.find(h => item.name.includes(h.name) || h.name.includes(item.name))
-      if (h) {
-        L.circleMarker([h.lat, h.lng], { radius: 10, color, fillColor: color, fillOpacity: 0.5, weight: 3 })
-          .bindPopup(`<b>${h.name}</b><br>${h.desc}`).addTo(highlightGroup)
-        matchedLats.push(h.lat); matchedLngs.push(h.lng)
-        drawn = true
-      }
-    }
-
-    // 匹配设备
-    if (item.type === 'device') {
-      const dev = allDevices.find(d => item.name.includes(d.name) || d.name.includes(item.name))
-      if (dev) {
-        L.circleMarker([dev.lat, dev.lng], { radius: 8, color, fillColor: color, fillOpacity: 0.5, weight: 2 })
-          .bindPopup(`<b>${dev.name}</b><br>${dev.readings}`).addTo(highlightGroup)
-        matchedLats.push(dev.lat); matchedLngs.push(dev.lng)
-        drawn = true
-      }
-    }
-
-    // 未匹配 → 用 LLM 给的坐标画标记
-    if (!drawn) {
-      L.circleMarker([item.lat, item.lng], { radius: 10, color, fillColor: color, fillOpacity: 0.4, weight: 3 })
-        .bindPopup(`<b>${item.name}</b><br>类型: ${item.type}`).addTo(highlightGroup)
-      matchedLats.push(item.lat); matchedLngs.push(item.lng)
-    }
+    // 深色描边层（稍宽） → 彩色层（稍窄） = 描边效果
+    L.polyline(polyline, { color: outline, weight: 9, opacity: 0.6 }).addTo(highlightGroup)
+    L.polyline(polyline, { color, weight: 6, opacity: 1.0 })
+      .bindPopup(`<b>${item.name}</b><br>${item.status} · ${item.speed}${item.direction ? ' · ' + item.direction : ''}`)
+      .addTo(highlightGroup)
   })
-
-  // 缩放：仅当没有 traffic_data 时才用 highlight 坐标（兜底）
-  // 有 traffic_data 时缩放由 realtimeTraffic watch 负责，highlight 只画标记
-  if (matchedLats.length > 0 && (!props.realtimeTraffic || props.realtimeTraffic.length === 0)) {
-    const minLat = Math.min(...matchedLats), maxLat = Math.max(...matchedLats)
-    const minLng = Math.min(...matchedLngs), maxLng = Math.max(...matchedLngs)
-    const bounds = L.latLngBounds([[minLat, minLng], [maxLat, maxLng]])
-
-    nextTick(() => {
-      setTimeout(() => {
-        if (!map) return
-        map.invalidateSize()
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: true, duration: 0.6 })
-      }, 80)
-    })
-  }
 }, { deep: true })
 
-// 实时路况渲染（高德 API 返回的精确 polyline）
-const statusColor = { '畅通': '#27ae60', '缓行': '#f39c12', '拥堵': '#e74c3c', '严重拥堵': '#c0392b' }
-const statusWeight = { '畅通': 3, '缓行': 4, '拥堵': 6, '严重拥堵': 7 }
+// 实时路况渲染（统一着色：绿/黄/红）
+const statusColor = { '畅通': '#27ae60', '缓行': '#e67e22', '拥堵': '#e74c3c', '严重拥堵': '#c0392b' }
 
 watch(() => props.realtimeTraffic, (roads) => {
   if (!map) return
@@ -280,10 +212,9 @@ watch(() => props.realtimeTraffic, (roads) => {
     if (!polyline || polyline.length < 2) return
 
     const color = statusColor[road.status] || '#7f8c8d'
-    const weight = statusWeight[road.status] || 3
 
     L.polyline(polyline, {
-      color, weight, opacity: 0.8,
+      color, weight: 4, opacity: 0.85,
     })
       .bindPopup(`<b>${road.name}</b><br>状态: ${road.status}<br>速度: ${road.speed}<br>方向: ${road.direction}`)
       .addTo(realtimeLayer)

@@ -18,10 +18,10 @@ class Config:
     DASHSCOPE_LLM_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode/v1'
     DASHSCOPE_LLM_MODEL = os.getenv('DASHSCOPE_LLM_MODEL', 'qwen-plus')
 
-    # TTS（Qwen-TTS）
-    DASHSCOPE_TTS_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation'
-    DASHSCOPE_TTS_MODEL = 'qwen-tts-2025-05-22'
-    DASHSCOPE_TTS_VOICE = 'Cherry'  # Qwen-TTS 音色: Cherry, Chelsie, Ethan 等
+    # TTS（Edge-TTS，微软免费引擎）
+    EDGE_TTS_VOICE = os.getenv('EDGE_TTS_VOICE', 'zh-CN-XiaoxiaoNeural')
+    EDGE_TTS_RATE = os.getenv('EDGE_TTS_RATE', '+0%')  # 语速: -50% ~ +100%
+    EDGE_TTS_PITCH = os.getenv('EDGE_TTS_PITCH', '+0Hz')  # 音调
 
     # ── 本地 ASR 配置（faster-whisper）──
     WHISPER_MODEL_SIZE = os.getenv('WHISPER_MODEL_SIZE', 'small')

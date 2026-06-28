@@ -130,7 +130,21 @@ export const useChatStore = defineStore('chat', () => {
       trafficCenter.value = data.center || null
       trafficRadius.value = data.query_radius || 0
       trafficBounds.value = data.bounds || null
+      mapHighlight.value = data.highlights || []
     })
+
+    // LLM 回复中提到的路名 → 合并进地图高亮
+    socket.value.on('highlight_update', (data) => {
+      if (!data.roads || data.roads.length === 0) return
+      const existing = new Map(mapHighlight.value.map(h => [h.name, h]))
+      data.roads.forEach(r => {
+        if (!existing.has(r.name)) {
+          existing.set(r.name, r)
+        }
+      })
+      mapHighlight.value = Array.from(existing.values())
+    })
+
   }
 
   const sendTextMessage = (text) => {

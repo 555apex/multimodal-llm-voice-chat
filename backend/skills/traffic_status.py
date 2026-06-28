@@ -81,9 +81,19 @@ class TrafficStatusSkill(BaseSkill):
                 'summary': f'未能在福建省找到「{area}」的位置信息，请尝试输入更具体的地名',
             }
 
-        # 城市级 → 下属区县中心采样
+        # 城市级 → 优先矩形 API 全覆盖，兜底区县采样
         if level == '市':
-            result = self._district_sample(label)
+            rect = self._get_city_boundary(label)
+            if rect:
+                data = self._call_traffic_rectangle(rect)
+                if data:
+                    result = self._format(data, label, level)
+                    result['center'] = [lat, lng]
+                    result['query_radius'] = radius
+                    result['bounds'] = [[rect[1], rect[0]], [rect[3], rect[2]]]
+                    return result
+            # 兜底
+            result = self._district_sample(label, level)
             if result:
                 return result
 
@@ -98,7 +108,7 @@ class TrafficStatusSkill(BaseSkill):
                     f'请告知用户可尝试查询附近主要城区（如区县中心）的交通情况。'
                 ),
             }
-        result = self._format(data, label)
+        result = self._format(data, label, level)
         result['center'] = [lat, lng]
         result['query_radius'] = radius
         return result
@@ -259,6 +269,25 @@ class TrafficStatusSkill(BaseSkill):
         except Exception:
             return None
 
+    def _call_traffic_rectangle(self, rect):
+        """矩形区域路况查询（城市级全覆盖）"""
+        if not self.api_key:
+            return None
+        rect_str = f'{rect[0]},{rect[1]};{rect[2]},{rect[3]}'
+        params = {
+            'key': self.api_key,
+            'rectangle': rect_str,
+            'extensions': 'all',
+        }
+        try:
+            resp = requests.get(self.traffic_url.replace('/circle', '/rectangle'), params=params, timeout=10)
+            data = resp.json()
+            if data.get('status') != '1':
+                return None
+            return data
+        except Exception:
+            return None
+
     def _get_city_center(self, city_name):
         """获取高德行政区划的城市中心坐标 (lat, lng)，含缓存"""
         global _rect_cache
@@ -365,7 +394,7 @@ class TrafficStatusSkill(BaseSkill):
             print(f'[Districts] {city_name} 失败: {e}')
             return None
 
-    def _district_sample(self, city_name):
+    def _district_sample(self, city_name, level=None):
         """下属区县中心多点采样 → 合并去重 → 返回统一格式"""
         centers = self._get_district_centers(city_name)
         if not centers:
@@ -405,6 +434,10 @@ class TrafficStatusSkill(BaseSkill):
         if not all_roads:
             return None
 
+        # 城市级 → 只保留交通要道
+        if level == '市':
+            all_roads = self._filter_focus_roads(all_roads)
+
         status_count = {}
         for rd in all_roads:
             st = rd['status']
@@ -430,7 +463,7 @@ class TrafficStatusSkill(BaseSkill):
 
     # ── 格式化 ──────────────────────────────────────────
 
-    def _format(self, data, label):
+    def _format(self, data, label, query_level=None):
         roads = []
         for r in data.get('trafficinfo', {}).get('roads', []):
             polyline = self._parse_polyline(r.get('polyline', ''))
@@ -443,6 +476,10 @@ class TrafficStatusSkill(BaseSkill):
                 'polyline': polyline,
             })
 
+        # 城市/区县级 → 只保留交通要道
+        if query_level in ('市', '区县'):
+            roads = self._filter_focus_roads(roads)
+
         status_count = {}
         for rd in roads:
             st = rd['status']
@@ -452,23 +489,95 @@ class TrafficStatusSkill(BaseSkill):
 
         return {'area': label, 'roads': roads, 'summary': summary, 'total': len(roads)}
 
+    # ── TTS 朗读策略 ────────────────────────────────────
+
+    tts_strategy = {
+        'enabled': True,
+        'max_items': 3,
+        'priority_field': 'speed',
+        'group_field': 'status',
+        'summary_tpl': '其余{count}条路段通行正常。',
+    }
+
+    # ── 地图高亮（从 API 数据提取，非 LLM 生成）───────
+
+    def build_highlights(self, result: dict) -> list:
+        roads = result.get('roads', [])
+        highlights = []
+        for r in roads:
+            status = r.get('status', '')
+            if status not in ('拥堵', '严重拥堵', '缓行'):
+                continue
+            highlights.append({
+                'name': r['name'],
+                'status': status,
+                'speed': r.get('speed', ''),
+                'direction': r.get('direction', ''),
+                'polyline': r.get('polyline', []),
+            })
+        severity = {'严重拥堵': 0, '拥堵': 1, '缓行': 2}
+        highlights.sort(key=lambda h: severity.get(h['status'], 99))
+        # debug
+        if highlights:
+            print(f'[DEBUG build_highlights] {len(highlights)} 条高亮:')
+            for h in highlights[:5]:
+                print(f'  {h["name"]} | {h["status"]} | polyline pts={len(h["polyline"])}')
+        else:
+            print(f'[DEBUG build_highlights] 0 条高亮（所有路畅通）')
+        return highlights
+
     # ── 千问 / 前端 数据切片 ─────────────────────────────
+
+    @staticmethod
+    def _build_key_facts(roads):
+        """生成确定性事实摘要（100% 基于数据，LLM 不可修改）"""
+        total = len(roads)
+        by_status = {}
+        for r in roads:
+            st = r['status']
+            by_status.setdefault(st, []).append(r['name'])
+        parts = []
+        for st in ('严重拥堵', '拥堵', '缓行', '畅通'):
+            names = by_status.get(st, [])
+            if names:
+                parts.append(f'{st}{len(names)}条（{"、".join(names[:5])}{"，等" if len(names)>5 else ""}）')
+        fact_line = f'共{total}条道路。' + '；'.join(parts) if parts else f'共{total}条道路，全部畅通。'
+        return fact_line
 
     def lightweight(self, result: dict) -> dict:
         light = super().lightweight(result)
         roads = result.get('roads', [])
-        light['_focus'] = self._build_focus(roads)
-        light['_guidance'] = (
-            '1. 先给一句总览，用 🔴🟡🟢 标注整体状态。'
-            '2. 如果有拥堵或缓行路段 → 用表格列出（道路|方向|速度|状况），逐条展开。'
-            '3. 然后按 _focus 分组简述：跨海通道→高速快速路→主要干道。'
-            '   有异常报异常，全畅通则一句话带过（如"跨海通道均畅通"）。'
-            '4. 全畅通时不画表格、不逐条列路名，用 _focus 分组简述即可。'
-            '5. 如有拥堵可给绕行建议，无拥堵则"其余路段通行正常"收尾。'
-        )
+
+        # 确定性事实摘要（替代 _guidance）
+        light['_key_facts'] = self._build_key_facts(roads)
+
+        # debug：打印 LLM 收到的真实数据
+        print(f'[DEBUG] LLM 收到 {len(roads)} 条路:')
+        for r in roads:
+            print(f'  {r["name"]} | {r["status"]} | {r["speed"]}')
+        print(f'[DEBUG] _key_facts: {light["_key_facts"]}')
+
         return light
 
     # ── 关键基础设施识别 ──────────────────────────────────
+
+    @staticmethod
+    def _filter_focus_roads(roads):
+        """城市级查询：只保留桥梁/通道、高速/快速路、主干道（过滤小巷支路）"""
+        bridge_kw = ('桥', '隧道', '通道', '大桥')
+        highway_kw = ('高速', '快速路', '大道', 'G15', 'G25', 'G70', 'G76', 'G319', 'G324', 'G205')
+        road_kw = ('路', '街')
+
+        def is_focus(name):
+            if any(k in name for k in bridge_kw + highway_kw):
+                return True
+            if any(k in name for k in road_kw):
+                return True
+            return False
+
+        filtered = [r for r in roads if is_focus(r['name'])]
+        print(f'[FocusFilter] {len(roads)} → {len(filtered)} 条要道')
+        return filtered if filtered else roads  # 过滤后为空则保留全部
 
     @staticmethod
     def _build_focus(roads):
