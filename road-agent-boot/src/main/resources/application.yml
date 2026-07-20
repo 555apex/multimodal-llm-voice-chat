@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: road-agent
+  jackson:
+    default-property-inclusion: non_null
+
+server:
+  port: ${SERVER_PORT:8080}
+
+roadagent:
+  traffic:
+    provider: ${ROADAGENT_TRAFFIC_PROVIDER:mock}
+    mock-scenario: ${ROADAGENT_MOCK_SCENARIO:normal}
+    stale-after-minutes: ${ROADAGENT_TRAFFIC_STALE_AFTER_MINUTES:5}
+    amap:
+      endpoint: ${AMAP_TRAFFIC_ENDPOINT:https://restapi.amap.com/v3/traffic/status/road}
+      api-key: ${AMAP_API_KEY:}
+      road-level: ${AMAP_ROAD_LEVEL:5}
+      timeout-seconds: ${AMAP_TIMEOUT_SECONDS:5}
+  model:
+    provider: ${ROADAGENT_MODEL_PROVIDER:rule}
+    endpoint: ${ROADAGENT_MODEL_ENDPOINT:https://api.deepseek.com/chat/completions}
+    api-key: ${ROADAGENT_MODEL_API_KEY:}
+    model-name: ${ROADAGENT_MODEL_NAME:deepseek-v4-flash}
+    timeout-seconds: ${ROADAGENT_MODEL_TIMEOUT_SECONDS:10}
+
+logging:
+  level:
+    root: INFO
+    cn.fj.roadagent: INFO

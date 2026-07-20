@@ -1,0 +1,38 @@
+# Maven
+**/target/
+.mvn/timing.properties
+*.class
+*.hprof
+hs_err_pid*
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
+frontend/*.tsbuildinfo
+npm-debug.log*
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+
+# IDE and operating system
+.DS_Store
+*.log
+.idea/
+**/.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+**/.settings/
+
+# Maven Wrapper must remain tracked:
+# mvnw, mvnw.cmd and .mvn/wrapper/maven-wrapper.properties

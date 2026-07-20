@@ -1,0 +1,152 @@
+openapi: 3.1.0
+info:
+  title: 福建应急交通Agent API
+  version: 0.1.0
+  description: 一期实时交通查询接口契约
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/v1/traffic/queries:
+    post:
+      summary: 查询指定道路的实时路况
+      operationId: queryRealtimeTraffic
+      parameters:
+        - in: header
+          name: X-Trace-Id
+          required: false
+          schema:
+            type: string
+          description: 调用方可传入的链路标识；不传时由后端生成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrafficQueryRequest'
+            example:
+              areaCode: '350100'
+              roadName: 五四路
+              direction: 南向北
+      responses:
+        '200':
+          description: 查询完成；没有路段也属于成功响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrafficQueryApiResponse'
+        '400':
+          description: 请求参数不正确
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: 高德等外部交通服务调用失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    TrafficQueryRequest:
+      type: object
+      required: [areaCode, roadName]
+      properties:
+        areaCode:
+          type: string
+          pattern: '^\d{6}$'
+        roadName:
+          type: string
+          maxLength: 100
+        direction:
+          type: [string, 'null']
+          maxLength: 50
+    TrafficSegment:
+      type: object
+      required: [roadName, direction, congestionLevel]
+      properties:
+        roadName:
+          type: string
+        direction:
+          type: string
+        congestionLevel:
+          type: string
+          enum: [UNKNOWN, SMOOTH, SLOW, CONGESTED]
+        averageSpeedKmh:
+          type: [number, 'null']
+        polyline:
+          type: [string, 'null']
+    TrafficQueryResult:
+      type: object
+      required:
+        - areaCode
+        - roadName
+        - summary
+        - summarySource
+        - segments
+        - source
+        - acquiredAt
+        - freshness
+        - mock
+        - warnings
+      properties:
+        areaCode:
+          type: string
+        roadName:
+          type: string
+        direction:
+          type: [string, 'null']
+        summary:
+          type: string
+        summarySource:
+          type: string
+          enum: [MODEL, RULE_FALLBACK]
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrafficSegment'
+        source:
+          type: string
+          examples: [MOCK, AMAP]
+        acquiredAt:
+          type: string
+          format: date-time
+        freshness:
+          type: string
+          enum: [FRESH, STALE, UNKNOWN]
+        mock:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+    TrafficQueryApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code:
+          const: OK
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/TrafficQueryResult'
+        traceId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    ErrorResponse:
+      type: object
+      required: [code, message, traceId, timestamp]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        data:
+          type: 'null'
+        traceId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
