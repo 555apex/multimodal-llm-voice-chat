@@ -1,30 +1,94 @@
+# =============================================================================
+# Road Agent 主配置文件
+# 语法说明：${环境变量:默认值} 读环境变量，读不到就用冒号右边的默认值
+# =============================================================================
+
+# ------ Spring 框架基础配置 ------
 spring:
   application:
+    # 应用名称，会在日志和监控中显示
     name: road-agent
   jackson:
+    # JSON序列化时，值为null的字段不输出（让返回的JSON更精简）
     default-property-inclusion: non_null
 
+# ------ 内嵌Tomcat服务器配置 ------
 server:
+  # 服务端口，可通过环境变量 SERVER_PORT 覆盖，默认8080
   port: ${SERVER_PORT:8080}
 
+# =============================================================================
+# Road Agent 业务配置（前缀 roadagent）
+# =============================================================================
 roadagent:
-  traffic:
-    provider: ${ROADAGENT_TRAFFIC_PROVIDER:mock}
-    mock-scenario: ${ROADAGENT_MOCK_SCENARIO:normal}
-    stale-after-minutes: ${ROADAGENT_TRAFFIC_STALE_AFTER_MINUTES:5}
-    amap:
-      endpoint: ${AMAP_TRAFFIC_ENDPOINT:https://restapi.amap.com/v3/traffic/status/road}
-      api-key: ${AMAP_API_KEY:}
-      road-level: ${AMAP_ROAD_LEVEL:5}
-      timeout-seconds: ${AMAP_TIMEOUT_SECONDS:5}
-  model:
-    provider: ${ROADAGENT_MODEL_PROVIDER:rule}
-    endpoint: ${ROADAGENT_MODEL_ENDPOINT:https://api.deepseek.com/chat/completions}
-    api-key: ${ROADAGENT_MODEL_API_KEY:}
-    model-name: ${ROADAGENT_MODEL_NAME:deepseek-v4-flash}
-    timeout-seconds: ${ROADAGENT_MODEL_TIMEOUT_SECONDS:10}
 
+  # ===== 交通数据源配置 =====
+  traffic:
+    # 当前运行时只使用amap（高德真实API）。未来甲方数据接入时增加新的Adapter。
+    provider: ${ROADAGENT_TRAFFIC_PROVIDER:amap}
+
+    # 数据过期阈值，单位：分钟。数据超过这个时间没更新就标记为 STALE
+    stale-after-minutes: ${ROADAGENT_TRAFFIC_STALE_AFTER_MINUTES:5}
+
+    # ===== 高德地图API配置（仅 provider=amap 时生效） =====
+    amap:
+      # 高德交通态势API地址（Web服务API v3）
+      endpoint: ${AMAP_TRAFFIC_ENDPOINT:https://restapi.amap.com/v3/traffic/status/road}
+      # 行政区区域交通使用矩形态势接口
+      area-endpoint: ${AMAP_AREA_TRAFFIC_ENDPOINT:https://restapi.amap.com/v3/traffic/status/rectangle}
+      # 根据市、区、县名称取得可信adcode和行政边界
+      district-endpoint: ${AMAP_DISTRICT_ENDPOINT:https://restapi.amap.com/v3/config/district}
+      # 高德API密钥，在 console.amap.com 注册应用后获取
+      # 默认值为空，使用高德时必须设置环境变量 AMAP_API_KEY
+      api-key: ${AMAP_API_KEY:}
+      # 道路等级过滤：1=高速 2=国道 3=省道 4=县道 5=全部（默认查所有级别道路）
+      road-level: ${AMAP_ROAD_LEVEL:5}
+      # HTTP请求超时时间，单位：秒
+      timeout-seconds: ${AMAP_TIMEOUT_SECONDS:8}
+      # 区域矩形边长约6公里，对角线低于高德10公里限制
+      area-tile-size-km: ${AMAP_AREA_TILE_SIZE_KM:6}
+      # 防止异常边界产生无限请求
+      area-max-tiles: ${AMAP_AREA_MAX_TILES:500}
+      # 同一行政区内并发请求数
+      area-concurrency: ${AMAP_AREA_CONCURRENCY:4}
+      # 区域路况短时缓存，避免连续提问重复采集
+      area-cache-seconds: ${AMAP_AREA_CACHE_SECONDS:120}
+      # 行政边界变化很少，开发阶段缓存24小时
+      district-cache-hours: ${AMAP_DISTRICT_CACHE_HOURS:24}
+
+  # ===== 大模型配置 =====
+  model:
+    # 当前使用openai-compatible。DeepSeek和多数服务器模型都可采用该协议。
+    provider: ${ROADAGENT_MODEL_PROVIDER:openai-compatible}
+
+    # 大模型API地址（仅 provider=openai-compatible 时生效）
+    # 默认是DeepSeek的地址，换成通义千问/智谱等兼容OpenAI格式的都可以
+    endpoint: ${ROADAGENT_MODEL_ENDPOINT:https://api.deepseek.com/chat/completions}
+
+    # 大模型API密钥，使用模型时必须设置环境变量
+    api-key: ${ROADAGENT_MODEL_API_KEY:}
+
+    # 调用的具体模型名称（换成其他厂商时改这里）
+    model-name: ${ROADAGENT_MODEL_NAME:deepseek-v4-flash}
+
+    # DeepSeek需要Bearer密钥；无鉴权的内网服务器模型可设为false
+    auth-enabled: ${ROADAGENT_MODEL_AUTH_ENABLED:true}
+
+    # 模型请求超时时间，单位：秒。流式回答比普通API耗时更长
+    timeout-seconds: ${ROADAGENT_MODEL_TIMEOUT_SECONDS:60}
+
+  # ===== 会话短期记忆配置 =====
+  memory:
+    # 每个会话最多保留20条消息，避免上下文无限增长
+    max-messages: ${ROADAGENT_MEMORY_MAX_MESSAGES:20}
+    # 60分钟没有访问后自动视为新会话
+    idle-minutes: ${ROADAGENT_MEMORY_IDLE_MINUTES:60}
+
+# ===== 日志配置 =====
 logging:
   level:
+    # 全局默认日志级别：INFO（只显示关键信息，不输出调试细节）
     root: INFO
+    # 本项目代码的日志级别，调成 DEBUG 可以看详细调用链
+    # 可选的级别（按输出量从少到多）：ERROR > WARN > INFO > DEBUG > TRACE
     cn.fj.roadagent: INFO

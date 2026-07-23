@@ -4,12 +4,14 @@
 
 | 编号 | 开发角色 | 业务功能 | 模块/实现类 | 输入 | 输出 | 当前状态 | 完成标准 | 测试 | 阻塞项 |
 |---|---|---|---|---|---|---|---|---|---|
-| TQ-A01 | Agent与业务主线 | 交通查询固定Skill | `RealtimeTrafficSkill.java` | `TrafficQueryCommand` | `TrafficQueryResult` | 基线已完成 | 固定5步；模型失败可降级 | `RealtimeTrafficSkillTest` | 无 |
-| TQ-A02 | Agent与业务主线 | 规则摘要优化 | `RuleBasedTrafficSummaryGenerator.java` | `TrafficSnapshot` | 中文摘要 | 待领取 | 统计不同拥堵等级且不编造事实 | 新增单元测试 | 无 |
-| TQ-B01 | 数据与Tool支线 | 实时路况查询Tool | `QueryRealtimeTrafficTool.java` | `TrafficQuery` | `TrafficSnapshot` | 基线已完成 | 仅依赖 `TrafficDataPort` | 适配器测试 | 等待真实数据接口 |
-| TQ-B02 | 数据与Tool支线 | 高德数据映射 | `AmapTrafficDataAdapter.java` | 高德JSON | 内部标准路况 | 基线已完成 | 状态、速度和错误正确映射 | `AmapTrafficDataAdapterTest` | Key可能无高级服务权限 |
-| TQ-B03 | 数据与Tool支线 | Mock部分数据场景 | `MockTrafficDataAdapter.java` | 查询条件 | 部分路段 | 待领取 | 可通过配置切换且有测试 | 新增适配器测试 | 无 |
-| TQ-C01 | 接口与交互支线 | 交通查询表单 | `TrafficQueryForm.vue` | 用户输入 | 查询请求 | 基线已完成 | 有本地校验和加载状态 | 组件测试 | 无 |
-| TQ-C02 | 接口与交互支线 | 警告中文化 | `TrafficResultPanel.vue` | warning code | 中文提示 | 待领取 | 空、旧、降级提示可区分 | 新增组件测试 | 需共同确定文案 |
+| AG-A01 | Agent与业务主线 | 意图识别与参数提取 | `IntentPlanner.java` | 用户消息、会话历史 | `AgentDecision` | 基线已完成 | 仅允许三种意图；非法JSON修复一次 | `AgentRuntimeTest`、模型适配器测试 | 需持续优化提示词 |
+| AG-A02 | Agent与业务主线 | Skill白名单与运行时 | `AgentRuntime.java`、`SkillRegistry.java` | `AgentDecision` | SSE阶段与业务结果 | 基线已完成 | 未注册能力不可执行；失败发`run.failed` | `AgentRuntimeTest` | 无 |
+| TQ-A01 | Agent与业务主线 | 道路与区域交通Skill | `IntentPlanner.java`、`RealtimeTrafficSkill.java` | 城市、行政区、道路、范围 | 路况回答与统一交通结果 | 基线已完成 | 正确选择`ROAD / AREA_ALL / AREA_MAJOR`；模型不编造交通要道 | `IntentPlannerTest`、`RealtimeTrafficSkillTest` | 高德高级服务权限 |
+| ED-A01 | Agent与业务主线 | 调度方案与审批规则 | `EmergencyDispatchSkill.java`、`DispatchApplicationService.java` | 事件、资源、审批决定 | 调度方案、Mock工单 | 基线已完成 | 未批准不下发；重复批准不重复建单 | `DispatchApplicationServiceTest` | 真实工单接口未提供 |
+| TQ-B01 | 数据与Tool支线 | 高德交通Tool与映射 | `QueryRealtimeTrafficTool.java`、`AmapTrafficDataAdapter.java` | `TrafficQuery` | `TrafficSnapshot` | 基线已完成 | 覆盖、状态、速度和错误正确映射 | `AmapTrafficDataAdapterTest` | 目前仅验证三座城市 |
+| TQ-B02 | 数据与Tool支线 | 行政区解析与区域分片 | `QueryAreaTrafficTool.java`、`AmapAdministrativeAreaAdapter.java`、`AmapAreaTrafficDataAdapter.java` | 行政区名称、查询范围 | 去重路段、指标、覆盖率 | 基线已完成 | 6公里分片、不超过500片、部分失败可见 | 行政区与区域Adapter测试 | 目前仅高德覆盖三座城市 |
+| ED-B01 | 数据与Tool支线 | Mock资源与工单 | `MockResourceDataAdapter.java`、`MockWorkOrderAdapter.java` | 资源查询、已审批方案 | 资源、唯一工单 | 基线已完成 | 资源可控；工单幂等 | `MockWorkOrderAdapterTest` | 等待甲方接口 |
+| UI-C01 | 接口与交互支线 | 流式对话页面 | `AgentController.java`、`agentApi.ts`、`agent.ts` | 用户自然语言 | SSE消息与阶段 | 基线已完成 | 流式拼接；失败丢弃半成品 | Controller与前端测试 | 无 |
+| UI-C02 | 接口与交互支线 | 交通与调度卡片 | `TrafficResultPanel.vue`、`DispatchPlanCard.vue` | 结构化结果 | 指标、覆盖率、道路列表与审批操作 | 基线已完成 | 区域列表可搜索、筛选、每页50条；审批防重复点击 | `TrafficResultPanel.test.ts`与调度组件测试 | warning需中文化 |
 
 状态建议统一使用：`待领取`、`进行中`、`待评审`、`已完成`、`受阻`。

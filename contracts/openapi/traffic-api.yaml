@@ -1,22 +1,106 @@
 openapi: 3.1.0
 info:
   title: 福建应急交通Agent API
-  version: 0.1.0
-  description: 一期实时交通查询接口契约
+  version: 0.3.0
+  description: 对话式道路/行政区交通查询、最小应急调度及结构化兼容接口
 servers:
   - url: http://localhost:8080
 paths:
-  /api/v1/traffic/queries:
+  /api/v1/conversations/{conversationId}/messages/stream:
     post:
-      summary: 查询指定道路的实时路况
-      operationId: queryRealtimeTraffic
+      summary: 发送自然语言消息并接收Agent流式事件
+      operationId: converseWithAgent
       parameters:
-        - in: header
-          name: X-Trace-Id
-          required: false
+        - in: path
+          name: conversationId
+          required: true
           schema:
             type: string
-          description: 调用方可传入的链路标识；不传时由后端生成
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentMessageRequest'
+            example:
+              message: 福州五四路现在堵吗
+      responses:
+        '200':
+          description: |
+            SSE事件流。事件名称可能为run.started、stage.changed、intent.recognized、
+            skill.selected、tool.started、tool.progress、tool.completed、answer.delta、result.traffic、
+            result.dispatch、approval.required、run.completed或run.failed。
+          content:
+            text/event-stream:
+              schema:
+                type: string
+              example: |-
+                event: answer.delta
+                data: {"content":"五四路当前"}
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/dispatches/{planId}:
+    get:
+      summary: 查询调度方案当前状态
+      operationId: getDispatchPlan
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+        - $ref: '#/components/parameters/TraceId'
+      responses:
+        '200':
+          description: 调度方案
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/dispatches/{planId}/approvals:
+    post:
+      summary: 批准或驳回调度方案
+      description: 只有本接口能触发Mock工单创建；聊天文字中的确认不能下发。
+      operationId: approveDispatchPlan
+      parameters:
+        - $ref: '#/components/parameters/PlanId'
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchApprovalRequest'
+            example:
+              decision: APPROVE
+              comment: 同意执行
+              expectedVersion: 1
+              idempotencyKey: browser-generated-uuid
+      responses:
+        '200':
+          description: 审批后的方案；批准后状态为SUBMITTED，驳回后为REJECTED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 方案版本冲突或当前状态不允许审批
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/traffic/queries:
+    post:
+      summary: 使用结构化参数查询实时路况（兼容接口）
+      operationId: queryRealtimeTraffic
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
       requestBody:
         required: true
         content:
@@ -29,25 +113,93 @@ paths:
               direction: 南向北
       responses:
         '200':
-          description: 查询完成；没有路段也属于成功响应
+          description: 查询及模型总结完成
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/TrafficQueryApiResponse'
         '400':
-          description: 请求参数不正确
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          $ref: '#/components/responses/BadRequest'
         '502':
-          description: 高德等外部交通服务调用失败
+          description: 高德或模型服务失败
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/traffic/area-queries:
+    post:
+      summary: 使用结构化参数查询行政区交通态势
+      description: AREA_ALL查全体命名道路，AREA_MAJOR按高德道路等级4查主要道路。
+      operationId: queryAreaTraffic
+      parameters:
+        - $ref: '#/components/parameters/TraceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AreaTrafficQueryRequest'
+            example:
+              city: 厦门
+              areaName: 思明区
+              scope: AREA_ALL
+      responses:
+        '200':
+          description: 区域路况摘要、Java统计指标、分片覆盖率和全部去重路段
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AreaTrafficApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          description: 高德或模型服务失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
+  parameters:
+    TraceId:
+      in: header
+      name: X-Trace-Id
+      required: false
+      schema:
+        type: string
+      description: 调用方可传入的链路标识；不传时由后端生成
+    PlanId:
+      in: path
+      name: planId
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: 请求参数或业务输入不正确
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 调度方案不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
   schemas:
+    AgentMessageRequest:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+
     TrafficQueryRequest:
       type: object
       required: [areaCode, roadName]
@@ -61,6 +213,21 @@ components:
         direction:
           type: [string, 'null']
           maxLength: 50
+
+    AreaTrafficQueryRequest:
+      type: object
+      required: [city, areaName, scope]
+      properties:
+        city:
+          type: string
+          maxLength: 30
+        areaName:
+          type: string
+          maxLength: 50
+        scope:
+          type: string
+          enum: [AREA_ALL, AREA_MAJOR]
+
     TrafficSegment:
       type: object
       required: [roadName, direction, congestionLevel]
@@ -76,19 +243,10 @@ components:
           type: [number, 'null']
         polyline:
           type: [string, 'null']
+
     TrafficQueryResult:
       type: object
-      required:
-        - areaCode
-        - roadName
-        - summary
-        - summarySource
-        - segments
-        - source
-        - acquiredAt
-        - freshness
-        - mock
-        - warnings
+      required: [areaCode, roadName, summary, summarySource, segments, source, acquiredAt, freshness, mock, warnings]
       properties:
         areaCode:
           type: string
@@ -100,14 +258,14 @@ components:
           type: string
         summarySource:
           type: string
-          enum: [MODEL, RULE_FALLBACK]
+          const: MODEL
         segments:
           type: array
           items:
             $ref: '#/components/schemas/TrafficSegment'
         source:
           type: string
-          examples: [MOCK, AMAP]
+          examples: [AMAP]
         acquiredAt:
           type: string
           format: date-time
@@ -116,37 +274,180 @@ components:
           enum: [FRESH, STALE, UNKNOWN]
         mock:
           type: boolean
+          const: false
         warnings:
           type: array
           items:
             type: string
+
+    TrafficEvaluation:
+      type: object
+      required: [totalSegments, smoothSegments, slowSegments, congestedSegments, unknownSegments, smoothRatio, slowRatio, congestedRatio, unknownRatio]
+      properties:
+        totalSegments: { type: integer, minimum: 0 }
+        smoothSegments: { type: integer, minimum: 0 }
+        slowSegments: { type: integer, minimum: 0 }
+        congestedSegments: { type: integer, minimum: 0 }
+        unknownSegments: { type: integer, minimum: 0 }
+        smoothRatio: { type: number, minimum: 0, maximum: 1 }
+        slowRatio: { type: number, minimum: 0, maximum: 1 }
+        congestedRatio: { type: number, minimum: 0, maximum: 1 }
+        unknownRatio: { type: number, minimum: 0, maximum: 1 }
+        averageSpeedKmh: { type: [number, 'null'] }
+
+    TrafficCoverage:
+      type: object
+      required: [totalTiles, succeededTiles, failedTiles, coverageRatio, complete]
+      properties:
+        totalTiles: { type: integer, minimum: 1 }
+        succeededTiles: { type: integer, minimum: 0 }
+        failedTiles: { type: integer, minimum: 0 }
+        coverageRatio: { type: number, minimum: 0, maximum: 1 }
+        complete: { type: boolean }
+
+    AreaTrafficResult:
+      type: object
+      required: [queryScope, areaCode, areaName, city, summary, summarySource, evaluation, coverage, segments, source, acquiredAt, freshness, warnings]
+      properties:
+        queryScope:
+          type: string
+          enum: [AREA_ALL, AREA_MAJOR]
+        areaCode: { type: string, pattern: '^35\d{4}$' }
+        areaName: { type: string }
+        city: { type: string }
+        summary: { type: string }
+        summarySource: { type: string, const: MODEL }
+        evaluation: { $ref: '#/components/schemas/TrafficEvaluation' }
+        coverage: { $ref: '#/components/schemas/TrafficCoverage' }
+        segments:
+          type: array
+          items: { $ref: '#/components/schemas/TrafficSegment' }
+        source: { type: string, examples: [AMAP] }
+        acquiredAt: { type: string, format: date-time }
+        freshness: { type: string, enum: [FRESH, STALE, UNKNOWN] }
+        warnings:
+          type: array
+          items: { type: string }
+
+    DispatchApprovalRequest:
+      type: object
+      required: [decision, expectedVersion, idempotencyKey]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        comment:
+          type: [string, 'null']
+          maxLength: 300
+        expectedVersion:
+          type: integer
+          minimum: 1
+        idempotencyKey:
+          type: string
+          minLength: 1
+
+    EmergencyEvent:
+      type: object
+      required: [eventType, city, locationDescription, severity, description]
+      properties:
+        eventType: { type: string }
+        city: { type: string }
+        locationDescription: { type: string }
+        severity: { type: string }
+        description: { type: string }
+
+    EmergencyResource:
+      type: object
+      required: [resourceId, type, name, city, capability, available]
+      properties:
+        resourceId: { type: string }
+        type: { type: string }
+        name: { type: string }
+        city: { type: string }
+        capability: { type: string }
+        available: { type: boolean }
+
+    DispatchTask:
+      type: object
+      required: [sequence, action, responsibleUnit]
+      properties:
+        sequence: { type: integer }
+        action: { type: string }
+        responsibleUnit: { type: string }
+        resourceId: { type: [string, 'null'] }
+
+    WorkOrderReference:
+      type: object
+      required: [workOrderId, status, submittedAt, mock]
+      properties:
+        workOrderId: { type: string }
+        status: { type: string }
+        submittedAt: { type: string, format: date-time }
+        mock: { type: boolean, const: true }
+
+    DispatchPlan:
+      type: object
+      required: [planId, event, summary, tasks, resources, warnings, status, version, createdAt, approvalRequired]
+      properties:
+        planId: { type: string }
+        event: { $ref: '#/components/schemas/EmergencyEvent' }
+        summary: { type: string }
+        tasks:
+          type: array
+          items: { $ref: '#/components/schemas/DispatchTask' }
+        resources:
+          type: array
+          items: { $ref: '#/components/schemas/EmergencyResource' }
+        warnings:
+          type: array
+          items: { type: string }
+        status:
+          type: string
+          enum: [DRAFT, WAITING_APPROVAL, APPROVED, SUBMITTED, REJECTED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+        version: { type: integer }
+        createdAt: { type: string, format: date-time }
+        workOrder:
+          oneOf:
+            - $ref: '#/components/schemas/WorkOrderReference'
+            - type: 'null'
+        approvalRequired: { type: boolean }
+
     TrafficQueryApiResponse:
       type: object
       required: [code, message, data, traceId, timestamp]
       properties:
-        code:
-          const: OK
-        message:
-          type: string
-        data:
-          $ref: '#/components/schemas/TrafficQueryResult'
-        traceId:
-          type: string
-        timestamp:
-          type: string
-          format: date-time
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/TrafficQueryResult' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    AreaTrafficApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/AreaTrafficResult' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    DispatchApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/DispatchPlan' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
     ErrorResponse:
       type: object
       required: [code, message, traceId, timestamp]
       properties:
-        code:
-          type: string
-        message:
-          type: string
-        data:
-          type: 'null'
-        traceId:
-          type: string
-        timestamp:
-          type: string
-          format: date-time
+        code: { type: string }
+        message: { type: string }
+        data: { type: 'null' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }

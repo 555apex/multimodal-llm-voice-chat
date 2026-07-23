@@ -1,80 +1,79 @@
 # 三人学习与开发任务
 
-当前代码是一条“能运行、能测试”的基线，不是整个项目的最终实现。三人先共同阅读公共契约，再在自己的模块中练习，避免直接修改其他人的具体实现。
+当前代码是“交通问答 + 最小应急调度”的可运行基线，不是最终产品。三人先理解公共契约，再在各自模块继续实现。
 
-## 1. 共同冻结的最小契约
+## 1. 共同维护的最小契约
 
-本轮先保持以下内容稳定：
+- 对话入口及SSE事件名称；
+- `AgentDecision`中的`trafficScope`、行政区、交通结果和调度方案等内部对象；
+- `TrafficDataPort`、`AdministrativeAreaPort`、`AreaTrafficDataPort`、`ChatModelPort`、`ResourceDataPort`、`WorkOrderPort`；
+- 已注册的意图和Skill白名单；
+- 调度状态、方案版本和审批幂等键。
 
-- 前端接口：`POST /api/v1/traffic/queries`；
-- 业务输入：行政区划代码、道路名称、可选方向；
-- `TrafficDataPort`：取得内部标准 `TrafficSnapshot`；
-- `ChatModelPort`：输入 `ModelRequest`，输出 `ModelResponse`；
-- 响应必须携带来源、获取时间、Mock标识和Trace ID。
-
-调整这些内容前，三人应先讨论，因为修改会同时影响多个模块。
+修改这些内容前应先讨论，因为它们会同时影响多个模块。外部厂商DTO不得进入`core`。
 
 ## 2. Agent与业务主线（约50%）
 
 先阅读：
 
-- `RealtimeTrafficSkill.java`；
-- `TrafficWorkflowStep.java`；
-- `TrafficQuery.java`；
-- `RealtimeTrafficSkillTest.java`。
+- `AgentRuntime.java`、`IntentPlanner.java`、`SkillRegistry.java`；
+- `RealtimeTrafficSkill.java`、`EmergencyDispatchSkill.java`；
+- `DispatchApplicationService.java`及对应测试。
 
 建议练习：
 
-1. 增加“道路名称过短或仅包含空白”的领域测试；
-2. 给未来时间的数据增加更明确的 `UNKNOWN` 警告；
-3. 改进规则摘要，使其分别统计畅通、缓行、拥堵路段数量；
-4. 为Prompt增加测试，证明没有把API密钥或技术配置发给模型；
-5. 设计第二个只读Skill时，复用工作流思想，但不要急于创建万能Planner。
+1. 增加意图模型非法字段、缺失参数和修复失败测试；
+2. 增加“继续问北向南”的多轮会话用例；
+3. 增加`ROAD / AREA_ALL / AREA_MAJOR`连续追问和非福建问题测试；
+4. 补充调度方案资源白名单、版本冲突和失败恢复测试；
+5. 为新增Skill明确输入、步骤、Tool、审批点和结果对象。
 
-验收：新增规则必须有单元测试；关闭模型API时交通查询仍可工作。
+验收：模型不能绕过Skill白名单和审批规则；模型或外部服务失败时不得伪造成功结果。
 
-## 3. 数据与Tool支线（约30%）
+## 3. 数据、Tool与知识支线（约30%）
 
 先阅读：
 
-- `QueryRealtimeTrafficTool.java`；
-- `MockTrafficDataAdapter.java`；
-- `AmapTrafficDataAdapter.java`；
-- `OpenAiCompatibleChatModelAdapter.java`。
+- `QueryRealtimeTrafficTool.java`、`QueryEmergencyResourcesTool.java`；
+- `AmapTrafficDataAdapter.java`、`AmapAdministrativeAreaAdapter.java`、`AmapAreaTrafficDataAdapter.java`；
+- `OpenAiCompatibleChatModelAdapter.java`；
+- `MockResourceDataAdapter.java`、`MockWorkOrderAdapter.java`。
 
 建议练习：
 
-1. 为Mock增加 `partial` 和 `timeout` 场景；
-2. 补充高德缺少道路列表、速度无法解析等测试；
-3. 将高德错误码映射整理为独立类；
-4. 记录外部调用耗时，但禁止记录API密钥；
-5. 数据团队接口确定后新增 `ClientTrafficDataAdapter`，不得把对方DTO传入核心层。
+1. 补充高德无道路、无权限、超时和异常字段测试；
+2. 理解6公里分片、500片保护、并发采集、短时缓存和部分覆盖的实现；
+3. 给结构化模型输出增加“一次修复成功”和“两次失败”测试；
+4. 扩充不同城市和事件类型的Mock资源；
+5. 记录外部调用耗时，但禁止记录API密钥和完整敏感请求；
+6. 甲方接口确定后新增Adapter，并转换为内部标准对象。
 
-验收：Mock和高德适配器都满足同一个 `TrafficDataPort`契约；外部错误不能伪装成正常数据。
+验收：自动测试不访问真实服务；Mock只用于暂时没有真实接口的资源和工单，不用于交通运行链路。
 
 ## 4. 接口与交互支线（约20%）
 
 先阅读：
 
-- `TrafficController.java`；
-- `TrafficQueryRequest.java`；
-- `frontend/src/stores/traffic.ts`；
-- 两个Vue组件。
+- `AgentController.java`、`DispatchController.java`；
+- `frontend/src/api/agentApi.ts`；
+- `frontend/src/stores/agent.ts`；
+- `ChatMessage.vue`、`TrafficResultPanel.vue`、`DispatchPlanCard.vue`。
 
 建议练习：
 
-1. 将后端警告码转换成用户易懂的中文；
-2. 为“空数据”和“陈旧数据”分别设计视觉状态；
-3. 增加最近三次查询记录，只保存在浏览器内存；
-4. 为结果面板增加组件测试；
-5. 后续有真实地图需求时，再讨论高德JS地图，不在当前页面直接嵌入。
+1. 将交通warning code转换为清晰中文；
+2. 维护区域整体指标、覆盖率、道路搜索、状态筛选和50条分页；
+3. 完善SSE断线、失败和重复点击审批的交互；
+4. 增加数字人“聆听、思考、回答、失败”状态测试；
+5. 为小屏和大屏布局增加视觉验收；
+6. 后续再分别接入ASR和TTS，不让语音逻辑进入Agent核心。
 
-验收：加载、成功、空数据、参数错误和上游错误五种状态均能明确呈现。
+验收：失败时丢弃未完成回答；交通卡片和调度卡片只依据结构化事件展示。
 
 ## 5. 集成规则
 
-- 不在模块之间复制DTO；需要共享的内部对象放在 `domain` 或 `application`；
-- 不让外部平台DTO进入 `core`；
-- 不在Controller里编写业务流程；
-- 不让大模型生成或改变拥堵等级；
-- 每人提交前至少运行自己模块测试，集成负责人运行全部测试。
+- 不在Controller或Vue组件中编写业务状态规则；
+- 不让大模型直接访问数据库或创建工单；
+- 不让外部平台DTO进入`core`；
+- 不在Git中保存API密钥；
+- 每人提交前运行自己模块测试，集成负责人运行全部后端、前端测试和构建。

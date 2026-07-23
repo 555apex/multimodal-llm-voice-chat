@@ -32,12 +32,12 @@ class TrafficControllerTest {
         QueryRealtimeTrafficUseCase useCase = command -> new TrafficQueryResult(
                 new TrafficQuery(command.areaCode(), command.roadName(), command.direction()),
                 "五四路当前缓行。",
-                SummarySource.RULE_FALLBACK,
+                SummarySource.MODEL,
                 List.of(new RoadSegmentStatus("五四路", "南向北", CongestionLevel.SLOW, 25.0, null)),
-                "MOCK",
+                "AMAP",
                 Instant.parse("2026-07-17T08:00:00Z"),
                 Freshness.FRESH,
-                true,
+                false,
                 List.of(),
                 command.traceId()
         );

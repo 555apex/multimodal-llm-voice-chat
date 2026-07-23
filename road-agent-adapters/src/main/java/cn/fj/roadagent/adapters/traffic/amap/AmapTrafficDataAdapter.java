@@ -13,6 +13,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.time.Clock;
 import java.util.List;
+import java.util.Set;
 
 public final class AmapTrafficDataAdapter implements TrafficDataPort {
 // 高德数据源数据实现：(adapters层)的AmapTrafficDataAdapter 实现 (application层)提供的数据接口：TrafficDataPort
@@ -22,6 +23,8 @@ public final class AmapTrafficDataAdapter implements TrafficDataPort {
     private final String apiKey;    // 高德API密钥
     private final int roadLevel;    // 道路等级（高速/国道/省道...）
     private final Clock clock;      // 时钟
+    // 高德交通态势接口当前在福建省明确覆盖福州、厦门和泉州。
+    private static final Set<String> SUPPORTED_FUJIAN_ADCODES = Set.of("350100", "350200", "350500");
 
     // 构造函数
     public AmapTrafficDataAdapter(
@@ -41,6 +44,12 @@ public final class AmapTrafficDataAdapter implements TrafficDataPort {
     @Override
     // 实现：构造url -> 发请求拿结果
     public TrafficSnapshot query(TrafficQuery query) {
+        if (!SUPPORTED_FUJIAN_ADCODES.contains(query.areaCode())) {
+            throw new ExternalServiceException(
+                    "AMAP", "TRAFFIC_AREA_UNSUPPORTED_BY_PROVIDER",
+                    "当前高德交通态势数据源暂不覆盖该福建城市，后续可切换甲方数据适配器"
+            );
+        }
         URI uri = UriComponentsBuilder.fromUriString(endpoint)
                 .queryParam("key", apiKey)      // 高德API密钥
                 .queryParam("level", roadLevel)     // 道路等级

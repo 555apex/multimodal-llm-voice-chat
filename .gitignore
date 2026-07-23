@@ -20,6 +20,8 @@ npm-debug.log*
 **/application-local.yml
 **/application-local.yaml
 **/application-local.properties
+config/api-test.env
+config/local.env
 
 # IDE and operating system
 .DS_Store

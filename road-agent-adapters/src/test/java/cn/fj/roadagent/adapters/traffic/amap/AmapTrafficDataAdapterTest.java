@@ -79,4 +79,12 @@ class AmapTrafficDataAdapterTest {
 
         assertEquals("AMAP_AUTH_OR_PERMISSION_ERROR", exception.errorCode());
     }
+
+    @Test
+    void shouldRejectFujianCityNotCoveredByCurrentProvider() {
+        ExternalServiceException exception = assertThrows(ExternalServiceException.class,
+                () -> adapter.query(new TrafficQuery("350900", "闽东路", null)));
+
+        assertEquals("TRAFFIC_AREA_UNSUPPORTED_BY_PROVIDER", exception.errorCode());
+    }
 }
