@@ -79,6 +79,7 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
 
     @Override   // 表示覆写接口或父类的方法，作为安全保障（以防不存在这个方法）
     // 此处，为覆写QueryRealtimeTrafficUseCase的query方法
+    // 函数功能：查询某条道路的交通数据信息
     public TrafficQueryResult query(TrafficQueryCommand command) {
         // command - 领域对象
         TrafficQuery query = new TrafficQuery(command.areaCode(), command.roadName(), command.direction());
@@ -113,6 +114,7 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
 
 
     @Override   // 覆写区域查询interface方法：QueryAreaTrafficUseCase
+    // 函数功能：查询某个区域的交通信息
     public AreaTrafficQueryResult queryArea(AreaTrafficQueryCommand command) {
         TrafficQueryScope scope = command.scope() == null ? TrafficQueryScope.AREA_ALL : command.scope();
         if (!scope.isArea()) {

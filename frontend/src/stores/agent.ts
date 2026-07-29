@@ -27,7 +27,7 @@ function initialSession(): StoredSession {
       {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: '你好，我可以查询福州、厦门、泉州的实时道路交通，也可以生成应急调度草案。',
+        content: '你好，我可以查询福州、厦门、泉州的实时道路交通。正式应急调度请通过顶部红色告警卡处理。',
         status: 'completed',
       },
     ],
@@ -113,7 +113,7 @@ export const useAgentStore = defineStore('agent', {
       this.persist()
     },
 
-    async decide(messageId: string, decision: 'APPROVE' | 'REJECT') {
+    async decide(messageId: string, decision: 'APPROVE' | 'REJECT', comment = '') {
       const message = this.findMessage(messageId)
       if (!message.dispatch || this.approvalBusyPlanId) return
       const plan = message.dispatch
@@ -124,6 +124,7 @@ export const useAgentStore = defineStore('agent', {
           decision,
           plan.version,
           `${plan.planId}-${crypto.randomUUID()}`,
+          comment,
         )
       } catch (error) {
         message.errorMessage = error instanceof Error ? error.message : '审批失败'
@@ -138,7 +139,7 @@ export const useAgentStore = defineStore('agent', {
       this.messages = [
         {
           id: crypto.randomUUID(), role: 'assistant',
-          content: '已开始新会话。请告诉我城市、道路，或描述需要调度的应急事件。',
+          content: '已开始新会话。请告诉我需要查询的城市、道路或行政区。',
           status: 'completed',
         },
       ]

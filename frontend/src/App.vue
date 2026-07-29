@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import ChatMessage from './components/ChatMessage.vue'
 import DigitalHumanPanel from './components/DigitalHumanPanel.vue'
+import EmergencyAlertCard from './components/EmergencyAlertCard.vue'
 import { useAgentStore } from './stores/agent'
+import { useEmergencyStore } from './stores/emergency'
 
 const store = useAgentStore()
 const { messages, running, stage, toolProgress, approvalBusyPlanId } = storeToRefs(store)
+const emergencyStore = useEmergencyStore()
+const {
+  alert: emergencyAlert,
+  actionBusy: emergencyActionBusy,
+  errorMessage: emergencyError,
+} = storeToRefs(emergencyStore)
 const input = ref('')
 const messageList = ref<HTMLElement>()
 
@@ -20,7 +28,6 @@ const examples = [
   '福州五四路现在堵吗？',
   '厦门市思明区的交通情况如何？',
   '思明区交通要道现在通行情况如何？',
-  '福州五四路发生塌方，请生成应急调度方案。',
 ]
 
 const progressText = computed(() => {
@@ -55,6 +62,9 @@ watch(
     messageList.value?.scrollTo({ top: messageList.value.scrollHeight, behavior: 'smooth' })
   },
 )
+
+onMounted(() => emergencyStore.startPolling())
+onUnmounted(() => emergencyStore.stopPolling())
 </script>
 
 <template>
@@ -71,6 +81,20 @@ watch(
       <DigitalHumanPanel :state="avatarState" />
 
       <section class="chat-panel">
+        <EmergencyAlertCard
+          v-if="emergencyAlert"
+          :alert="emergencyAlert"
+          :busy="emergencyActionBusy"
+          :error-message="emergencyError"
+          @generate="emergencyStore.generate"
+          @no-dispatch="emergencyStore.markNoDispatch"
+          @decide="emergencyStore.decide"
+        />
+        <div v-else-if="emergencyError" class="emergency-query-error">
+          紧急事件告警暂时无法加载：{{ emergencyError }}
+          <button @click="emergencyStore.refresh">重新查询</button>
+        </div>
+
         <div ref="messageList" class="message-list">
           <ChatMessage
             v-for="message in messages"
@@ -97,14 +121,14 @@ watch(
             rows="2"
             maxlength="1000"
             :disabled="running"
-            placeholder="询问路况，或描述需要调度的公路应急事件…"
+            placeholder="询问道路或行政区实时路况…"
             @keydown="handleKeydown"
           ></textarea>
           <button type="submit" :disabled="running || !input.trim()">
             <span>{{ running ? '生成中' : '发送' }}</span><i aria-hidden="true">↗</i>
           </button>
         </form>
-        <p class="composer-hint">Enter发送 · Shift + Enter换行 · 调度下发必须点击人工确认按钮</p>
+        <p class="composer-hint">Enter发送 · Shift + Enter换行 · 正式调度请使用顶部告警卡</p>
       </section>
     </section>
   </main>

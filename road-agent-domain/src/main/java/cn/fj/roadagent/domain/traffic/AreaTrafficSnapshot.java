@@ -4,6 +4,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * 区域查询获得的结果顶层汇总
+ * @param query AreaTrafficQuery.java 区域查询条件
+ * @param segments
+ * @param evaluation    TrafficEvaluation.java 区域拥堵情况统计
+ * @param coverage      TrafficCoverage.java 区域查询覆盖率计算
+ * @param source
+ * @param acquiredAt
+ * @param description
+ * @param warnings
+ */
 public record AreaTrafficSnapshot(
         AreaTrafficQuery query,
         List<RoadSegmentStatus> segments,

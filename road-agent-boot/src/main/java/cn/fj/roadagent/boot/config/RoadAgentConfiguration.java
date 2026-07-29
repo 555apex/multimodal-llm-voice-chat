@@ -1,28 +1,24 @@
 package cn.fj.roadagent.boot.config;
 
-import cn.fj.roadagent.adapters.dispatch.memory.InMemoryDispatchRepository;
-import cn.fj.roadagent.adapters.dispatch.mock.MockResourceDataAdapter;
-import cn.fj.roadagent.adapters.dispatch.mock.MockWorkOrderAdapter;
 import cn.fj.roadagent.adapters.memory.InMemoryConversationMemoryAdapter;
 import cn.fj.roadagent.adapters.model.openai.OpenAiCompatibleChatModelAdapter;
+import cn.fj.roadagent.adapters.transaction.SpringUnitOfWork;
 import cn.fj.roadagent.adapters.tool.QueryAreaTrafficTool;
-import cn.fj.roadagent.adapters.tool.QueryEmergencyResourcesTool;
 import cn.fj.roadagent.adapters.tool.QueryRealtimeTrafficTool;
 import cn.fj.roadagent.adapters.traffic.amap.AmapAdministrativeAreaAdapter;
 import cn.fj.roadagent.adapters.traffic.amap.AmapAreaTrafficDataAdapter;
 import cn.fj.roadagent.adapters.traffic.amap.AmapTrafficDataAdapter;
 import cn.fj.roadagent.application.agent.ConverseWithAgentUseCase;
 import cn.fj.roadagent.application.port.AdministrativeAreaPort;
+import cn.fj.roadagent.application.port.AbnormalEventPort;
 import cn.fj.roadagent.application.port.AreaTrafficDataPort;
 import cn.fj.roadagent.application.port.AreaTrafficQueryTool;
 import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.ConversationMemoryPort;
 import cn.fj.roadagent.application.port.DispatchRepository;
-import cn.fj.roadagent.application.port.ResourceDataPort;
-import cn.fj.roadagent.application.port.ResourceQueryTool;
 import cn.fj.roadagent.application.port.TrafficDataPort;
 import cn.fj.roadagent.application.port.TrafficQueryTool;
-import cn.fj.roadagent.application.port.WorkOrderPort;
+import cn.fj.roadagent.application.port.UnitOfWork;
 import cn.fj.roadagent.core.agent.AgentRuntime;
 import cn.fj.roadagent.core.agent.AgentSkill;
 import cn.fj.roadagent.core.agent.IntentPlanner;
@@ -36,6 +32,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.http.HttpClient;
 import java.time.Clock;
@@ -142,41 +140,32 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
-    ResourceDataPort resourceDataPort() {
-        return new MockResourceDataAdapter();
+    EmergencyDispatchSkill emergencyDispatchSkill() {
+        return new EmergencyDispatchSkill();
     }
 
     @Bean
-    ResourceQueryTool resourceQueryTool(ResourceDataPort dataPort) {
-        return new QueryEmergencyResourcesTool(dataPort);
-    }
-
-    @Bean
-    DispatchRepository dispatchRepository() {
-        return new InMemoryDispatchRepository();
-    }
-
-    @Bean
-    WorkOrderPort workOrderPort(Clock clock) {
-        return new MockWorkOrderAdapter(clock);
-    }
-
-    @Bean
-    EmergencyDispatchSkill emergencyDispatchSkill(
-            ResourceQueryTool resourceQueryTool,
-            ChatModelPort chatModelPort,
-            DispatchRepository dispatchRepository,
-            Clock clock
-    ) {
-        return new EmergencyDispatchSkill(resourceQueryTool, chatModelPort, dispatchRepository, clock);
+    UnitOfWork unitOfWork(PlatformTransactionManager transactionManager) {
+        return new SpringUnitOfWork(new TransactionTemplate(transactionManager));
     }
 
     @Bean
     DispatchApplicationService dispatchApplicationService(
+            AbnormalEventPort eventPort,
             DispatchRepository repository,
-            WorkOrderPort workOrderPort
+            ChatModelPort chatModelPort,
+            UnitOfWork unitOfWork,
+            RoadAgentProperties properties,
+            Clock clock
     ) {
-        return new DispatchApplicationService(repository, workOrderPort);
+        return new DispatchApplicationService(
+                eventPort,
+                repository,
+                chatModelPort,
+                unitOfWork,
+                clock,
+                Duration.ofSeconds(properties.getDispatch().getStaleGeneratingSeconds())
+        );
     }
 
     @Bean

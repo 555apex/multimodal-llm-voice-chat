@@ -1,5 +1,13 @@
 package cn.fj.roadagent.domain.traffic;
 
+/**
+ * 区域查询的覆盖率计算
+ * @param totalTiles
+ * @param succeededTiles
+ * @param failedTiles
+ * @param coverageRatio
+ * @param complete
+ */
 public record TrafficCoverage(
         int totalTiles,
         int succeededTiles,

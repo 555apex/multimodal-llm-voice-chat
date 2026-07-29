@@ -5,7 +5,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 某一时刻取得的交通数据快照。
+ * 单路查询获得的结果聚合
+ * 具体：某一时刻取得的单路的所有交通相关数据。
  */
 public record TrafficSnapshot(  // record实现不可变的数据载体（数据为private final，方法包含构造方法和getter）
         TrafficQuery query,     // 查询条件

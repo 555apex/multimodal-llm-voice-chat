@@ -2,8 +2,8 @@ package cn.fj.roadagent.adapters.dispatch.mock;
 
 import cn.fj.roadagent.domain.dispatch.DispatchPlan;
 import cn.fj.roadagent.domain.dispatch.DispatchStatus;
-import cn.fj.roadagent.domain.dispatch.DispatchTask;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.SuggestedResource;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;
@@ -20,9 +20,16 @@ class MockWorkOrderAdapterTest {
         Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
         MockWorkOrderAdapter adapter = new MockWorkOrderAdapter(clock);
         DispatchPlan plan = new DispatchPlan(
-                "DP-1", new EmergencyEvent("塌方", "福州", "五四路", "HIGH", "塌方"),
-                "摘要", List.of(new DispatchTask(1, "警戒", "属地", null)), List.of(), List.of(),
-                DispatchStatus.APPROVED, 2L, Instant.EPOCH, null
+                "DP-1",
+                new EmergencyEvent("1", "EVT-1", Instant.EPOCH, "DT01", "塌方"),
+                List.of(new SuggestedResource("队伍", "抢险队", 1, "组", "警戒")),
+                "建议封控",
+                DispatchStatus.APPROVED,
+                1L,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                null,
+                null
         );
 
         var first = adapter.submit(plan, "idem-1");

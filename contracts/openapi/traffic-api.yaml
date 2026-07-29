@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: 福建应急交通Agent API
-  version: 0.3.0
-  description: 对话式道路/行政区交通查询、最小应急调度及结构化兼容接口
+  version: 0.4.0
+  description: 对话式道路交通查询和数据库异常事件应急调度接口
 servers:
   - url: http://localhost:8080
 paths:
@@ -29,8 +29,8 @@ paths:
         '200':
           description: |
             SSE事件流。事件名称可能为run.started、stage.changed、intent.recognized、
-            skill.selected、tool.started、tool.progress、tool.completed、answer.delta、result.traffic、
-            result.dispatch、approval.required、run.completed或run.failed。
+            skill.selected、tool.started、tool.progress、tool.completed、answer.delta、
+            result.traffic、run.completed或run.failed。
           content:
             text/event-stream:
               schema:
@@ -40,6 +40,70 @@ paths:
                 data: {"content":"五四路当前"}
         '400':
           $ref: '#/components/responses/BadRequest'
+
+  /api/v1/emergency-events/pending/next:
+    get:
+      summary: 查询最早发生的未处理异常事件
+      operationId: getNextPendingEmergency
+      responses:
+        '200':
+          description: 返回下一条事件、最新工单版本和待处理总数；无事件时data为null
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyAlertApiResponse'
+
+  /api/v1/emergency-events/{eventId}/dispatches:
+    post:
+      summary: 为数据库异常事件生成或重试调度工单
+      operationId: generateEmergencyDispatch
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200':
+          description: 当前最新工单版本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 事件或工单状态冲突
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: 模型服务失败，失败状态已持久化
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/emergency-events/{eventId}/no-dispatch:
+    post:
+      summary: 人工确认事件无需生成调度工单
+      operationId: markEmergencyNoDispatch
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoDispatchRequest'
+      responses:
+        '200':
+          description: 事件已标记为无需调度
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 事件已有工单或状态已变化
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/dispatches/{planId}:
     get:
@@ -61,7 +125,7 @@ paths:
   /api/v1/dispatches/{planId}/approvals:
     post:
       summary: 批准或驳回调度方案
-      description: 只有本接口能触发Mock工单创建；聊天文字中的确认不能下发。
+      description: 批准会结束事件；驳回必须填写意见并生成下一版本。聊天文字不能审批。
       operationId: approveDispatchPlan
       parameters:
         - $ref: '#/components/parameters/PlanId'
@@ -79,7 +143,7 @@ paths:
               idempotencyKey: browser-generated-uuid
       responses:
         '200':
-          description: 审批后的方案；批准后状态为SUBMITTED，驳回后为REJECTED
+          description: 批准后状态为APPROVED；驳回后返回新生成的WAITING_APPROVAL版本
           content:
             application/json:
               schema:
@@ -175,6 +239,14 @@ components:
       required: true
       schema:
         type: string
+    EventId:
+      in: path
+      name: eventId
+      required: true
+      description: 以字符串传输的w_abnormal_event.id，避免JavaScript整数精度丢失
+      schema:
+        type: string
+        pattern: '^\d+$'
 
   responses:
     BadRequest:
@@ -184,7 +256,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     NotFound:
-      description: 调度方案不存在
+      description: 事件或调度方案不存在
       content:
         application/json:
           schema:
@@ -338,7 +410,7 @@ components:
           enum: [APPROVE, REJECT]
         comment:
           type: [string, 'null']
-          maxLength: 300
+          maxLength: 500
         expectedVersion:
           type: integer
           minimum: 1
@@ -348,69 +420,71 @@ components:
 
     EmergencyEvent:
       type: object
-      required: [eventType, city, locationDescription, severity, description]
+      required: [eventId, customId, eventType, description]
       properties:
+        eventId:
+          type: string
+          description: 以字符串传输的数据库BIGINT主键
+        customId: { type: string }
+        occurrenceTime:
+          type: [string, 'null']
+          format: date-time
         eventType: { type: string }
-        city: { type: string }
-        locationDescription: { type: string }
-        severity: { type: string }
         description: { type: string }
 
-    EmergencyResource:
+    SuggestedResource:
       type: object
-      required: [resourceId, type, name, city, capability, available]
+      required: [resourceType, resourceName, quantity, unit, purpose]
       properties:
-        resourceId: { type: string }
-        type: { type: string }
-        name: { type: string }
-        city: { type: string }
-        capability: { type: string }
-        available: { type: boolean }
+        resourceType: { type: string }
+        resourceName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit: { type: string }
+        purpose: { type: string }
 
-    DispatchTask:
+    NoDispatchRequest:
       type: object
-      required: [sequence, action, responsibleUnit]
+      required: [reason, confirmed]
       properties:
-        sequence: { type: integer }
-        action: { type: string }
-        responsibleUnit: { type: string }
-        resourceId: { type: [string, 'null'] }
-
-    WorkOrderReference:
-      type: object
-      required: [workOrderId, status, submittedAt, mock]
-      properties:
-        workOrderId: { type: string }
-        status: { type: string }
-        submittedAt: { type: string, format: date-time }
-        mock: { type: boolean, const: true }
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+        confirmed:
+          type: boolean
+          const: true
 
     DispatchPlan:
       type: object
-      required: [planId, event, summary, tasks, resources, warnings, status, version, createdAt, approvalRequired]
+      required: [planId, event, suggestedResources, rescuePlan, status, version, createdAt, updatedAt, approvalRequired]
       properties:
         planId: { type: string }
         event: { $ref: '#/components/schemas/EmergencyEvent' }
-        summary: { type: string }
-        tasks:
+        suggestedResources:
           type: array
-          items: { $ref: '#/components/schemas/DispatchTask' }
-        resources:
-          type: array
-          items: { $ref: '#/components/schemas/EmergencyResource' }
-        warnings:
-          type: array
-          items: { type: string }
+          items: { $ref: '#/components/schemas/SuggestedResource' }
+        rescuePlan:
+          type: [string, 'null']
         status:
           type: string
-          enum: [DRAFT, WAITING_APPROVAL, APPROVED, SUBMITTED, REJECTED, IN_PROGRESS, COMPLETED, FAILED, CANCELLED]
+          enum: [GENERATING, WAITING_APPROVAL, REJECTED, APPROVED, FAILED]
         version: { type: integer }
         createdAt: { type: string, format: date-time }
-        workOrder:
-          oneOf:
-            - $ref: '#/components/schemas/WorkOrderReference'
-            - type: 'null'
+        updatedAt: { type: string, format: date-time }
+        rejectionReason: { type: [string, 'null'] }
+        errorMessage: { type: [string, 'null'] }
         approvalRequired: { type: boolean }
+
+    EmergencyAlert:
+      type: object
+      required: [event, pendingCount]
+      properties:
+        event: { $ref: '#/components/schemas/EmergencyEvent' }
+        dispatch:
+          oneOf:
+            - $ref: '#/components/schemas/DispatchPlan'
+            - type: 'null'
+        pendingCount: { type: integer, minimum: 1 }
 
     TrafficQueryApiResponse:
       type: object
@@ -439,6 +513,19 @@ components:
         code: { const: OK }
         message: { type: string }
         data: { $ref: '#/components/schemas/DispatchPlan' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    EmergencyAlertApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data:
+          oneOf:
+            - $ref: '#/components/schemas/EmergencyAlert'
+            - type: 'null'
         traceId: { type: string }
         timestamp: { type: string, format: date-time }
 

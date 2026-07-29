@@ -3,14 +3,15 @@ package cn.fj.roadagent.domain.traffic;
 import java.util.Objects;
 
 /**
- * 一段道路的标准路况。平均速度允许为空，因为部分数据源不提供该字段。
+ * 单条路段状态描述（查询后返回的结果输出）
+ * 具体：描述查询所得到的一段道路的标准路况。平均速度允许为空，因为部分数据源不提供该字段。
  */
 public record RoadSegmentStatus(
-        String roadName,
-        String direction,
-        CongestionLevel congestionLevel,
-        Double averageSpeedKmh,
-        String polyline
+        String roadName,    // 道路名称
+        String direction,   // 道路方向
+        CongestionLevel congestionLevel,    // 拥堵等级
+        Double averageSpeedKmh, // 平均车速
+        String polyline // 路段坐标串（用于地图定位、渲染）
 ) {
     public RoadSegmentStatus {
         roadName = roadName == null ? "未知道路" : roadName.trim();

@@ -1,6 +1,8 @@
 package cn.fj.roadagent.domain.traffic;
 
-/** 交通查询范围由模型识别，最终必须经过Java白名单校验。 */
+/** 交通查询范围
+ * 具体：由模型识别用户文本获得，最终必须经过Java白名单校验。
+ * */
 public enum TrafficQueryScope {
     ROAD,   // 具体路查询
     AREA_ALL,   // 区域全体查询

@@ -2,7 +2,10 @@ package cn.fj.roadagent.domain.traffic;
 
 import java.util.List;
 
-/** 由Java依据全部去重路段计算，模型只能解释这些指标。 */
+/**
+ * 区域查询功能时，区域拥堵情况统计
+ * 由Java依据全部去重路段计算，模型只能解释这些指标。
+ **/
 public record TrafficEvaluation(
         int totalSegments,
         int smoothSegments,

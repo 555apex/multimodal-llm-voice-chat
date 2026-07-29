@@ -4,8 +4,8 @@ import cn.fj.roadagent.application.dispatch.DispatchApprovalUseCase;
 import cn.fj.roadagent.application.dispatch.DispatchQueryUseCase;
 import cn.fj.roadagent.domain.dispatch.DispatchPlan;
 import cn.fj.roadagent.domain.dispatch.DispatchStatus;
-import cn.fj.roadagent.domain.dispatch.DispatchTask;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.SuggestedResource;
 import cn.fj.roadagent.interfaces.rest.common.TraceIdFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,14 +41,24 @@ class DispatchControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.planId").value("DP-1"))
-                .andExpect(jsonPath("$.data.status").value("SUBMITTED"));
+                .andExpect(jsonPath("$.data.status").value("APPROVED"))
+                .andExpect(jsonPath("$.data.event.eventId").value("202607280000000001"));
     }
 
     private DispatchPlan plan() {
         return new DispatchPlan(
-                "DP-1", new EmergencyEvent("塌方", "福州", "五四路", "HIGH", "道路塌方"),
-                "建议封控", List.of(new DispatchTask(1, "警戒", "属地", null)),
-                List.of(), List.of(), DispatchStatus.SUBMITTED, 3L, Instant.EPOCH, null
+                "DP-1",
+                new EmergencyEvent(
+                        "202607280000000001", "EVT-1", Instant.EPOCH, "DT01", "道路塌方"
+                ),
+                List.of(new SuggestedResource("队伍", "抢险队", 1, "组", "警戒")),
+                "建议封控",
+                DispatchStatus.APPROVED,
+                1L,
+                Instant.EPOCH,
+                Instant.EPOCH,
+                null,
+                null
         );
     }
 }

@@ -4,7 +4,10 @@ import java.util.Arrays;
 import java.util.Optional;
 
 /**
- * 福建地级市与可信adcode。模型只提取城市名称，编码必须由Java映射。
+ * 福建地级市枚举
+ * 包括可信adcode，adcode为行政区划编码，以下adcode为城市级别的编码关联
+ * adcode与对应城市绑定模型只提取城市名称，编码由Java映射
+ * 从而LLM 只能提取城市名称字符串，但最终使用的 adcode 必须Java 枚举映射的，杜绝 LLM 编造不存在的编码
  */
 public enum FujianCity {
     FUZHOU("福州", "350100"),

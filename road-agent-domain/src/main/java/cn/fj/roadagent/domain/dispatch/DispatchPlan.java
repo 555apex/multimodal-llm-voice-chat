@@ -4,60 +4,131 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * 应急方案状态推进
- * 具体：不可变调度方案。每次状态变化由java规则推进，不受大模型影响，便于检查重复审批。
- * */
+/** 不可变的数据库调度工单版本；模型只能生成内容，状态由Java规则推进。 */
 public record DispatchPlan(
-        String planId,  // 方案ID
-        EmergencyEvent event,   // 关联的应急事件（EmergencyEvent.java定义）
-        String summary, // 方案摘要，大模型生成
-        List<DispatchTask> tasks,   // 调度任务列表
-        List<EmergencyResource> resources,  // 调度资源列表
-        List<String> warnings,  // 警告信息
-        DispatchStatus status,  // 应急方案的调度状态(DispatchStatus.java定义)
-        long version,   // 版本号
-        Instant createdAt,  // 应急方案的创建时间
-        WorkOrderReference workOrder    // 工单引用（WorkOrderReference.java）定义
+        String planId,
+        EmergencyEvent event,
+        List<SuggestedResource> suggestedResources,
+        String rescuePlan,
+        DispatchStatus status,
+        long version,
+        Instant createdAt,
+        Instant updatedAt,
+        String rejectionReason,
+        String errorMessage
 ) {
-    // 构造函数（检查成员变量）
     public DispatchPlan {
-        planId = Objects.requireNonNull(planId, "planId不能为空");
+        planId = requireText(planId, "planId不能为空");
         event = Objects.requireNonNull(event, "event不能为空");
-        summary = summary == null ? "" : summary.trim();
-        tasks = tasks == null ? List.of() : List.copyOf(tasks);
-        resources = resources == null ? List.of() : List.copyOf(resources);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        suggestedResources = suggestedResources == null ? List.of() : List.copyOf(suggestedResources);
+        rescuePlan = rescuePlan == null ? "" : rescuePlan.trim();
         status = Objects.requireNonNull(status, "status不能为空");
+        if (version < 1) {
+            throw new IllegalArgumentException("工单版本必须大于0");
+        }
         createdAt = Objects.requireNonNull(createdAt, "createdAt不能为空");
+        updatedAt = Objects.requireNonNull(updatedAt, "updatedAt不能为空");
+        rejectionReason = normalize(rejectionReason);
+        errorMessage = normalize(errorMessage);
     }
 
-    // 以下方法均为应急方案状态的推进方法，前置条件判断+指定状态转变
-    public DispatchPlan approve() {
+    public static DispatchPlan generating(
+            String planId,
+            EmergencyEvent event,
+            long version,
+            Instant now
+    ) {
+        return new DispatchPlan(
+                planId, event, List.of(), "", DispatchStatus.GENERATING,
+                version, now, now, null, null
+        );
+    }
+
+    public DispatchPlan generated(
+            List<SuggestedResource> resources,
+            String generatedRescuePlan,
+            Instant now
+    ) {
+        requireStatus(DispatchStatus.GENERATING);
+        if (resources == null || resources.isEmpty()) {
+            throw new IllegalArgumentException("模型生成的建议资源清单不能为空");
+        }
+        if (generatedRescuePlan == null || generatedRescuePlan.isBlank()) {
+            throw new IllegalArgumentException("模型生成的救援方案不能为空");
+        }
+        return new DispatchPlan(
+                planId, event, resources, generatedRescuePlan,
+                DispatchStatus.WAITING_APPROVAL, version, createdAt, now, null, null
+        );
+    }
+
+    public DispatchPlan approve(Instant now) {
         requireStatus(DispatchStatus.WAITING_APPROVAL);
-        return withStatus(DispatchStatus.APPROVED, version + 1, workOrder);
+        return withStatus(DispatchStatus.APPROVED, now, null, null);
     }
 
-    public DispatchPlan reject() {
+    public DispatchPlan reject(String reason, Instant now) {
         requireStatus(DispatchStatus.WAITING_APPROVAL);
-        return withStatus(DispatchStatus.REJECTED, version + 1, null);
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("驳回意见不能为空");
+        }
+        return withStatus(DispatchStatus.REJECTED, now, reason.trim(), null);
     }
 
-    public DispatchPlan submitted(WorkOrderReference reference) {
-        requireStatus(DispatchStatus.APPROVED);
-        return withStatus(DispatchStatus.SUBMITTED, version + 1,
-                Objects.requireNonNull(reference, "工单不能为空"));
+    public DispatchPlan failed(String message, Instant now) {
+        requireStatus(DispatchStatus.GENERATING);
+        return withStatus(
+                DispatchStatus.FAILED,
+                now,
+                rejectionReason,
+                message == null || message.isBlank() ? "模型生成失败" : message.trim()
+        );
     }
 
-    // 方法：
-    private DispatchPlan withStatus(DispatchStatus next, long nextVersion, WorkOrderReference reference) {
-        return new DispatchPlan(planId, event, summary, tasks, resources, warnings,
-                next, nextVersion, createdAt, reference);
+    public DispatchPlan retry(Instant now) {
+        if (status != DispatchStatus.FAILED && status != DispatchStatus.GENERATING) {
+            throw new IllegalStateException("只有失败或超时的生成任务可以重试");
+        }
+        return new DispatchPlan(
+                planId, event, List.of(), "", DispatchStatus.GENERATING,
+                version, createdAt, now, rejectionReason, null
+        );
+    }
+
+    public DispatchPlan nextRevision(Instant now) {
+        requireStatus(DispatchStatus.REJECTED);
+        return new DispatchPlan(
+                planId, event, List.of(), "", DispatchStatus.GENERATING,
+                version + 1, now, now, null, null
+        );
+    }
+
+    private DispatchPlan withStatus(
+            DispatchStatus next,
+            Instant now,
+            String nextRejectionReason,
+            String nextError
+    ) {
+        return new DispatchPlan(
+                planId, event, suggestedResources, rescuePlan, next, version,
+                createdAt, now, nextRejectionReason, nextError
+        );
     }
 
     private void requireStatus(DispatchStatus expected) {
         if (status != expected) {
             throw new IllegalStateException("状态" + status + "不能执行该操作，要求状态为" + expected);
         }
+    }
+
+    private static String requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
+    }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

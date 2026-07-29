@@ -4,14 +4,18 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>cn.fj.roadagent</groupId>
-    <artifactId>roadagent-parent</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
-    <packaging>pom</packaging>
+    <!-- 1. 基础信息 -->
+    <groupId>cn.fj.roadagent</groupId>         <!-- 组织域名 -->
+    <artifactId>roadagent-parent</artifactId>  <!-- 项目唯一ID -->
+    <version>0.1.0-SNAPSHOT</version>   <!-- 版本号 -->
+    <packaging>pom</packaging>  <!-- 打包方式(默认jar，还有pom、war等) -->
 
-    <name>福建应急交通 Agent</name>
+    <!-- 2. 元信息 -->
+    <name>福建应急交通 Agent</name>   <!-- 项目名称 -->
+    <!-- url:<url>https://example.com</url>  可选 -->
     <description>交通查询工作流教学型项目骨架</description>
 
+    <!-- maven子模块管理说明 -->
     <modules>
         <module>road-agent-domain</module>
         <module>road-agent-application</module>
@@ -21,6 +25,7 @@
         <module>road-agent-boot</module>
     </modules>
 
+    <!-- 3. 环境配置 -->
     <properties>
         <java.version>17</java.version>
         <maven.compiler.release>${java.version}</maven.compiler.release>
@@ -32,6 +37,7 @@
         <jts.version>1.20.0</jts.version>
     </properties>
 
+    <!-- 4. 依赖管理 -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -49,6 +55,7 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- 5. 构建配置 -->
     <build>
         <pluginManagement>
             <plugins>

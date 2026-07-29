@@ -2,19 +2,21 @@ package cn.fj.roadagent.core.dispatch;
 
 import java.util.List;
 
-/** 模型输出格式；Java随后会检查资源ID和任务完整性。 */
+/** 大模型返回的数据库应急调度工单内容。 */
 public record DispatchPlanProposal(
-        String summary,
-        List<ProposedTask> tasks,
-        List<String> selectedResourceIds,
-        List<String> warnings
+        List<ProposedResource> suggestedResources,
+        String rescuePlan
 ) {
     public DispatchPlanProposal {
-        tasks = tasks == null ? List.of() : List.copyOf(tasks);
-        selectedResourceIds = selectedResourceIds == null ? List.of() : List.copyOf(selectedResourceIds);
-        warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        suggestedResources = suggestedResources == null ? List.of() : List.copyOf(suggestedResources);
     }
 
-    public record ProposedTask(String action, String responsibleUnit, String resourceId) {
+    public record ProposedResource(
+            String resourceType,
+            String resourceName,
+            int quantity,
+            String unit,
+            String purpose
+    ) {
     }
 }

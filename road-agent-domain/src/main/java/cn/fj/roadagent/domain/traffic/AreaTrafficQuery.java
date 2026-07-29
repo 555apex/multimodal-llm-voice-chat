@@ -2,6 +2,11 @@ package cn.fj.roadagent.domain.traffic;
 
 import java.util.Objects;
 
+/**
+ * 区域查询条件
+ * @param area 行政区对象（包含各类行政区信息：AdministrativeArea.java）
+ * @param scope
+ */
 public record AreaTrafficQuery(AdministrativeArea area, TrafficQueryScope scope) {
     public AreaTrafficQuery {
         area = Objects.requireNonNull(area, "行政区不能为空");

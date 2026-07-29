@@ -4,7 +4,9 @@ import DispatchPlanCard from './DispatchPlanCard.vue'
 import TrafficResultPanel from './TrafficResultPanel.vue'
 
 defineProps<{ message: AgentMessage; approvalBusyPlanId: string }>()
-const emit = defineEmits<{ decide: [messageId: string, decision: 'APPROVE' | 'REJECT'] }>()
+const emit = defineEmits<{
+  decide: [messageId: string, decision: 'APPROVE' | 'REJECT', comment: string]
+}>()
 </script>
 
 <template>
@@ -27,7 +29,7 @@ const emit = defineEmits<{ decide: [messageId: string, decision: 'APPROVE' | 'RE
         v-if="message.dispatch"
         :plan="message.dispatch"
         :busy="approvalBusyPlanId === message.dispatch.planId"
-        @decide="emit('decide', message.id, $event)"
+        @decide="(decision, comment) => emit('decide', message.id, decision, comment)"
       />
     </div>
   </article>

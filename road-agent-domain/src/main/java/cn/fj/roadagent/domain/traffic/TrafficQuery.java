@@ -1,8 +1,8 @@
 package cn.fj.roadagent.domain.traffic;
 
 /**
- * 交通查询的内部标准输入。这里不包含高德Key、Mock场景等技术参数。
- * 描述行政区代码，道路名称，方向
+ * 单路查询条件
+ * 具体：交通查询的内部标准输入。描述行政区代码，道路名称，方向
  */
 public record TrafficQuery(String areaCode, String roadName, String direction) {
 

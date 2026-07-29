@@ -6,13 +6,26 @@ import type { DispatchPlan } from '../types/dispatch'
 const plan: DispatchPlan = {
   planId: 'DP-1',
   event: {
-    eventType: '道路塌方', city: '福州', locationDescription: '五四路',
-    severity: 'HIGH', description: '道路发生塌方',
+    eventId: '202607280000000001',
+    customId: 'EVT-1',
+    occurrenceTime: '2026-07-21T00:00:00Z',
+    eventType: 'DT01',
+    description: '福州五四路发生塌方',
   },
-  summary: '建议先警戒再清障',
-  tasks: [{ sequence: 1, action: '设置警戒', responsibleUnit: '属地单位' }],
-  resources: [], warnings: [], status: 'WAITING_APPROVAL', version: 1,
+  suggestedResources: [
+    {
+      resourceType: '抢险队伍',
+      resourceName: '道路抢险人员',
+      quantity: 1,
+      unit: '组',
+      purpose: '设置警戒并开展清障',
+    },
+  ],
+  rescuePlan: '建议先警戒再清障',
+  status: 'WAITING_APPROVAL',
+  version: 1,
   createdAt: '2026-07-21T00:00:00Z',
+  updatedAt: '2026-07-21T00:00:00Z',
 }
 
 describe('DispatchPlanCard', () => {
@@ -21,7 +34,7 @@ describe('DispatchPlanCard', () => {
 
     await wrapper.find('.approve-button').trigger('click')
 
-    expect(wrapper.emitted('decide')?.[0]).toEqual(['APPROVE'])
-    expect(wrapper.text()).toContain('只有点击批准才会创建Mock工单')
+    expect(wrapper.emitted('decide')?.[0]).toEqual(['APPROVE', ''])
+    expect(wrapper.text()).toContain('资源由模型基于通用知识建议')
   })
 })

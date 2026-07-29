@@ -76,17 +76,6 @@ public final class IntentPlanner {
                 missing.add("areaName");        // 缺失区域查询
             }
         }
-        if (decision.parsedIntent() == AgentIntent.EMERGENCY_DISPATCH) {
-            if (FujianCity.fromName(decision.city()).isEmpty()) {
-                missing.add("city");
-            }
-            if (isBlank(decision.location())) {
-                missing.add("location");
-            }
-            if (isBlank(decision.eventDescription())) {
-                missing.add("eventDescription");
-            }
-        }
         return missing;
     }
 

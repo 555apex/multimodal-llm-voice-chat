@@ -11,6 +11,17 @@ spring:
   jackson:
     # JSON序列化时，值为null的字段不输出（让返回的JSON更精简）
     default-property-inclusion: non_null
+  datasource:
+    # 数据库凭据只从运行环境读取，避免将线上密码提交到仓库
+    url: ${ROADAGENT_DB_URL}
+    username: ${ROADAGENT_DB_USERNAME}
+    password: ${ROADAGENT_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+      validation-timeout: 5000
 
 # ------ 内嵌Tomcat服务器配置 ------
 server:
@@ -83,6 +94,11 @@ roadagent:
     max-messages: ${ROADAGENT_MEMORY_MAX_MESSAGES:20}
     # 60分钟没有访问后自动视为新会话
     idle-minutes: ${ROADAGENT_MEMORY_IDLE_MINUTES:60}
+
+  # ===== 数据库应急调度配置 =====
+  dispatch:
+    # 生成状态超过该时间后允许重试，避免服务中断留下永久卡住的工单
+    stale-generating-seconds: ${ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS:120}
 
 # ===== 日志配置 =====
 logging:

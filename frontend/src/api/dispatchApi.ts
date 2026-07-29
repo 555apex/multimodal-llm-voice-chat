@@ -7,7 +7,7 @@ export async function decideDispatch(
   expectedVersion: number,
   idempotencyKey: string,
   comment = '',
-) {
+): Promise<DispatchPlan> {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
   const response = await fetch(`${apiBaseUrl}/api/v1/dispatches/${encodeURIComponent(planId)}/approvals`, {
     method: 'POST',

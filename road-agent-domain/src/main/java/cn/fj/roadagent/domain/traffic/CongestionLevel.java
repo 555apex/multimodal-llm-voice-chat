@@ -24,6 +24,7 @@ public enum CongestionLevel {
         return severity;
     }
 
+    // 方法：遍历所有路段，返回拥堵最严重的一段
     public static CongestionLevel worstOf(Iterable<RoadSegmentStatus> segments) {
         CongestionLevel worst = UNKNOWN;
         for (RoadSegmentStatus segment : segments) {

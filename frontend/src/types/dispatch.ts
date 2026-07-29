@@ -1,55 +1,43 @@
 export type DispatchStatus =
-  | 'DRAFT'
+  | 'GENERATING'
   | 'WAITING_APPROVAL'
-  | 'APPROVED'
-  | 'SUBMITTED'
   | 'REJECTED'
-  | 'IN_PROGRESS'
-  | 'COMPLETED'
+  | 'APPROVED'
   | 'FAILED'
-  | 'CANCELLED'
 
 export interface EmergencyEvent {
+  eventId: string
+  customId: string
+  occurrenceTime?: string
   eventType: string
-  city: string
-  locationDescription: string
-  severity: string
+  eventTypeName?: string
   description: string
 }
 
-export interface EmergencyResource {
-  resourceId: string
-  type: string
-  name: string
-  city: string
-  capability: string
-  available: boolean
-}
-
-export interface DispatchTask {
-  sequence: number
-  action: string
-  responsibleUnit: string
-  resourceId?: string
-}
-
-export interface WorkOrderReference {
-  workOrderId: string
-  status: string
-  submittedAt: string
-  mock: boolean
+export interface SuggestedResource {
+  resourceType: string
+  resourceName: string
+  quantity: number
+  unit: string
+  purpose: string
 }
 
 export interface DispatchPlan {
   planId: string
   event: EmergencyEvent
-  summary: string
-  tasks: DispatchTask[]
-  resources: EmergencyResource[]
-  warnings: string[]
+  suggestedResources: SuggestedResource[]
+  rescuePlan: string
   status: DispatchStatus
   version: number
   createdAt: string
-  workOrder?: WorkOrderReference
+  updatedAt: string
+  rejectionReason?: string
+  errorMessage?: string
   approvalRequired?: boolean
+}
+
+export interface EmergencyAlert {
+  event: EmergencyEvent
+  dispatch?: DispatchPlan
+  pendingCount: number
 }

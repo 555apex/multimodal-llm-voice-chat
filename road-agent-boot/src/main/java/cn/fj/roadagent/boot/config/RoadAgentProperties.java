@@ -9,6 +9,7 @@ public class RoadAgentProperties {
     private final Traffic traffic = new Traffic();
     private final Model model = new Model();
     private final Memory memory = new Memory();
+    private final Dispatch dispatch = new Dispatch();
 
     public Traffic getTraffic() {
         return traffic;
@@ -20,6 +21,10 @@ public class RoadAgentProperties {
 
     public Memory getMemory() {
         return memory;
+    }
+
+    public Dispatch getDispatch() {
+        return dispatch;
     }
 
     public static class Traffic {
@@ -225,6 +230,18 @@ public class RoadAgentProperties {
 
         public void setIdleMinutes(long idleMinutes) {
             this.idleMinutes = idleMinutes;
+        }
+    }
+
+    public static class Dispatch {
+        private long staleGeneratingSeconds = 120;
+
+        public long getStaleGeneratingSeconds() {
+            return staleGeneratingSeconds;
+        }
+
+        public void setStaleGeneratingSeconds(long staleGeneratingSeconds) {
+            this.staleGeneratingSeconds = staleGeneratingSeconds;
         }
     }
 }
