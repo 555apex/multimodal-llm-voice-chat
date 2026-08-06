@@ -69,6 +69,7 @@ describe('emergency store', () => {
 
     store.startPolling()
     await vi.waitFor(() => expect(fetchNextEmergency).toHaveBeenCalledTimes(1))
+    expect(store.queryStatus).toBe('ready')
     await vi.advanceTimersByTimeAsync(5000)
     expect(fetchNextEmergency).toHaveBeenCalledTimes(2)
 
@@ -127,5 +128,28 @@ describe('emergency store', () => {
       '现场已经自行恢复',
     )
     expect(store.alert?.event.eventId).toBe('202607280000000003')
+  })
+
+  it('shows an explicit empty state when no pending event is returned', async () => {
+    vi.mocked(fetchNextEmergency).mockResolvedValue(null)
+    const store = useEmergencyStore()
+
+    await store.refresh()
+
+    expect(store.alert).toBeNull()
+    expect(store.queryStatus).toBe('empty')
+    expect(store.errorMessage).toBe('')
+  })
+
+  it('keeps the current alert visible when polling fails', async () => {
+    const store = useEmergencyStore()
+    store.alert = alert
+    vi.mocked(fetchNextEmergency).mockRejectedValueOnce(new Error('后端暂时不可用'))
+
+    await store.refresh()
+
+    expect(store.alert).toEqual(alert)
+    expect(store.queryStatus).toBe('error')
+    expect(store.errorMessage).toContain('后端暂时不可用')
   })
 })

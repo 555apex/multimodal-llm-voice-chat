@@ -129,13 +129,12 @@ public class RoadAgentConfiguration {
     RealtimeTrafficSkill realtimeTrafficSkill(
             TrafficQueryTool trafficQueryTool,
             AreaTrafficQueryTool areaTrafficQueryTool,
-            ChatModelPort chatModelPort,
             RoadAgentProperties properties,
             Clock clock
     ) {
         Duration staleAfter = Duration.ofMinutes(properties.getTraffic().getStaleAfterMinutes());
         return new RealtimeTrafficSkill(
-                trafficQueryTool, areaTrafficQueryTool, chatModelPort, clock, staleAfter
+                trafficQueryTool, areaTrafficQueryTool, clock, staleAfter
         );
     }
 

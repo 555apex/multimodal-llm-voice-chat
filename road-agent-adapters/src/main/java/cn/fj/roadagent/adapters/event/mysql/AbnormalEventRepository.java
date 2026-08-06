@@ -14,6 +14,10 @@ import java.util.Optional;
 @Repository
 public class AbnormalEventRepository implements AbnormalEventPort {
 
+    /** 兼容当前N/Y与历史0/1两种逻辑删除编码。 */
+    private static final String ACTIVE_EVENT_PREDICATE =
+            "(del_flag IS NULL OR del_flag IN ('N', '0'))";
+
     private static final String BASE_COLUMNS = """
             SELECT id, custom_id, occurrence_time, event_type, description, create_time
             FROM w_abnormal_event
@@ -49,10 +53,10 @@ public class AbnormalEventRepository implements AbnormalEventPort {
         return jdbcTemplate.query(
                 BASE_COLUMNS + """
                         WHERE event_status = ?
-                          AND COALESCE(del_flag, '0') = '0'
+                          AND %s
                         ORDER BY occurrence_time IS NULL, occurrence_time ASC, id ASC
                         LIMIT 1
-                        """,
+                        """.formatted(ACTIVE_EVENT_PREDICATE),
                 EVENT_MAPPER,
                 AbnormalEventStatus.PENDING.databaseValue()
         ).stream().findFirst();
@@ -64,8 +68,8 @@ public class AbnormalEventRepository implements AbnormalEventPort {
                 """
                 SELECT COUNT(*)
                 FROM w_abnormal_event
-                WHERE event_status = ? AND COALESCE(del_flag, '0') = '0'
-                """,
+                WHERE event_status = ? AND %s
+                """.formatted(ACTIVE_EVENT_PREDICATE),
                 Long.class,
                 AbnormalEventStatus.PENDING.databaseValue()
         );
@@ -79,8 +83,8 @@ public class AbnormalEventRepository implements AbnormalEventPort {
                 UPDATE w_abnormal_event
                 SET event_status = ?, no_dispatch_reason = NULL, update_time = ?
                 WHERE id = ? AND event_status = ?
-                  AND COALESCE(del_flag, '0') = '0'
-                """,
+                  AND %s
+                """.formatted(ACTIVE_EVENT_PREDICATE),
                 AbnormalEventStatus.DISPATCH_APPROVED.databaseValue(),
                 Timestamp.from(updateTime),
                 parseEventId(eventId),
@@ -95,8 +99,8 @@ public class AbnormalEventRepository implements AbnormalEventPort {
                 UPDATE w_abnormal_event
                 SET event_status = ?, no_dispatch_reason = ?, update_time = ?
                 WHERE id = ? AND event_status = ?
-                  AND COALESCE(del_flag, '0') = '0'
-                """,
+                  AND %s
+                """.formatted(ACTIVE_EVENT_PREDICATE),
                 AbnormalEventStatus.NO_DISPATCH_REQUIRED.databaseValue(),
                 reason,
                 Timestamp.from(updateTime),
@@ -120,9 +124,9 @@ public class AbnormalEventRepository implements AbnormalEventPort {
                 BASE_COLUMNS + """
                         WHERE id = ?
                           AND event_status = ?
-                          AND COALESCE(del_flag, '0') = '0'
+                          AND %s
                         LIMIT 1
-                        """ + lockClause,
+                        """.formatted(ACTIVE_EVENT_PREDICATE) + lockClause,
                 EVENT_MAPPER,
                 parseEventId(eventId),
                 AbnormalEventStatus.PENDING.databaseValue()

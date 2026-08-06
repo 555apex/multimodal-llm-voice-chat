@@ -13,6 +13,7 @@ const emergencyStore = useEmergencyStore()
 const {
   alert: emergencyAlert,
   actionBusy: emergencyActionBusy,
+  queryStatus: emergencyQueryStatus,
   errorMessage: emergencyError,
 } = storeToRefs(emergencyStore)
 const input = ref('')
@@ -92,6 +93,14 @@ onUnmounted(() => emergencyStore.stopPolling())
         />
         <div v-else-if="emergencyError" class="emergency-query-error">
           紧急事件告警暂时无法加载：{{ emergencyError }}
+          <button @click="emergencyStore.refresh">重新查询</button>
+        </div>
+        <div v-else-if="emergencyQueryStatus === 'loading'" class="emergency-query-status" aria-live="polite">
+          <span class="progress-dot"></span>
+          正在查询待处理事件…
+        </div>
+        <div v-else-if="emergencyQueryStatus === 'empty'" class="emergency-query-status empty" aria-live="polite">
+          <span>当前没有待处理事件</span>
           <button @click="emergencyStore.refresh">重新查询</button>
         </div>
 

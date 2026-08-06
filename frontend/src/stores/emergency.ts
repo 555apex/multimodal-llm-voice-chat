@@ -7,11 +7,14 @@ import {
 } from '../api/emergencyApi'
 import type { EmergencyAlert } from '../types/dispatch'
 
+export type EmergencyQueryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
+
 export const useEmergencyStore = defineStore('emergency', {
   state: () => ({
     alert: null as EmergencyAlert | null,
     polling: false,
     actionBusy: false,
+    queryStatus: 'idle' as EmergencyQueryStatus,
     errorMessage: '',
     timerId: 0,
   }),
@@ -39,10 +42,15 @@ export const useEmergencyStore = defineStore('emergency', {
     async refresh() {
       if (this.polling || this.actionBusy) return
       this.polling = true
+      if (!this.alert) this.queryStatus = 'loading'
       try {
-        this.alert = await fetchNextEmergency()
+        const nextAlert = await fetchNextEmergency()
+        this.alert = nextAlert
+        this.queryStatus = nextAlert ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        // 轮询失败时保留当前告警，避免一次网络抖动让待处理工单从页面消失。
+        this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '紧急事件查询失败'
       } finally {
         this.polling = false

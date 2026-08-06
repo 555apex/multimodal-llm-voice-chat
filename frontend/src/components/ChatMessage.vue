@@ -22,7 +22,6 @@ const emit = defineEmits<{
       <TrafficResultPanel
         v-if="message.traffic"
         :result="message.traffic"
-        :trace-id="message.traffic.traceId"
         compact
       />
       <DispatchPlanCard

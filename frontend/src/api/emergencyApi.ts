@@ -4,7 +4,12 @@ import type { DispatchPlan, EmergencyAlert } from '../types/dispatch'
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
 async function parseResponse<T>(response: Response, fallback: string): Promise<T> {
-  const body = (await response.json()) as ApiResponse<T>
+  let body: ApiResponse<T>
+  try {
+    body = (await response.json()) as ApiResponse<T>
+  } catch {
+    throw new Error(fallback)
+  }
   if (!response.ok) {
     throw new Error(body.message || fallback)
   }

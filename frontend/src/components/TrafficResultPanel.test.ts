@@ -34,30 +34,38 @@ const result: TrafficQueryResult = {
 }
 
 describe('TrafficResultPanel area mode', () => {
-  it('shows aggregate metrics, coverage warning and paginated roads', async () => {
+  it('shows a compact traffic table without aggregate metrics', async () => {
     const wrapper = mount(TrafficResultPanel, {
-      props: { result, traceId: 'trace-area', compact: true },
+      props: { result, compact: true },
     })
 
     expect(wrapper.text()).toContain('思明区')
-    expect(wrapper.text()).toContain('数据覆盖率 90%')
-    expect(wrapper.findAll('.segment')).toHaveLength(50)
+    expect(wrapper.text()).toContain('道路名称')
+    expect(wrapper.text()).toContain('拥堵程度')
+    expect(wrapper.find('.traffic-answer')).toBeTruthy()
+    expect(wrapper.find('.area-metrics').exists()).toBe(false)
+    expect(wrapper.find('.coverage-card').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('AMAP')
+    expect(wrapper.text()).not.toContain('获取时间')
+    expect(wrapper.text()).not.toContain('新鲜度')
+    expect(wrapper.text()).not.toContain('覆盖')
+    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(50)
 
     await wrapper.find('.area-pagination button:last-child').trigger('click')
-    expect(wrapper.findAll('.segment')).toHaveLength(5)
+    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(5)
   })
 
   it('filters by road name and congestion level', async () => {
     const wrapper = mount(TrafficResultPanel, {
-      props: { result, traceId: 'trace-area', compact: true },
+      props: { result, compact: true },
     })
 
     await wrapper.find('input[type="search"]').setValue('成功大道')
-    expect(wrapper.findAll('.segment')).toHaveLength(1)
+    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(1)
     expect(wrapper.text()).toContain('成功大道')
 
     await wrapper.find('input[type="search"]').setValue('')
     await wrapper.find('select').setValue('CONGESTED')
-    expect(wrapper.findAll('.segment')).toHaveLength(19)
+    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(19)
   })
 })

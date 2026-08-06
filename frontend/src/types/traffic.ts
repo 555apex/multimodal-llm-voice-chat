@@ -1,5 +1,5 @@
 export type CongestionLevel = 'UNKNOWN' | 'SMOOTH' | 'SLOW' | 'CONGESTED'
-export type SummarySource = 'MODEL'
+export type SummarySource = 'MODEL' | 'DETERMINISTIC'
 export type Freshness = 'FRESH' | 'STALE' | 'UNKNOWN'
 export type TrafficQueryScope = 'ROAD' | 'AREA_ALL' | 'AREA_MAJOR'
 

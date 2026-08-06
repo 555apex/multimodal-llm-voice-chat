@@ -4,8 +4,6 @@ import cn.fj.roadagent.application.agent.AgentEvent;
 import cn.fj.roadagent.application.agent.AgentEventSink;
 import cn.fj.roadagent.application.agent.AgentIntent;
 import cn.fj.roadagent.application.agent.TrafficAgentResult;
-import cn.fj.roadagent.application.model.ModelResponse;
-import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.AreaTrafficQueryTool;
 import cn.fj.roadagent.application.port.TrafficQueryTool;
 import cn.fj.roadagent.application.traffic.Freshness;
@@ -22,6 +20,8 @@ import cn.fj.roadagent.core.agent.AgentSkill;
 import cn.fj.roadagent.core.agent.AgentSkillResult;
 import cn.fj.roadagent.domain.traffic.FujianCity;
 import cn.fj.roadagent.domain.traffic.AreaTrafficSnapshot;
+import cn.fj.roadagent.domain.traffic.RoadSegmentStatus;
+import cn.fj.roadagent.domain.traffic.TrafficEvaluation;
 import cn.fj.roadagent.domain.traffic.TrafficQuery;
 import cn.fj.roadagent.domain.traffic.TrafficSnapshot;
 import cn.fj.roadagent.domain.traffic.TrafficQueryScope;
@@ -35,8 +35,8 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 交通路况查询Skill：以确定性Java工作流控制业务，大模型仅辅助生成摘要。（固定工作流编排，保证模型 不出错）
- * （Tool、Adapter、PromptFactory等）按固定步骤编排起来，完成"查询路况→生成摘要"这个任务
+ * 交通路况查询Skill：以确定性Java工作流控制业务和回答事实。
+ * Tool与回答生成器按固定步骤编排，完成“查询路况→生成专业结论”。
  */
 // （Agent-core层）RealtimeTrafficSkill 实现 （Agent-application层）提供的interface
 /*
@@ -57,24 +57,21 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
 
     private final TrafficQueryTool trafficQueryTool;    // 查交通数据的Tool
     private final AreaTrafficQueryTool areaTrafficQueryTool; // 查行政区交通态势的Tool
-    private final ChatModelPort chatModelPort;// 调用大模型端口
-    private final TrafficSummaryPromptFactory promptFactory;    // Prompt工厂
+    private final TrafficAnswerComposer answerComposer;
     private final Clock clock;  // 时钟：用于判断数据是否过期
     private final Duration staleAfter;  // 定义过期时间
 
     public RealtimeTrafficSkill(    // 类的构造函数
             TrafficQueryTool trafficQueryTool,
             AreaTrafficQueryTool areaTrafficQueryTool,
-            ChatModelPort chatModelPort,
             Clock clock,
             Duration staleAfter
     ) {
         this.trafficQueryTool = trafficQueryTool;   // Spring注入构造方式：由配置决定
         this.areaTrafficQueryTool = areaTrafficQueryTool;
-        this.chatModelPort = chatModelPort;
         this.clock = clock;
         this.staleAfter = staleAfter;
-        this.promptFactory = new TrafficSummaryPromptFactory();
+        this.answerComposer = new TrafficAnswerComposer();
     }
 
     @Override   // 表示覆写接口或父类的方法，作为安全保障（以防不存在这个方法）
@@ -86,8 +83,9 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
         TrafficSnapshot snapshot = trafficQueryTool.execute(query); // 执行tool查数据
         Freshness freshness = evaluateFreshness(snapshot.acquiredAt()); // 评估数据的实时程度（判断数据是否过期）
         List<String> warnings = collectDataWarnings(query, snapshot, freshness);   // 收集警告（返回前端）
+        List<RoadSegmentStatus> displaySegments = answerComposer.deduplicate(snapshot.segments());
 
-        Summary summary = summarize(snapshot);    // Summary为record类型的数据
+        String summary = answerComposer.compose(snapshot, freshness);
         // 确保traceId
         String traceId = command.traceId() == null || command.traceId().isBlank()
                 ? UUID.randomUUID().toString()
@@ -95,9 +93,9 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
 
         return new TrafficQueryResult(
                 query,  // 查询条件
-                summary.content(),  // 摘要文字
-                summary.source(),   // 摘要来源（当前固定为MODEL）
-                snapshot.segments(),// 路段列表
+                summary,
+                SummarySource.DETERMINISTIC,
+                displaySegments,// 按道路名称+方向去重后的路段列表
                 snapshot.source(),  // 数据来源（当前为高德，未来可切换甲方接口）
                 snapshot.acquiredAt(), // 获取时间
                 freshness,  // 数据实时性
@@ -125,14 +123,13 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
         );
         Freshness freshness = evaluateFreshness(snapshot.acquiredAt());
         List<String> warnings = collectAreaWarnings(snapshot, freshness);
-        ModelResponse response = chatModelPort.generate(
-                promptFactory.create(snapshot, "请汇报该行政区交通态势。", List.of())
-        );
+        List<RoadSegmentStatus> displaySegments = answerComposer.deduplicate(snapshot.segments());
+        String summary = answerComposer.compose(snapshot, freshness);
         String traceId = command.traceId() == null || command.traceId().isBlank()
                 ? UUID.randomUUID().toString() : command.traceId();
         return new AreaTrafficQueryResult(
-                snapshot.query(), response.content(), SummarySource.MODEL, snapshot.segments(),
-                snapshot.evaluation(), snapshot.coverage(), snapshot.source(), snapshot.acquiredAt(),
+                snapshot.query(), summary, SummarySource.DETERMINISTIC, displaySegments,
+                TrafficEvaluation.from(displaySegments), snapshot.coverage(), snapshot.source(), snapshot.acquiredAt(),
                 freshness, warnings, traceId
         );
     }
@@ -174,33 +171,19 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
 
         Freshness freshness = evaluateFreshness(snapshot.acquiredAt());
         List<String> warnings = collectDataWarnings(query, snapshot, freshness);
-        StringBuilder answer = new StringBuilder();
+        List<RoadSegmentStatus> displaySegments = answerComposer.deduplicate(snapshot.segments());
         sink.emit(new AgentEvent("stage.changed", Map.of(
-                "stage", "ANSWERING", "label", "正在根据真实数据生成回答"
+                "stage", "ANSWERING", "label", "正在生成专业路况结论"
         )));
-
-        // 流式输出
-        /*
-        阻塞式：
-        chatModelPort.generate() → 等大模型全部生成完 → 一次性返回整段文字
-        流式：
-        chatModelPort.stream(delta -> ...) → 大模型生成一个字就回调一次 → 逐字推给前端
-        StringBuilder 用来把流式的 delta 片段拼接成完整答案，最后存进 TrafficQueryResult 里。
-         */
-        chatModelPort.stream(
-                promptFactory.create(snapshot, context.command().message(), context.history()),
-                delta -> {
-                    answer.append(delta);
-                    sink.emit(new AgentEvent("answer.delta", Map.of("content", delta)));
-                }
-        );
+        String answer = answerComposer.compose(snapshot, freshness);
+        sink.emit(new AgentEvent("answer.delta", Map.of("content", answer)));
 
         TrafficQueryResult result = new TrafficQueryResult(
-                query, answer.toString(), SummarySource.MODEL, snapshot.segments(), snapshot.source(),
+                query, answer, SummarySource.DETERMINISTIC, displaySegments, snapshot.source(),
                 snapshot.acquiredAt(), freshness, false, warnings, context.command().traceId()
         );
         sink.emit(new AgentEvent("result.traffic", TrafficAgentResult.from(result)));
-        return new AgentSkillResult(answer.toString());
+        return new AgentSkillResult(answer);
     }
 
     // 方法：区域查询流程（核心方法），在execute()方法中使用
@@ -237,24 +220,19 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
 
         Freshness freshness = evaluateFreshness(snapshot.acquiredAt());
         List<String> warnings = collectAreaWarnings(snapshot, freshness);
-        StringBuilder answer = new StringBuilder();
+        List<RoadSegmentStatus> displaySegments = answerComposer.deduplicate(snapshot.segments());
         sink.emit(new AgentEvent("stage.changed", Map.of(
-                "stage", "ANSWERING", "label", "正在汇总区域交通态势"
+                "stage", "ANSWERING", "label", "正在生成专业交通结论"
         )));
-        chatModelPort.stream(
-                promptFactory.create(snapshot, context.command().message(), context.history()),
-                delta -> {
-                    answer.append(delta);
-                    sink.emit(new AgentEvent("answer.delta", Map.of("content", delta)));
-                }
-        );
+        String answer = answerComposer.compose(snapshot, freshness);
+        sink.emit(new AgentEvent("answer.delta", Map.of("content", answer)));
         AreaTrafficQueryResult result = new AreaTrafficQueryResult(
-                snapshot.query(), answer.toString(), SummarySource.MODEL, snapshot.segments(),
-                snapshot.evaluation(), snapshot.coverage(), snapshot.source(), snapshot.acquiredAt(),
+                snapshot.query(), answer, SummarySource.DETERMINISTIC, displaySegments,
+                TrafficEvaluation.from(displaySegments), snapshot.coverage(), snapshot.source(), snapshot.acquiredAt(),
                 freshness, warnings, context.command().traceId()
         );
         sink.emit(new AgentEvent("result.traffic", TrafficAgentResult.from(result)));
-        return new AgentSkillResult(answer.toString());
+        return new AgentSkillResult(answer);
     }
 
     // 方法实现：数据过期判断
@@ -312,13 +290,4 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
         return direction.replaceAll("[由往向至\\s]", "").trim();
     }
 
-    // 方法实现：摘要生成
-    private Summary summarize(TrafficSnapshot snapshot) {
-        ModelResponse response = chatModelPort.generate(promptFactory.create(snapshot));
-        // TrafficSummaryPromptFactory类的实例对象promptFactory 把结构化的TrafficSnapshot转换成大模型能理解的 ModelRequest（systemPrompt + userPrompt + temperature）
-        return new Summary(response.content(), SummarySource.MODEL);
-    }
-    // 私有内部record类（类包含两个字段：content和source），该类仅服务在RealtimeTrafficSkill类中，其他类不可见
-    private record Summary(String content, SummarySource source) {
-    }
 }

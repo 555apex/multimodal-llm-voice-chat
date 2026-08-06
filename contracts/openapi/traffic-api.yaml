@@ -330,7 +330,7 @@ components:
           type: string
         summarySource:
           type: string
-          const: MODEL
+          enum: [MODEL, DETERMINISTIC]
         segments:
           type: array
           items:
@@ -388,7 +388,7 @@ components:
         areaName: { type: string }
         city: { type: string }
         summary: { type: string }
-        summarySource: { type: string, const: MODEL }
+        summarySource: { type: string, enum: [MODEL, DETERMINISTIC] }
         evaluation: { $ref: '#/components/schemas/TrafficEvaluation' }
         coverage: { $ref: '#/components/schemas/TrafficCoverage' }
         segments:

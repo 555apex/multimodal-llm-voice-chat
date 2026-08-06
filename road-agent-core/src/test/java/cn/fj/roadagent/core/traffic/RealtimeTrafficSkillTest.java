@@ -1,13 +1,8 @@
 package cn.fj.roadagent.core.traffic;
 
-import cn.fj.roadagent.application.exception.ExternalServiceException;
 import cn.fj.roadagent.application.agent.AgentDecision;
 import cn.fj.roadagent.application.agent.AgentEvent;
 import cn.fj.roadagent.application.agent.AgentMessageCommand;
-import cn.fj.roadagent.application.model.ModelRequest;
-import cn.fj.roadagent.application.model.ModelResponse;
-import cn.fj.roadagent.application.model.ModelStreamListener;
-import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.AreaTrafficQueryTool;
 import cn.fj.roadagent.application.traffic.AreaTrafficProgress;
 import cn.fj.roadagent.application.port.TrafficQueryTool;
@@ -38,7 +33,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RealtimeTrafficSkillTest {
@@ -48,7 +42,7 @@ class RealtimeTrafficSkillTest {
 
     @Test
     void shouldKeepFixedWorkflowOrder() {
-        RealtimeTrafficSkill skill = skill(normalTool(), successfulModel());
+        RealtimeTrafficSkill skill = skill(normalTool());
 
         assertEquals(List.of(
                 TrafficWorkflowStep.VALIDATE_QUERY,
@@ -60,25 +54,21 @@ class RealtimeTrafficSkillTest {
     }
 
     @Test
-    void shouldUseModelForSummary() {
-        TrafficQueryResult result = skill(normalTool(), successfulModel()).query(command());
+    void shouldBuildDeterministicProfessionalAnswer() {
+        TrafficQueryResult result = skill(normalTool()).query(command());
 
-        assertEquals(SummarySource.MODEL, result.summarySource());
-        assertEquals("五四路当前总体缓行。", result.summary());
+        assertEquals(SummarySource.DETERMINISTIC, result.summarySource());
+        assertEquals(
+                "五四路当前未发现拥堵，但部分路段通行缓慢。 "
+                        + "重点路段：五四路（南向北，缓行，约25 km/h）。 "
+                        + "建议途经上述缓行路段时适当预留通行时间。\n"
+                        + "本次返回的全部路段：\n"
+                        + "- 五四路（南向北，缓行，约25 km/h）",
+                result.summary()
+        );
+        assertEquals(1, result.segments().size());
         assertEquals(CongestionLevel.SLOW, result.segments().get(0).congestionLevel());
-    }
-
-    @Test
-    void shouldFailInsteadOfUsingRuleSummaryWhenModelFails() {
-        ChatModelPort failedModel = new StubChatModel() {
-            @Override
-            public ModelResponse generate(ModelRequest request) {
-                throw new ExternalServiceException("CHAT_MODEL", "MODEL_UPSTREAM_ERROR", "timeout");
-            }
-        };
-
-        assertThrows(ExternalServiceException.class,
-                () -> skill(normalTool(), failedModel).query(command()));
+        assertEquals(25.0, result.segments().get(0).averageSpeedKmh());
     }
 
     @Test
@@ -87,7 +77,7 @@ class RealtimeTrafficSkillTest {
                 query, List.of(), "AMAP", NOW.minus(Duration.ofMinutes(30)), false, ""
         );
 
-        TrafficQueryResult result = skill(staleTool, successfulModel()).query(command());
+        TrafficQueryResult result = skill(staleTool).query(command());
 
         assertEquals(Freshness.STALE, result.freshness());
         assertTrue(result.warnings().contains("EMPTY_TRAFFIC_DATA"));
@@ -100,7 +90,7 @@ class RealtimeTrafficSkillTest {
                 "350100", "五四路", "北向南", "trace-direction-test"
         );
 
-        TrafficQueryResult result = skill(normalTool(), successfulModel()).query(oppositeDirection);
+        TrafficQueryResult result = skill(normalTool()).query(oppositeDirection);
 
         assertTrue(result.warnings().contains("REQUESTED_DIRECTION_NOT_COVERED"));
     }
@@ -126,7 +116,7 @@ class RealtimeTrafficSkillTest {
             );
         };
         RealtimeTrafficSkill skill = new RealtimeTrafficSkill(
-                normalTool(), areaTool, successfulModel(), CLOCK, Duration.ofMinutes(5)
+                normalTool(), areaTool, CLOCK, Duration.ofMinutes(5)
         );
         AgentDecision decision = new AgentDecision(
                 "TRAFFIC_QUERY", "AREA_MAJOR", "厦门", "思明区", null, null,
@@ -146,21 +136,20 @@ class RealtimeTrafficSkillTest {
         assertTrue(resultEvent.data().toString().contains("AREA_MAJOR"));
     }
 
-    private RealtimeTrafficSkill skill(TrafficQueryTool tool, ChatModelPort model) {
+    private RealtimeTrafficSkill skill(TrafficQueryTool tool) {
         AreaTrafficQueryTool areaTool = (city, areaName, scope, listener) -> {
             throw new UnsupportedOperationException("本组道路查询测试不调用区域Tool");
         };
-        return new RealtimeTrafficSkill(tool, areaTool, model, CLOCK, Duration.ofMinutes(5));
-    }
-
-    private ChatModelPort successfulModel() {
-        return new StubChatModel();
+        return new RealtimeTrafficSkill(tool, areaTool, CLOCK, Duration.ofMinutes(5));
     }
 
     private TrafficQueryTool normalTool() {
         return query -> new TrafficSnapshot(
                 query,
-                List.of(new RoadSegmentStatus("五四路", "南向北", CongestionLevel.SLOW, 25.0, null)),
+                List.of(
+                        new RoadSegmentStatus("五四路", "南向北", CongestionLevel.SLOW, 30.0, null),
+                        new RoadSegmentStatus("五四路", "南向北", CongestionLevel.SLOW, 25.0, null)
+                ),
                 "AMAP",
                 NOW,
                 false,
@@ -172,20 +161,4 @@ class RealtimeTrafficSkillTest {
         return new TrafficQueryCommand("350100", "五四路", "南向北", "trace-test");
     }
 
-    private static class StubChatModel implements ChatModelPort {
-        @Override
-        public ModelResponse generate(ModelRequest request) {
-            return new ModelResponse("五四路当前总体缓行。", "TEST", "test-model");
-        }
-
-        @Override
-        public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void stream(ModelRequest request, ModelStreamListener listener) {
-            listener.onDelta("五四路当前总体缓行。");
-        }
-    }
 }

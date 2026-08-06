@@ -64,7 +64,8 @@ class DatabaseConnectionIntegrationTest {
                 """
                 SELECT CAST(id AS CHAR)
                 FROM w_abnormal_event
-                WHERE event_status = 0 AND COALESCE(del_flag, '0') = '0'
+                WHERE event_status = 0
+                  AND (del_flag IS NULL OR del_flag IN ('N', '0'))
                 ORDER BY occurrence_time IS NULL, occurrence_time ASC, id ASC
                 LIMIT 1
                 """,
@@ -73,6 +74,37 @@ class DatabaseConnectionIntegrationTest {
 
         assertEquals(expectedId, event.eventId());
         assertTrue(event.eventId().length() > 15);
+        Long expectedCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM w_abnormal_event
+                WHERE event_status = 0
+                  AND (del_flag IS NULL OR del_flag IN ('N', '0'))
+                """,
+                Long.class
+        );
+        assertEquals(expectedCount, abnormalEventRepository.countPending());
+    }
+
+    @Test
+    void shouldRecognizeCurrentAndLegacyActiveDeletionFlags() {
+        List<String> activeFlags = jdbcTemplate.queryForList(
+                """
+                SELECT COALESCE(flag_value, 'NULL')
+                FROM (
+                    SELECT 'N' AS flag_value
+                    UNION ALL SELECT '0'
+                    UNION ALL SELECT NULL
+                    UNION ALL SELECT 'Y'
+                    UNION ALL SELECT '1'
+                ) flags
+                WHERE flag_value IS NULL OR flag_value IN ('N', '0')
+                ORDER BY COALESCE(flag_value, 'NULL')
+                """,
+                String.class
+        );
+
+        assertEquals(List.of("0", "N", "NULL"), activeFlags);
     }
 
     @Test
