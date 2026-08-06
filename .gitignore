@@ -21,6 +21,7 @@ npm-debug.log*
 **/application-local.yaml
 **/application-local.properties
 config/api-test.env
+config/api-test.ps1
 config/local.env
 
 # IDE and operating system

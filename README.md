@@ -3,11 +3,11 @@
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通两条纵向闭环：
 
 ```text
-交通问答：自然语言 → DeepSeek 识别道路/区域范围 → 交通 Skill → 高德 Tool → DeepSeek 流式回答
+交通问答：自然语言 → DeepSeek 识别道路/区域范围 → 交通 Skill → 高德 Tool → Java确定性回答
 应急调度：MySQL 异常事件 → 顶部告警卡 → 模型生成版本化工单 → 人工审批或返工 → 数据库留痕
 ```
 
-DeepSeek 负责理解和生成；Java 负责 Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单或修改业务状态。
+DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答、Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单、修改业务状态或改写交通事实。
 
 ## 1. 环境要求
 
@@ -35,36 +35,60 @@ git pull --ff-only origin version/roadagent-v1
 
 以下内容不会上传到 GitHub：
 
-- `config/api-test.env`：真实 API 密钥和 MySQL 密码；
+- `config/api-test.env`、`config/api-test.ps1`：真实 API 密钥和 MySQL 密码；
 - `.idea/`：每位协作者自己的 IDEA 配置和数据库工具连接；
 - `target/`、`node_modules/`、`frontend/dist/`：可重新生成的构建产物和依赖；
 - MySQL 中的真实表数据。
 
 仓库会保留 Maven Wrapper、`package-lock.json`、配置示例和数据库变更脚本，因此协作者不需要复制项目负责人的本地工程目录。
 
-## 3. 获取共享配置
+## 3. 准备 API 和共享数据库配置
 
-项目负责人需要通过安全渠道向协作者提供：
+运行项目需要两类外部 API 和一个共享云数据库。API Key 由每位协作者使用自己的账号申请，数据库连接信息由项目负责人通过安全渠道提供。
 
-- `AMAP_API_KEY`；
-- `ROADAGENT_MODEL_API_KEY`；
-- `ROADAGENT_DB_URL`；
-- `ROADAGENT_DB_USERNAME`；
-- `ROADAGENT_DB_PASSWORD`。
+| 配置 | 由谁准备 | 要求 |
+|---|---|---|
+| `AMAP_API_KEY` | 协作者 | 在[高德开放平台](https://lbs.amap.com/api/webservice/create-project-and-key)创建应用并申请“Web 服务”类型的 Key；确认账号具有项目所用交通态势和行政区接口的调用额度 |
+| `ROADAGENT_MODEL_API_KEY` | 协作者 | 在[DeepSeek 开放平台](https://platform.deepseek.com/api_keys)创建 API Key，并确认账号有可用余额和调用额度 |
+| `ROADAGENT_DB_URL` | 项目负责人 | 完整 JDBC URL，包含数据库 IP/域名、端口、schema 和连接参数 |
+| `ROADAGENT_DB_USERNAME` | 项目负责人 | 共享数据库账号 |
+| `ROADAGENT_DB_PASSWORD` | 项目负责人 | 共享数据库密码 |
 
-协作者在项目根目录执行：
+负责人还需要告知协作者数据库是否要求校园网、VPN 或 IP 白名单，并确认第 4 节所列的表结构和读写权限已经准备好。真实 IP、账号、密码和任何 API Key 都不能写入 README、示例文件或 Java 配置。
+
+### 3.1 macOS / Linux
+
+在项目根目录执行：
 
 ```bash
 cp config/api-test.env.example config/api-test.env
 ```
 
-然后把收到的真实值填入本地 `config/api-test.env`，每次新开终端后执行：
+然后把自己申请的两个 API Key 和负责人提供的数据库信息填入本地 `config/api-test.env`，每次新开终端后执行：
 
 ```bash
 source config/api-test.env
 ```
 
-`config/api-test.env` 已被 Git 忽略，不能提交。不要把密钥或密码写入 Java、`application.yml`、README 或示例文件。
+`config/api-test.env` 已被 Git 忽略，不能提交。
+
+### 3.2 Windows PowerShell
+
+在项目根目录执行：
+
+```powershell
+Copy-Item config/api-test.ps1.example config/api-test.ps1
+```
+
+填写自己申请的 API Key 和负责人提供的数据库信息后，每次新开 PowerShell 执行：
+
+```powershell
+. .\config\api-test.ps1
+```
+
+`config/api-test.ps1` 同样已被 Git 忽略，不能提交。PowerShell 配置只对当前终端会话生效。
+
+### 3.3 IDEA
 
 通过 IDEA 启动时，在 `Run → Edit Configurations → RoadAgentApplication → Environment variables` 中填写同样的环境变量。IDEA 右侧数据库工具中的数据源只供查看和执行 SQL，不会自动成为 Spring Boot 的运行时数据源。
 
@@ -102,13 +126,15 @@ docs/sql/20260728_emergency_dispatch.sql
 - `event_status=0`：待处理；
 - `event_status=1`：调度工单已审批通过；
 - `event_status=2`：已确认无需调度；
-- `del_flag=0` 或 `NULL`：有效数据，`del_flag=1`：逻辑删除。
+- `del_flag=N`、`0` 或 `NULL`：有效数据；`del_flag=Y` 或 `1`：逻辑删除。
 
 `w_abnormal_event.id` 是 `BIGINT`，后端会以字符串形式返回给前端，避免 JavaScript 精度丢失。若需要在 IDEA 中查看共享数据库，应单独创建 MySQL 数据源并选择连接参数中的 schema；刷新表列表只会刷新 IDEA 缓存，不会改变后端连接。
 
 ## 5. 启动项目
 
 ### 5.1 后端
+
+仓库中的 Maven Wrapper 已固定使用 Maven 3.9.16：macOS/Linux 使用 `mvnw`，Windows 使用 `mvnw.cmd`，版本和下载地址保存在 `.mvn/wrapper/maven-wrapper.properties`。当前 Wrapper 采用官方 `distributionType=only-script`，因此不需要也不会包含 `maven-wrapper.jar`；这不是文件缺失。首次运行时会从 Maven Central 下载 Maven 和项目依赖，协作者需要能够访问 `repo.maven.apache.org`。
 
 首次拉取项目或 `pom.xml` 发生变化后，在 IDEA 中执行一次 Maven Reload；普通启动不需要每次都刷新 Maven。
 
@@ -119,7 +145,14 @@ docs/sql/20260728_emergency_dispatch.sql
 java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
 ```
 
-Windows 使用 `mvnw.cmd`，并在 PowerShell 或 IDEA 运行配置中设置环境变量。首次执行会下载 Maven 和 Java 依赖到用户缓存，不会安装全局 Maven。
+Windows PowerShell 使用：
+
+```powershell
+.\mvnw.cmd package -DskipTests
+java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
+```
+
+首次执行会下载 Maven 和 Java 依赖到用户缓存，不会安装全局 Maven。
 
 后端启动成功后可检查：
 
@@ -151,11 +184,11 @@ npm run dev
 - 道路查询缺少城市或道路时继续追问；区域查询不再强制追问某一条路；
 - 行政区名称由高德行政区服务解析，Java 校验 adcode 必须属于福建，不采信模型生成的编码；
 - “交通要道”使用高德道路等级 4 查询，不让模型凭自身知识列举道路；
-- 区域边界以约 6 公里矩形分片，最多 500 片、并发 4 个；部分失败时明确显示覆盖率；
-- Java 根据全部成功分片的去重路段计算畅通、缓行、拥堵比例和平均速度，模型只负责解释统计结果；
+- 区域边界以约 6 公里矩形分片，最多 500 片、并发 4 个；部分失败时由Java自动收紧回答范围，不对外输出切片覆盖率；
+- Java只依据高德返回的道路、方向、状态和速度生成确定性回答：先总结整体和重点道路，再逐条列出本次返回的全部路段；同一道路名称和方向只保留拥堵程度最高、同等级速度最低的一条；不允许模型补充路段或改写交通事实；
 - 会话最多保留 20 条消息，闲置 60 分钟后失效；
 - 高德适配器当前验证福州、厦门、泉州，其他福建城市提示数据源覆盖不足；
-- 高德或 DeepSeek 失败时，本次请求失败，不返回虚构数据或规则摘要；
+- 高德或意图识别模型失败时，本次请求失败；已取得的交通事实不交给模型自由改写；
 - 保留 `POST /api/v1/traffic/queries`，用于结构化交通查询兼容。
 
 ### 6.2 数据库应急调度
@@ -241,7 +274,7 @@ cd frontend && npm run build
 
 1. 后端已在 `8080` 端口启动；
 2. `GET /api/v1/emergency-events/pending/next` 能返回事件；
-3. 事件满足 `event_status=0 AND COALESCE(del_flag, 0)=0`；
+3. 事件满足 `event_status=0 AND (del_flag IS NULL OR del_flag IN ('N', '0'))`；
 4. 前端已在 `5173` 端口启动，浏览器页面处于可见状态；
 5. 前后端终端中没有数据库连接或代理错误。
 

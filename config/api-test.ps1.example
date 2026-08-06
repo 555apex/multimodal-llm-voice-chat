@@ -1,0 +1,18 @@
+# 复制本文件为 config/api-test.ps1，再填写协作者自己的 API Key 和负责人提供的数据库信息。
+# config/api-test.ps1 已被 Git 忽略，不要在本示例文件中填写真实密钥。
+
+# 当前交通数据只使用高德 Web 服务 API。
+$env:ROADAGENT_TRAFFIC_PROVIDER = 'amap'
+$env:AMAP_API_KEY = 'replace-with-your-own-amap-web-key'
+
+# DeepSeek 负责意图识别、方案生成和流式回答。
+$env:ROADAGENT_MODEL_PROVIDER = 'openai-compatible'
+$env:ROADAGENT_MODEL_ENDPOINT = 'https://api.deepseek.com/chat/completions'
+$env:ROADAGENT_MODEL_API_KEY = 'replace-with-your-own-deepseek-key'
+$env:ROADAGENT_MODEL_NAME = 'deepseek-v4-flash'
+$env:ROADAGENT_MODEL_AUTH_ENABLED = 'true'
+
+# 云 MySQL 信息由项目负责人通过安全渠道提供。
+$env:ROADAGENT_DB_URL = 'jdbc:mysql://database-host:3306/road_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
+$env:ROADAGENT_DB_USERNAME = 'replace-with-database-user'
+$env:ROADAGENT_DB_PASSWORD = 'replace-with-database-password'
