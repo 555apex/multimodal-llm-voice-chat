@@ -8,6 +8,7 @@ export interface AgentMessage {
   id: string
   role: AgentRole
   content: string
+  speechText?: string
   status: AgentMessageStatus
   traffic?: TrafficQueryResult
   dispatch?: DispatchPlan

@@ -321,7 +321,58 @@ button:disabled { cursor: not-allowed; opacity: .55; }
 .chat-composer textarea::placeholder { color: #9aabb1; }
 .chat-composer button { height: 44px; padding: 0 16px; display: flex; align-items: center; gap: 7px; color: #fff; border: none; border-radius: 13px; background: linear-gradient(135deg, #0f8d85, #116270); box-shadow: 0 8px 18px rgba(11, 111, 111, .22); }
 .chat-composer button i { font-style: normal; font-size: 18px; }
-.composer-hint { margin: 7px 0 14px; color: #94a4aa; text-align: center; font-size: 10px; }
+.voice-input-control { position: relative; flex: 0 0 auto; align-self: center; }
+.chat-composer .voice-input-button {
+  width: 42px; height: 42px; padding: 0; display: grid; place-items: center;
+  color: #27746f; border: 1px solid #cfe1e1; border-radius: 12px;
+  background: #f3f9f8; box-shadow: none; font-size: 17px;
+}
+.voice-input-control[data-status='recording'] .voice-input-button {
+  color: #fff; border-color: #c54b43; background: #c54b43;
+  animation: pulse 1.2s infinite;
+}
+.voice-input-control[data-status='transcribing'] .voice-input-button { color: #98691c; background: #fff4da; }
+.voice-recording-actions {
+  position: absolute; left: 50%; bottom: calc(100% + 5px); z-index: 5;
+  display: flex; align-items: center; gap: 5px; transform: translateX(-50%);
+  white-space: nowrap;
+}
+.voice-recording-time {
+  min-width: 48px; padding: 3px 6px; color: #8d4d48;
+  border: 1px solid #eccbc7; border-radius: 7px; background: #fff8f7;
+  text-align: center; font-size: 9px; white-space: nowrap;
+}
+.voice-input-control > .voice-recording-time {
+  position: absolute; left: 50%; bottom: calc(100% + 5px); transform: translateX(-50%);
+}
+.chat-composer .voice-input-cancel {
+  height: 24px; padding: 0 7px; color: #9f403a; border: 1px solid #e8bbb7;
+  border-radius: 7px; background: #fff; box-shadow: none; font-size: 9px;
+}
+.voice-input-error {
+  position: absolute; left: 0; bottom: calc(100% + 7px); z-index: 5;
+  width: min(280px, 70vw); padding: 6px 8px; color: #a23f38;
+  border: 1px solid #edcbc8; border-radius: 8px; background: #fff7f6;
+  box-shadow: 0 6px 18px rgba(75, 35, 32, .1); font-size: 10px;
+}
+.composer-options {
+  min-height: 29px; margin: 1px clamp(20px, 3vw, 47px) 8px;
+  display: flex; align-items: center; gap: 10px;
+}
+.composer-hint { flex: 1; margin: 0; color: #94a4aa; text-align: right; font-size: 10px; }
+.speech-auto-toggle {
+  display: inline-flex; align-items: center; gap: 6px; color: #52757b;
+  font-size: 11px; cursor: pointer; white-space: nowrap;
+}
+.speech-auto-toggle input { accent-color: #128b7d; }
+.speech-auto-toggle.unavailable { color: #9aa8ac; cursor: not-allowed; }
+.message-speech-control { margin-top: 5px; display: flex; align-items: center; gap: 7px; }
+.message-speech-control button {
+  padding: 4px 8px; display: inline-flex; align-items: center; gap: 4px;
+  color: #4a747c; border: 1px solid #d4e4e5; border-radius: 8px;
+  background: #f8fbfb; font-size: 10px;
+}
+.message-speech-control small { color: #a14b44; font-size: 10px; }
 
 .traffic-answer, .dispatch-card {
   width: 100%; margin-top: 10px;
@@ -420,6 +471,7 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .emergency-alert-card { margin: 10px 12px 0; max-height: 48%; }
   .message-list { padding: 20px 16px 12px; }
   .chat-composer { margin-inline: 12px; }
+  .composer-options { margin-inline: 15px; }
   .example-prompts, .agent-progress { padding-inline: 16px; }
 }
 
@@ -431,6 +483,8 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   .human-orbit { width: 100px; left: 58px; }
   .human-state { display: none; }
   .message-body { width: calc(100% - 42px); }
+  .composer-options { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .composer-hint { text-align: left; }
   .traffic-table { font-size: 11px; }
   .traffic-table thead { display: none; }
   .traffic-table, .traffic-table tbody, .traffic-table tr, .traffic-table td { display: block; width: 100%; }

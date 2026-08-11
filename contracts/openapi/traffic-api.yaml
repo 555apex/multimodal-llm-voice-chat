@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: 福建应急交通Agent API
-  version: 0.4.0
-  description: 对话式道路交通查询和数据库异常事件应急调度接口
+  version: 0.5.0
+  description: 对话式道路交通查询、数据库异常事件应急调度和Docker语音服务接口
 servers:
   - url: http://localhost:8080
 paths:
@@ -29,7 +29,7 @@ paths:
         '200':
           description: |
             SSE事件流。事件名称可能为run.started、stage.changed、intent.recognized、
-            skill.selected、tool.started、tool.progress、tool.completed、answer.delta、
+            skill.selected、tool.started、tool.progress、tool.completed、answer.delta、answer.speech、
             result.traffic、run.completed或run.failed。
           content:
             text/event-stream:
@@ -40,6 +40,82 @@ paths:
                 data: {"content":"五四路当前"}
         '400':
           $ref: '#/components/responses/BadRequest'
+
+  /api/v1/speech/capabilities:
+    get:
+      summary: 查询ASR、TTS当前可用性及上传限制
+      description: 语音容器离线时仍返回200，但asrAvailable和ttsAvailable为false。
+      operationId: getSpeechCapabilities
+      responses:
+        '200':
+          description: 当前语音能力
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechCapabilitiesApiResponse'
+
+  /api/v1/speech/transcriptions:
+    post:
+      summary: 识别一段浏览器录音
+      operationId: transcribeSpeech
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio, durationMs]
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: 最大10 MB，支持WebM、MP4、Ogg或WAV音频
+                durationMs:
+                  type: integer
+                  minimum: 1
+                  maximum: 60000
+      responses:
+        '200':
+          description: 识别文本，不会自动发送为聊天消息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpeechTranscriptionApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          description: ASR容器不可用或识别失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/speech/syntheses:
+    post:
+      summary: 将一个自然语言片段合成为MP3
+      operationId: synthesizeSpeech
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SpeechSynthesisRequest'
+      responses:
+        '200':
+          description: Edge-TTS合成的音频；响应禁止缓存
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          description: TTS容器或Microsoft在线语音服务不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/emergency-events/pending/next:
     get:
@@ -271,6 +347,34 @@ components:
           type: string
           minLength: 1
           maxLength: 1000
+
+    SpeechCapabilities:
+      type: object
+      required: [asrAvailable, ttsAvailable, maxRecordingSeconds, maxAudioBytes]
+      properties:
+        asrAvailable: { type: boolean }
+        ttsAvailable: { type: boolean }
+        asrModel: { type: [string, 'null'], examples: [small] }
+        ttsVoice: { type: [string, 'null'], examples: [zh-CN-XiaoxiaoNeural] }
+        maxRecordingSeconds: { type: integer, minimum: 1, examples: [60] }
+        maxAudioBytes: { type: integer, minimum: 1, examples: [10485760] }
+
+    SpeechTranscription:
+      type: object
+      required: [text, language, durationMs]
+      properties:
+        text: { type: string }
+        language: { type: string, examples: [zh] }
+        durationMs: { type: integer, minimum: 0 }
+
+    SpeechSynthesisRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 500
 
     TrafficQueryRequest:
       type: object
@@ -526,6 +630,26 @@ components:
           oneOf:
             - $ref: '#/components/schemas/EmergencyAlert'
             - type: 'null'
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    SpeechCapabilitiesApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/SpeechCapabilities' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    SpeechTranscriptionApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/SpeechTranscription' }
         traceId: { type: string }
         timestamp: { type: string, format: date-time }
 

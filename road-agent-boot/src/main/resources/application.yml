@@ -22,6 +22,10 @@ spring:
       minimum-idle: 1
       connection-timeout: 10000
       validation-timeout: 5000
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
 
 # ------ 内嵌Tomcat服务器配置 ------
 server:
@@ -99,6 +103,17 @@ roadagent:
   dispatch:
     # 生成状态超过该时间后允许重试，避免服务中断留下永久卡住的工单
     stale-generating-seconds: ${ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS:120}
+
+  # ===== Docker语音服务配置 =====
+  speech:
+    # 容器离线不会阻止Java启动；能力接口会返回不可用
+    enabled: ${ROADAGENT_SPEECH_ENABLED:true}
+    service-url: ${ROADAGENT_SPEECH_SERVICE_URL:http://localhost:8091}
+    connect-timeout-seconds: ${ROADAGENT_SPEECH_CONNECT_TIMEOUT_SECONDS:3}
+    request-timeout-seconds: ${ROADAGENT_SPEECH_REQUEST_TIMEOUT_SECONDS:90}
+    max-recording-seconds: ${ROADAGENT_SPEECH_MAX_RECORDING_SECONDS:60}
+    max-audio-bytes: ${ROADAGENT_SPEECH_MAX_AUDIO_BYTES:10485760}
+    max-tts-characters: ${ROADAGENT_SPEECH_MAX_TTS_CHARACTERS:500}
 
 # ===== 日志配置 =====
 logging:

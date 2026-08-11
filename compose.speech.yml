@@ -1,0 +1,38 @@
+services:
+  speech-service:
+    build:
+      context: ./speech-service
+      dockerfile: Dockerfile
+      target: runtime
+    ports:
+      - "127.0.0.1:8091:8091"
+    environment:
+      SPEECH_ASR_MODEL: ${SPEECH_ASR_MODEL:-small}
+      SPEECH_ASR_DEVICE: ${SPEECH_ASR_DEVICE:-cpu}
+      SPEECH_ASR_COMPUTE_TYPE: ${SPEECH_ASR_COMPUTE_TYPE:-int8}
+      SPEECH_ASR_DOWNLOAD_ROOT: /models
+      SPEECH_ASR_LANGUAGE: ${SPEECH_ASR_LANGUAGE:-zh}
+      SPEECH_ASR_MODEL_BASE_URL: ${SPEECH_ASR_MODEL_BASE_URL:-}
+      HF_ENDPOINT: ${SPEECH_HF_ENDPOINT:-https://huggingface.co}
+      HF_HUB_DISABLE_XET: ${SPEECH_HF_DISABLE_XET:-1}
+      SPEECH_ASR_MAX_CONCURRENCY: ${SPEECH_ASR_MAX_CONCURRENCY:-1}
+      SPEECH_MAX_AUDIO_BYTES: ${SPEECH_MAX_AUDIO_BYTES:-10485760}
+      SPEECH_TTS_VOICE: ${SPEECH_TTS_VOICE:-zh-CN-XiaoxiaoNeural}
+      SPEECH_TTS_RATE: ${SPEECH_TTS_RATE:-+0%}
+      SPEECH_TTS_VOLUME: ${SPEECH_TTS_VOLUME:-+0%}
+      SPEECH_TTS_PITCH: ${SPEECH_TTS_PITCH:-+0Hz}
+      SPEECH_MAX_TTS_CHARACTERS: ${SPEECH_MAX_TTS_CHARACTERS:-500}
+    volumes:
+      - roadagent-speech-models:/models
+    restart: unless-stopped
+
+  speech-tests:
+    profiles: ["test"]
+    build:
+      context: ./speech-service
+      dockerfile: Dockerfile
+      target: test
+    command: ["python", "-m", "pytest", "-q"]
+
+volumes:
+  roadagent-speech-models:

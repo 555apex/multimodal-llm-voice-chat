@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { AgentMessage } from '../types/agent'
 import DispatchPlanCard from './DispatchPlanCard.vue'
+import MessageSpeechButton from './MessageSpeechButton.vue'
 import TrafficResultPanel from './TrafficResultPanel.vue'
 
 defineProps<{ message: AgentMessage; approvalBusyPlanId: string }>()
@@ -18,6 +19,11 @@ const emit = defineEmits<{
         <p v-else-if="message.status === 'pending'" class="thinking-dots"><i></i><i></i><i></i></p>
         <p v-if="message.errorMessage" class="message-error">{{ message.errorMessage }}</p>
       </div>
+      <MessageSpeechButton
+        v-if="message.role === 'assistant' && message.status === 'completed' && message.speechText"
+        :message-id="message.id"
+        :speech-text="message.speechText"
+      />
 
       <TrafficResultPanel
         v-if="message.traffic"

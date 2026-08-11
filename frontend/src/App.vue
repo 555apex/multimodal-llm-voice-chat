@@ -4,8 +4,10 @@ import { storeToRefs } from 'pinia'
 import ChatMessage from './components/ChatMessage.vue'
 import DigitalHumanPanel from './components/DigitalHumanPanel.vue'
 import EmergencyAlertCard from './components/EmergencyAlertCard.vue'
+import VoiceInputButton from './components/VoiceInputButton.vue'
 import { useAgentStore } from './stores/agent'
 import { useEmergencyStore } from './stores/emergency'
+import { useSpeechStore } from './stores/speech'
 
 const store = useAgentStore()
 const { messages, running, stage, toolProgress, approvalBusyPlanId } = storeToRefs(store)
@@ -17,12 +19,24 @@ const {
   errorMessage: emergencyError,
 } = storeToRefs(emergencyStore)
 const input = ref('')
+const inputElement = ref<HTMLTextAreaElement>()
 const messageList = ref<HTMLElement>()
+const recording = ref(false)
+const speechStore = useSpeechStore()
+const {
+  capabilities: speechCapabilities,
+  capabilitiesLoading: speechCapabilitiesLoading,
+  capabilityError: speechCapabilityError,
+  autoReadEnabled,
+  playbackStatus,
+} = storeToRefs(speechStore)
 
 const avatarState = computed(() => {
   if (messages.value.at(-1)?.status === 'failed') return 'error'
+  if (recording.value) return 'listening'
+  if (playbackStatus.value === 'playing') return 'speaking'
   if (!running.value) return 'idle'
-  return stage.value?.stage === 'ANSWERING' ? 'speaking' : 'listening'
+  return 'listening'
 })
 
 const examples = [
@@ -40,9 +54,24 @@ const progressText = computed(() => {
 
 async function send() {
   const content = input.value.trim()
-  if (!content || running.value) return
+  if (!content || running.value || recording.value) return
   input.value = ''
   await store.send(content)
+}
+
+async function insertTranscription(text: string) {
+  const element = inputElement.value
+  const start = element?.selectionStart ?? input.value.length
+  const end = element?.selectionEnd ?? start
+  const before = input.value.slice(0, start)
+  const after = input.value.slice(end)
+  const prefix = before && !/\s$/.test(before) ? ' ' : ''
+  const suffix = after && !/^\s/.test(after) ? ' ' : ''
+  input.value = `${before}${prefix}${text}${suffix}${after}`
+  const caret = start + prefix.length + text.length + suffix.length
+  await nextTick()
+  element?.focus()
+  element?.setSelectionRange(caret, caret)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -64,8 +93,14 @@ watch(
   },
 )
 
-onMounted(() => emergencyStore.startPolling())
-onUnmounted(() => emergencyStore.stopPolling())
+onMounted(() => {
+  emergencyStore.startPolling()
+  void speechStore.loadCapabilities()
+})
+onUnmounted(() => {
+  emergencyStore.stopPolling()
+  speechStore.stop()
+})
 </script>
 
 <template>
@@ -125,7 +160,16 @@ onUnmounted(() => emergencyStore.stopPolling())
         </div>
 
         <form class="chat-composer" @submit.prevent="send">
+          <VoiceInputButton
+            :disabled="running || recording"
+            :available="Boolean(speechCapabilities?.asrAvailable)"
+            :max-recording-seconds="speechCapabilities?.maxRecordingSeconds ?? 60"
+            :max-audio-bytes="speechCapabilities?.maxAudioBytes ?? 10485760"
+            @transcribed="insertTranscription"
+            @recording-changed="recording = $event"
+          />
           <textarea
+            ref="inputElement"
             v-model="input"
             rows="2"
             maxlength="1000"
@@ -133,11 +177,25 @@ onUnmounted(() => emergencyStore.stopPolling())
             placeholder="询问道路或行政区实时路况…"
             @keydown="handleKeydown"
           ></textarea>
-          <button type="submit" :disabled="running || !input.trim()">
+          <button type="submit" :disabled="running || recording || !input.trim()">
             <span>{{ running ? '生成中' : '发送' }}</span><i aria-hidden="true">↗</i>
           </button>
         </form>
-        <p class="composer-hint">Enter发送 · Shift + Enter换行 · 正式调度请使用顶部告警卡</p>
+        <div class="composer-options">
+          <label class="speech-auto-toggle" :class="{ unavailable: !speechCapabilities?.ttsAvailable }">
+            <input
+              type="checkbox"
+              :checked="autoReadEnabled"
+              :disabled="speechCapabilitiesLoading || !speechCapabilities?.ttsAvailable"
+              @change="speechStore.setAutoRead(($event.target as HTMLInputElement).checked)"
+            />
+            <span>语音回答</span>
+          </label>
+          <p class="composer-hint">
+            <span v-if="speechCapabilityError">语音服务未就绪 · </span>
+            Enter发送 · Shift + Enter换行 · 正式调度请使用顶部告警卡
+          </p>
+        </div>
       </section>
     </section>
   </main>

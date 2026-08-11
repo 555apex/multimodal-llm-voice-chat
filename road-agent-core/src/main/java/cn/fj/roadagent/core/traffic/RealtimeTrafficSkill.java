@@ -177,13 +177,14 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
         )));
         String answer = answerComposer.compose(snapshot, freshness);
         sink.emit(new AgentEvent("answer.delta", Map.of("content", answer)));
+        String speechText = answerComposer.composeSpeech(snapshot, freshness);
 
         TrafficQueryResult result = new TrafficQueryResult(
                 query, answer, SummarySource.DETERMINISTIC, displaySegments, snapshot.source(),
                 snapshot.acquiredAt(), freshness, false, warnings, context.command().traceId()
         );
         sink.emit(new AgentEvent("result.traffic", TrafficAgentResult.from(result)));
-        return new AgentSkillResult(answer);
+        return new AgentSkillResult(answer, speechText);
     }
 
     // 方法：区域查询流程（核心方法），在execute()方法中使用
@@ -226,13 +227,14 @@ public final class RealtimeTrafficSkill implements QueryRealtimeTrafficUseCase, 
         )));
         String answer = answerComposer.compose(snapshot, freshness);
         sink.emit(new AgentEvent("answer.delta", Map.of("content", answer)));
+        String speechText = answerComposer.composeSpeech(snapshot, freshness);
         AreaTrafficQueryResult result = new AreaTrafficQueryResult(
                 snapshot.query(), answer, SummarySource.DETERMINISTIC, displaySegments,
                 TrafficEvaluation.from(displaySegments), snapshot.coverage(), snapshot.source(), snapshot.acquiredAt(),
                 freshness, warnings, context.command().traceId()
         );
         sink.emit(new AgentEvent("result.traffic", TrafficAgentResult.from(result)));
-        return new AgentSkillResult(answer);
+        return new AgentSkillResult(answer, speechText);
     }
 
     // 方法实现：数据过期判断

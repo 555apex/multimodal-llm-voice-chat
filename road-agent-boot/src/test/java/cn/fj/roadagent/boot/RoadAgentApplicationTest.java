@@ -6,6 +6,7 @@ import cn.fj.roadagent.application.port.TrafficDataPort;
 import cn.fj.roadagent.application.traffic.QueryRealtimeTrafficUseCase;
 import cn.fj.roadagent.application.agent.ConverseWithAgentUseCase;
 import cn.fj.roadagent.application.dispatch.DispatchApprovalUseCase;
+import cn.fj.roadagent.application.speech.QuerySpeechCapabilitiesUseCase;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -47,6 +48,7 @@ class RoadAgentApplicationTest {
         assertNotNull(context.getBean(QueryRealtimeTrafficUseCase.class));
         assertNotNull(context.getBean(ConverseWithAgentUseCase.class));
         assertNotNull(context.getBean(DispatchApprovalUseCase.class));
+        assertNotNull(context.getBean(QuerySpeechCapabilitiesUseCase.class));
         assertEquals(1, context.getBeansOfType(ChatModelPort.class).size());
         assertEquals(0, context.getBean(AbnormalEventRepository.class).countEvents());
     }

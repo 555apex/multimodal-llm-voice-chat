@@ -2,6 +2,7 @@ package cn.fj.roadagent.boot.config;
 
 import cn.fj.roadagent.adapters.memory.InMemoryConversationMemoryAdapter;
 import cn.fj.roadagent.adapters.model.openai.OpenAiCompatibleChatModelAdapter;
+import cn.fj.roadagent.adapters.speech.http.PythonSpeechServiceAdapter;
 import cn.fj.roadagent.adapters.transaction.SpringUnitOfWork;
 import cn.fj.roadagent.adapters.tool.QueryAreaTrafficTool;
 import cn.fj.roadagent.adapters.tool.QueryRealtimeTrafficTool;
@@ -16,6 +17,9 @@ import cn.fj.roadagent.application.port.AreaTrafficQueryTool;
 import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.ConversationMemoryPort;
 import cn.fj.roadagent.application.port.DispatchRepository;
+import cn.fj.roadagent.application.port.SpeechCapabilityPort;
+import cn.fj.roadagent.application.port.SpeechRecognitionPort;
+import cn.fj.roadagent.application.port.SpeechSynthesisPort;
 import cn.fj.roadagent.application.port.TrafficDataPort;
 import cn.fj.roadagent.application.port.TrafficQueryTool;
 import cn.fj.roadagent.application.port.UnitOfWork;
@@ -25,6 +29,7 @@ import cn.fj.roadagent.core.agent.IntentPlanner;
 import cn.fj.roadagent.core.agent.SkillRegistry;
 import cn.fj.roadagent.core.dispatch.DispatchApplicationService;
 import cn.fj.roadagent.core.dispatch.EmergencyDispatchSkill;
+import cn.fj.roadagent.core.speech.SpeechApplicationService;
 import cn.fj.roadagent.core.traffic.RealtimeTrafficSkill;
 import cn.fj.roadagent.interfaces.rest.common.TraceIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -164,6 +169,40 @@ public class RoadAgentConfiguration {
                 unitOfWork,
                 clock,
                 Duration.ofSeconds(properties.getDispatch().getStaleGeneratingSeconds())
+        );
+    }
+
+    @Bean
+    PythonSpeechServiceAdapter pythonSpeechServiceAdapter(RoadAgentProperties properties) {
+        RoadAgentProperties.Speech speech = properties.getSpeech();
+        Duration connectTimeout = Duration.ofSeconds(speech.getConnectTimeoutSeconds());
+        Duration requestTimeout = Duration.ofSeconds(speech.getRequestTimeoutSeconds());
+        HttpClient client = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        var requestFactory = new org.springframework.http.client.JdkClientHttpRequestFactory(client);
+        requestFactory.setReadTimeout(requestTimeout);
+        org.springframework.web.client.RestClient restClient =
+                org.springframework.web.client.RestClient.builder()
+                        .requestFactory(requestFactory)
+                        .build();
+        return new PythonSpeechServiceAdapter(restClient, speech.getServiceUrl());
+    }
+
+    @Bean
+    SpeechApplicationService speechApplicationService(
+            SpeechCapabilityPort capabilityPort,
+            SpeechRecognitionPort recognitionPort,
+            SpeechSynthesisPort synthesisPort,
+            RoadAgentProperties properties
+    ) {
+        RoadAgentProperties.Speech speech = properties.getSpeech();
+        return new SpeechApplicationService(
+                capabilityPort,
+                recognitionPort,
+                synthesisPort,
+                speech.isEnabled(),
+                speech.getMaxRecordingSeconds(),
+                speech.getMaxAudioBytes(),
+                speech.getMaxTtsCharacters()
         );
     }
 

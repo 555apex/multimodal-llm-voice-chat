@@ -23,6 +23,19 @@ describe('agent store area progress', () => {
     })
   })
 
+  it('stores the dedicated speakable answer from SSE', () => {
+    const store = useAgentStore()
+    const messageId = crypto.randomUUID()
+    store.messages.push({ id: messageId, role: 'assistant', content: '完整回答', status: 'pending' })
+
+    store.applyEvent(messageId, {
+      name: 'answer.speech',
+      data: { content: '精简朗读摘要。详细数据请查看页面。' },
+    })
+
+    expect(store.messages.at(-1)?.speechText).toBe('精简朗读摘要。详细数据请查看页面。')
+  })
+
   it('does not persist traffic polylines to session storage', () => {
     const store = useAgentStore()
     store.messages.push({

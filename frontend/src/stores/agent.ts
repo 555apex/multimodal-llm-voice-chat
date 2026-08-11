@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { streamAgentMessage } from '../api/agentApi'
 import { decideDispatch } from '../api/dispatchApi'
+import { useSpeechStore } from './speech'
 import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RunFailedData } from '../types/agent'
 import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
@@ -49,6 +50,7 @@ export const useAgentStore = defineStore('agent', {
   actions: {
     async send(message: string) {
       if (this.running || !message.trim()) return
+      useSpeechStore().stop()
       this.running = true
       this.stage = { stage: 'CONNECTING', label: '正在连接Agent' }
       this.toolProgress = null
@@ -90,6 +92,9 @@ export const useAgentStore = defineStore('agent', {
         case 'answer.delta':
           message.content += (event.data as { content: string }).content
           break
+        case 'answer.speech':
+          message.speechText = (event.data as { content: string }).content
+          break
         case 'result.traffic':
           message.traffic = event.data as TrafficQueryResult
           break
@@ -98,6 +103,9 @@ export const useAgentStore = defineStore('agent', {
           break
         case 'run.completed':
           message.status = 'completed'
+          if (message.speechText && useSpeechStore().autoReadEnabled) {
+            void useSpeechStore().speak(message.id, message.speechText)
+          }
           break
         case 'run.failed': {
           const failed = event.data as RunFailedData
@@ -105,6 +113,7 @@ export const useAgentStore = defineStore('agent', {
           message.content = ''
           message.traffic = undefined
           message.dispatch = undefined
+          message.speechText = undefined
           message.status = 'failed'
           message.errorMessage = `${failed.message}（${failed.code}）`
           break
@@ -135,6 +144,7 @@ export const useAgentStore = defineStore('agent', {
     },
 
     reset() {
+      useSpeechStore().stop()
       this.conversationId = crypto.randomUUID()
       this.messages = [
         {

@@ -10,6 +10,7 @@ public class RoadAgentProperties {
     private final Model model = new Model();
     private final Memory memory = new Memory();
     private final Dispatch dispatch = new Dispatch();
+    private final Speech speech = new Speech();
 
     public Traffic getTraffic() {
         return traffic;
@@ -25,6 +26,10 @@ public class RoadAgentProperties {
 
     public Dispatch getDispatch() {
         return dispatch;
+    }
+
+    public Speech getSpeech() {
+        return speech;
     }
 
     public static class Traffic {
@@ -242,6 +247,72 @@ public class RoadAgentProperties {
 
         public void setStaleGeneratingSeconds(long staleGeneratingSeconds) {
             this.staleGeneratingSeconds = staleGeneratingSeconds;
+        }
+    }
+
+    public static class Speech {
+        private boolean enabled = true;
+        private String serviceUrl = "http://localhost:8091";
+        private int connectTimeoutSeconds = 3;
+        private int requestTimeoutSeconds = 90;
+        private int maxRecordingSeconds = 60;
+        private long maxAudioBytes = 10 * 1024 * 1024L;
+        private int maxTtsCharacters = 500;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getServiceUrl() {
+            return serviceUrl;
+        }
+
+        public void setServiceUrl(String serviceUrl) {
+            this.serviceUrl = serviceUrl;
+        }
+
+        public int getConnectTimeoutSeconds() {
+            return connectTimeoutSeconds;
+        }
+
+        public void setConnectTimeoutSeconds(int connectTimeoutSeconds) {
+            this.connectTimeoutSeconds = connectTimeoutSeconds;
+        }
+
+        public int getRequestTimeoutSeconds() {
+            return requestTimeoutSeconds;
+        }
+
+        public void setRequestTimeoutSeconds(int requestTimeoutSeconds) {
+            this.requestTimeoutSeconds = requestTimeoutSeconds;
+        }
+
+        public int getMaxRecordingSeconds() {
+            return maxRecordingSeconds;
+        }
+
+        public void setMaxRecordingSeconds(int maxRecordingSeconds) {
+            this.maxRecordingSeconds = maxRecordingSeconds;
+        }
+
+        public long getMaxAudioBytes() {
+            return maxAudioBytes;
+        }
+
+        public void setMaxAudioBytes(long maxAudioBytes) {
+            this.maxAudioBytes = maxAudioBytes;
+        }
+
+        public int getMaxTtsCharacters() {
+            return maxTtsCharacters;
+        }
+
+        public void setMaxTtsCharacters(int maxTtsCharacters) {
+            this.maxTtsCharacters = maxTtsCharacters;
         }
     }
 }

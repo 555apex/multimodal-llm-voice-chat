@@ -86,6 +86,30 @@ class TrafficAnswerComposerTest {
     }
 
     @Test
+    void shouldCreateShortSpeakableSummaryWithoutAllSegments() {
+        List<RoadSegmentStatus> segments = List.of(
+                segment("拥堵一", "东向西", CongestionLevel.CONGESTED, 8.0),
+                segment("拥堵二", "东向西", CongestionLevel.CONGESTED, 12.0),
+                segment("缓行一", "东向西", CongestionLevel.SLOW, 18.0),
+                segment("缓行二", "东向西", CongestionLevel.SLOW, 20.0),
+                segment("畅通道路", "双向", CongestionLevel.SMOOTH, 50.0)
+        );
+
+        String speech = composer.composeSpeech(
+                areaSnapshot(segments, TrafficCoverage.of(1, 1, 0)),
+                Freshness.FRESH
+        );
+
+        assertTrue(speech.contains("拥堵一"));
+        assertTrue(speech.contains("拥堵二"));
+        assertTrue(speech.contains("缓行一"));
+        assertFalse(speech.contains("缓行二"));
+        assertFalse(speech.contains("畅通道路"));
+        assertFalse(speech.contains("本次返回的全部路段"));
+        assertTrue(speech.endsWith("详细数据请查看页面。"));
+    }
+
+    @Test
     void shouldKeepWorstRecordWhenSameRoadAndDirectionAreRepeated() {
         List<RoadSegmentStatus> segments = List.of(
                 segment("环岛干道", "北向南", CongestionLevel.SMOOTH, 45.0),

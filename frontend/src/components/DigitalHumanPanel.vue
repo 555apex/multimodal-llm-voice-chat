@@ -21,7 +21,7 @@ defineProps<{ state: 'idle' | 'listening' | 'speaking' | 'error' }>()
       </div>
     </div>
     <div class="human-state">
-      {{ state === 'speaking' ? '正在回答' : state === 'listening' ? '正在处理' : state === 'error' ? '处理异常' : '在线待命' }}
+      {{ state === 'speaking' ? '正在朗读' : state === 'listening' ? '正在聆听或处理' : state === 'error' ? '处理异常' : '在线待命' }}
     </div>
   </aside>
 </template>

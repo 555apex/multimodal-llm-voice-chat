@@ -84,6 +84,7 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             // 记录Agent的回答内容，作为上下文记忆
             memoryPort.append(command.conversationId(),
                     new ConversationMessage("assistant", result.assistantMessage(), clock.instant()));
+            emit(sink, "answer.speech", Map.of("content", result.speechText()));
             emit(sink, "run.completed", Map.of("runId", runId));    // 推送Agent执行结束信息
         } catch (Exception exception) {
             emit(sink, "run.failed", Map.of(
@@ -103,6 +104,9 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             String answer
     ) {
         emit(sink, "answer.delta", Map.of("content", answer));
+        emit(sink, "answer.speech", Map.of(
+                "content", SpeechTextSanitizer.toSpeakableText(answer)
+        ));
         memoryPort.append(command.conversationId(),
                 new ConversationMessage("assistant", answer, clock.instant()));
         emit(sink, "run.completed", Map.of("runId", runId));

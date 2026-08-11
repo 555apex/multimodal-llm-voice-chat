@@ -15,6 +15,7 @@ import java.util.Map;
 /** 仅依据结构化路况事实生成回答，不允许模型补充道路或路段信息。 */
 final class TrafficAnswerComposer {
     private static final int MAX_FOCUS_SEGMENTS = 5;
+    private static final int MAX_SPEECH_FOCUS_SEGMENTS = 3;
     private static final Comparator<RoadSegmentStatus> FOCUS_ORDER =
             Comparator.<RoadSegmentStatus>comparingInt(
                             segment -> segment.congestionLevel().severity()
@@ -55,6 +56,39 @@ final class TrafficAnswerComposer {
         appendAdvice(answer, facts, freshness);
         appendAllSegments(answer, facts.allSegments());
         return answer.toString();
+    }
+
+    String composeSpeech(TrafficSnapshot snapshot, Freshness freshness) {
+        String roadName = snapshot.query().roadName();
+        if (snapshot.segments().isEmpty()) {
+            return "暂未获取到%s的有效路况信息，当前无法判断通行状态。".formatted(roadName);
+        }
+        TrafficFacts facts = facts(snapshot.segments());
+        StringBuilder speech = new StringBuilder(roadConclusion(roadName, facts, freshness));
+        appendFocusSegments(
+                speech,
+                facts.focusSegments().stream().limit(MAX_SPEECH_FOCUS_SEGMENTS).toList()
+        );
+        appendAdvice(speech, facts, freshness);
+        speech.append(" 详细数据请查看页面。");
+        return speech.toString();
+    }
+
+    String composeSpeech(AreaTrafficSnapshot snapshot, Freshness freshness) {
+        String areaName = snapshot.query().area().name();
+        if (snapshot.segments().isEmpty()) {
+            return "暂未获取到%s的有效路况信息，当前无法判断整体通行情况。".formatted(areaName);
+        }
+        TrafficFacts facts = facts(snapshot.segments());
+        boolean qualifiedScope = !snapshot.coverage().complete() || freshness != Freshness.FRESH;
+        StringBuilder speech = new StringBuilder(areaConclusion(areaName, facts, qualifiedScope));
+        appendFocusSegments(
+                speech,
+                facts.focusSegments().stream().limit(MAX_SPEECH_FOCUS_SEGMENTS).toList()
+        );
+        appendAdvice(speech, facts, freshness);
+        speech.append(" 详细数据请查看页面。");
+        return speech.toString();
     }
 
     private String roadConclusion(String roadName, TrafficFacts facts, Freshness freshness) {
