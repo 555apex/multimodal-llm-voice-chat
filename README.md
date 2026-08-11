@@ -1,10 +1,11 @@
 # 福建应急交通 Agent
 
-这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通两条纵向闭环：
+这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
 ```text
 交通问答：自然语言 → DeepSeek 识别道路/区域范围 → 交通 Skill → 高德 Tool → Java确定性回答
 应急调度：MySQL 异常事件 → 顶部告警卡 → 模型生成版本化工单 → 人工审批或返工 → 数据库留痕
+语音交互：浏览器录音 → Java语音接口 → Docker内faster-whisper识别；回答摘要 → Edge-TTS分段合成 → 浏览器播放
 ```
 
 DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答、Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单、修改业务状态或改写交通事实。
@@ -14,8 +15,15 @@ DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答
 - Git；
 - JDK 17；
 - Node.js 20 或更高版本；
+- Docker Desktop，或 Docker Engine + Docker Compose v2，仅语音功能需要；
 - 能访问项目负责人共享的 MySQL 8 数据库；
 - 无需安装全局 Maven。仓库已包含 Maven Wrapper 3.3.4，并固定 Maven 3.9.16。
+
+语音服务的 Python 3.11、faster-whisper 和 Edge-TTS 全部安装在 Docker 镜像中。本机不需要安装 Python、Conda、FFmpeg 或相关依赖；不启动语音容器时，文字问答、交通查询和应急调度仍可正常使用。
+
+当前只支持 `small + CPU + int8`。不要把 `SPEECH_ASR_DEVICE` 改成 `cuda`：当前镜像没有安装 CUDA、cuBLAS 或 cuDNN。faster-whisper 官方基准中，small/int8 的 ASR 进程约使用 1.5 GB 内存；为容器和依赖预留额外空间，建议 Docker 至少可使用 4 GB 内存。
+
+本版在 Apple Silicon/ARM64 上实测：运行镜像约 711 MB，`small` 模型卷约 467 MB，模型就绪后的容器空闲内存约 389 MiB；推理时占用会升高，不同 Docker 版本和 CPU 架构也会有差异。首次构建还需要保存基础镜像和构建缓存，建议至少预留 2 GB 可用磁盘空间。
 
 ## 2. 拉取指定版本
 
@@ -35,9 +43,11 @@ git pull --ff-only origin version/roadagent-v1
 
 以下内容不会上传到 GitHub：
 
+- 根目录 `.env`：协作者自己的 Docker 语音容器参数；
 - `config/api-test.env`、`config/api-test.ps1`：真实 API 密钥和 MySQL 密码；
 - `.idea/`：每位协作者自己的 IDEA 配置和数据库工具连接；
 - `target/`、`node_modules/`、`frontend/dist/`：可重新生成的构建产物和依赖；
+- Docker 命名卷中的 faster-whisper 模型，以及请求期间使用的临时音频；
 - MySQL 中的真实表数据。
 
 仓库会保留 Maven Wrapper、`package-lock.json`、配置示例和数据库变更脚本，因此协作者不需要复制项目负责人的本地工程目录。
@@ -100,6 +110,36 @@ export ROADAGENT_MODEL_NAME=服务器模型名
 export ROADAGENT_MODEL_AUTH_ENABLED=false
 ```
 
+Java 默认通过 `http://localhost:8091` 访问语音容器。如需显式配置或临时关闭语音入口，可设置：
+
+```bash
+export ROADAGENT_SPEECH_ENABLED=true
+export ROADAGENT_SPEECH_SERVICE_URL=http://localhost:8091
+```
+
+### 3.4 Docker 语音配置
+
+Java 配置和 Docker 配置是两套独立配置，不能互相替代：
+
+| 本地文件 | 谁读取 | 主要内容 |
+|---|---|---|
+| `config/api-test.env` / `config/api-test.ps1` | 当前终端中的 Java 后端 | MySQL、高德、DeepSeek，以及 `ROADAGENT_SPEECH_*` |
+| 根目录 `.env` | `docker compose` | ASR 模型、CPU计算方式、下载源和 Edge-TTS 音色等 `SPEECH_*` |
+
+Docker 语音服务已有可直接运行的默认值。需要查看或修改时，在项目根目录执行：
+
+```bash
+cp .env.example .env
+```
+
+Windows PowerShell 使用：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+`.env` 不需要 `source`，Docker Compose 会自动读取；Java 不会读取它。`.env` 已被 Git 忽略，不能提交。使用第三方模型镜像前，应自行确认镜像来源和网络策略。
+
 如果模型协议不同，应新增 `ChatModelPort` 适配器，Agent、Skill、Tool 和前端接口不需要修改。
 
 ## 4. 共享数据库要求
@@ -132,7 +172,47 @@ docs/sql/20260728_emergency_dispatch.sql
 
 ## 5. 启动项目
 
-### 5.1 后端
+完整语音版由三个本地进程组成，启动顺序建议保持如下：
+
+```text
+Docker语音服务 :8091 → Java后端 :8080 → Vite前端 :5173 → 浏览器麦克风/扬声器
+```
+
+只使用文字功能时，可以跳过语音容器，直接启动后端和前端。
+
+### 5.1 语音容器
+
+先启动 Docker Desktop 或 Docker Engine。确认下面两条命令都成功后，再在项目根目录启动语音服务：
+
+```bash
+docker version
+docker compose version
+```
+
+```bash
+docker compose -f compose.speech.yml up --build -d
+docker compose -f compose.speech.yml ps
+docker compose -f compose.speech.yml logs -f speech-service
+```
+
+`logs -f` 会持续显示日志，按 `Ctrl+C` 只退出日志查看，不会停止容器。第一次启动会构建 Python 镜像并下载 faster-whisper `small` 模型，下载和载入期间容器会显示为 `starting` 或未就绪。可另开终端分别检查存活和就绪状态：
+
+```bash
+curl http://localhost:8091/health/live
+curl http://localhost:8091/health/ready
+```
+
+`/health/live` 返回 `status: UP` 表示进程已启动；`/health/ready` 返回 `status: UP`、`asrAvailable: true` 和 `ttsAvailable: true` 后，页面语音功能才可用。
+
+模型保存在 Docker 命名卷中。停止并删除容器、但保留已下载模型，使用：
+
+```bash
+docker compose -f compose.speech.yml down
+```
+
+普通 `down` 后，下次启动会复用模型。不要随意执行 `docker compose -f compose.speech.yml down -v`，因为 `-v` 会同时删除模型卷，下次必须重新下载。Java 后端不会因语音容器离线而启动失败。
+
+### 5.2 后端
 
 仓库中的 Maven Wrapper 已固定使用 Maven 3.9.16：macOS/Linux 使用 `mvnw`，Windows 使用 `mvnw.cmd`，版本和下载地址保存在 `.mvn/wrapper/maven-wrapper.properties`。当前 Wrapper 采用官方 `distributionType=only-script`，因此不需要也不会包含 `maven-wrapper.jar`；这不是文件缺失。首次运行时会从 Maven Central 下载 Maven 和项目依赖，协作者需要能够访问 `repo.maven.apache.org`。
 
@@ -158,11 +238,12 @@ java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
 
 ```bash
 curl http://localhost:8080/api/v1/emergency-events/pending/next
+curl http://localhost:8080/api/v1/speech/capabilities
 ```
 
 如果共享数据库中存在 `event_status=0` 且未逻辑删除的事件，接口会返回最早的一条事件、已有最新工单以及待处理总数。
 
-### 5.2 前端
+### 5.3 前端
 
 另开一个终端：
 
@@ -175,6 +256,19 @@ npm run dev
 浏览器访问 `http://localhost:5173`。开发服务器会把 `/api` 请求代理到 `http://localhost:8080`，因此必须先保证后端已启动。
 
 页面可见时每 5 秒查询一次待处理事件。待处理事件会显示在聊天区顶部红色告警卡中，但不会阻塞用户继续进行交通问答。
+
+首次点击麦克风时，浏览器会请求录音权限，请选择允许。本机使用 `http://localhost:5173` 即可；通过其他域名或 IP 访问时必须配置 HTTPS，否则浏览器通常不会开放麦克风。
+
+### 5.4 跑通后的语音验收
+
+按顺序检查以下行为：
+
+1. `GET http://localhost:8091/health/ready` 返回 ASR、TTS 均可用；
+2. `GET http://localhost:8080/api/v1/speech/capabilities` 返回同样的能力状态，证明 Java 已连通容器；
+3. 点击麦克风，说“福州五四路现在拥堵吗”，再次点击停止；识别结果应插入输入框当前光标处，但不会自动发送；
+4. 手动发送问题，等待回答完成；点击单条回答的“朗读”，检查播放、暂停、继续和重播；
+5. 打开“语音回答”后再提一个问题，只应自动朗读之后完成的新回答；
+6. 停止语音容器并刷新页面，语音按钮应显示不可用，但文字问答和应急调度仍能继续。
 
 ## 6. 当前能力与边界
 
@@ -204,6 +298,17 @@ npm run dev
 - 当前资源清单是模型基于通用知识生成的建议，不代表实际库存、距离、联系人或到达时间；
 - 聊天识别到应急调度意图时只引导用户使用顶部告警卡，不创建无数据库来源的正式工单。
 
+### 6.3 语音输入与回答朗读
+
+- 输入框麦克风按钮支持开始、停止和取消录音；最长 60 秒、最大 10 MB，识别文字插入当前光标位置，不会自动发送；
+- 浏览器优先使用 WebM/Opus，按能力回退到 MP4/AAC 或 Ogg/Opus；非 `localhost` 部署需要 HTTPS 才能稳定获取麦克风权限；
+- “语音回答”每次打开页面默认关闭；打开后只自动朗读之后完成的助手回答，关闭会立即停止并清空播放队列；
+- 每条已完成的助手消息均有独立的播放、暂停、继续和重播按钮，同一时刻只播放一条；
+- 中文按自然标点分段，播放当前段时预合成下一段，以降低首段等待和段间停顿；
+- 交通查询朗读 Java 根据结构化事实生成的简短结论、最多 3 条重点道路和出行建议，不逐行朗读表格或坐标；省略明细时会提示查看页面；
+- 应急告警卡和正式调度工单不会自动朗读；Edge-TTS 不需要 API Key，但必须联网，并会把待朗读文本发送到 Microsoft 在线语音服务；
+- 语音容器不可用、ASR/TTS 失败或被用户取消时，只影响语音功能，不影响已有文字和其他业务流程。
+
 ## 7. 工程模块
 
 | 模块 | 作用 | 主要内容 |
@@ -215,6 +320,7 @@ npm run dev
 | `road-agent-interface` | HTTP 边界 | REST、SSE、请求响应 DTO 和错误转换 |
 | `road-agent-boot` | 统一装配 | Spring Boot 启动、配置和具体实现选择 |
 | `frontend` | 对话界面 | 数字人、流式消息、交通卡片、独立应急告警状态和审批交互 |
+| `speech-service` | Docker语音服务 | FastAPI、faster-whisper、Edge-TTS、健康检查和无外部依赖的替身测试 |
 
 依赖方向：
 
@@ -236,9 +342,12 @@ GET  /api/v1/dispatches/{planId}
 POST /api/v1/dispatches/{planId}/approvals
 POST /api/v1/traffic/queries
 POST /api/v1/traffic/area-queries
+GET  /api/v1/speech/capabilities
+POST /api/v1/speech/transcriptions
+POST /api/v1/speech/syntheses
 ```
 
-流式入口返回 SSE 事件，包括运行阶段、意图、Skill、Tool、文字增量、业务结果、审批要求和失败信息。接口契约见 [contracts/openapi/traffic-api.yaml](contracts/openapi/traffic-api.yaml)。
+流式入口返回 SSE 事件，包括运行阶段、意图、Skill、Tool、文字增量、独立朗读文本 `answer.speech`、业务结果、审批要求和失败信息。接口契约见 [contracts/openapi/traffic-api.yaml](contracts/openapi/traffic-api.yaml)。
 
 ## 9. 推荐阅读顺序
 
@@ -250,7 +359,9 @@ POST /api/v1/traffic/area-queries
 6. `QueryRealtimeTrafficTool`、`QueryAreaTrafficTool` 与各类 Port：Tool 和外部接口如何隔离；
 7. `AbnormalEventRepository`、`MysqlDispatchRepository` 与 `SpringUnitOfWork`：MySQL 持久化和事务边界；
 8. `OpenAiCompatibleChatModelAdapter`：结构化输出和流式输出如何实现；
-9. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
+9. `SpeechController`、`SpeechApplicationService` 与 `PythonSpeechServiceAdapter`：Java 如何隔离语音容器故障；
+10. `speech-service/app` 与前端 `speech` Store：识别、自然分段、预合成和播放取消；
+11. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
 
 ## 10. 验证命令
 
@@ -260,7 +371,10 @@ POST /api/v1/traffic/area-queries
 ./mvnw test
 cd frontend && npm test -- --run
 cd frontend && npm run build
+docker compose -f compose.speech.yml --profile test run --rm speech-tests
 ```
+
+Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS。Docker 运行时人工验收还应检查 ARM64/amd64 构建、首次模型加载、普通 `down` 后模型卷复用、福建道路名称识别，以及交通表格不逐行朗读。
 
 ## 11. 常见问题
 
@@ -282,6 +396,23 @@ cd frontend && npm run build
 
 不需要。首次拉取或 `pom.xml` 变化后执行 Maven Reload；提交代码前运行测试。平时启动只需加载环境变量后运行后端和前端。
 
+### 语音按钮不可用或容器一直未就绪
+
+先执行 `docker version`。如果看不到 Server 信息，说明 Docker 引擎尚未启动；先打开 Docker Desktop 或启动 Docker Engine。然后执行 `docker compose -f compose.speech.yml ps` 和 `docker compose -f compose.speech.yml logs -f speech-service`。首次启动通常是在下载或载入模型；确认 Docker 能访问模型下载地址，并给 Docker 至少 4 GB 可用内存。`GET /api/v1/speech/capabilities` 会反映 Java 当前探测到的 ASR/TTS 状态，容器恢复后刷新页面即可。
+
+如果日志提示 `8091` 端口已被占用，先停止占用该端口的旧进程或旧容器，再重新启动。本项目把语音端口绑定到 `127.0.0.1`，不要为了协作调试直接改成 `0.0.0.0` 暴露到局域网。
+
+如果模型日志长时间停在 Hugging Face 下载且健康状态一直为 `starting`，可以在项目根目录本地 `.env` 中添加下面两行，再重新执行 `docker compose -f compose.speech.yml up --build -d`：
+
+```dotenv
+SPEECH_HF_ENDPOINT=https://hf-mirror.com
+SPEECH_ASR_MODEL_BASE_URL=https://hf-mirror.com/Systran/faster-whisper-small/resolve/main
+```
+
+第二项会启用容器内可恢复的标准 HTTP 下载，网络中断时从模型卷里的 `.part` 文件继续，不重复下载已经完成的部分。`.env` 已被 Git 忽略，这些配置只影响语音容器；协作者所在网络可正常访问 Hugging Face 时无需设置。
+
+如果只有 TTS 失败，检查容器能否访问互联网；Edge-TTS 依赖 Microsoft 在线语音服务。麦克风无权限时，检查浏览器站点权限；远程部署需使用 HTTPS，本机 `http://localhost` 可直接调试。
+
 ### 当前尚未实现的部分
 
-统一救援资源数据库、知识库、语音、地图可视化和外部工单平台尚未接入。MySQL 异常事件读取、工单持久化、审批、返工和无需调度留痕已经实现。
+统一救援资源数据库、知识库、地图可视化和外部工单平台尚未接入。MySQL 应急调度、Docker ASR、分段 TTS 及前端语音交互已经实现。
