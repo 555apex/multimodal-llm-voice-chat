@@ -64,6 +64,27 @@ describe('voice input button', () => {
     expect(transcribeSpeech).toHaveBeenCalledOnce()
   })
 
+  it('keeps the stop control enabled while recording even if the parent becomes disabled', async () => {
+    const wrapper = mount(VoiceInputButton, {
+      global: { plugins: [createPinia()] },
+      props: {
+        available: true,
+        maxRecordingSeconds: 60,
+        maxAudioBytes: 10485760,
+      },
+    })
+
+    await wrapper.get('.voice-input-button').trigger('click')
+    await wrapper.setProps({ disabled: true })
+
+    const stopButton = wrapper.get('.voice-input-button')
+    expect(stopButton.attributes('disabled')).toBeUndefined()
+    expect(stopButton.text()).toContain('停止')
+    await stopButton.trigger('click')
+
+    await vi.waitFor(() => expect(transcribeSpeech).toHaveBeenCalledOnce())
+  })
+
   it('cancels an active recording without sending it to ASR', async () => {
     const wrapper = mount(VoiceInputButton, {
       global: { plugins: [createPinia()] },

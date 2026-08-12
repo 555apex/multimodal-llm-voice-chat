@@ -361,7 +361,8 @@ POST /api/v1/speech/syntheses
 8. `OpenAiCompatibleChatModelAdapter`：结构化输出和流式输出如何实现；
 9. `SpeechController`、`SpeechApplicationService` 与 `PythonSpeechServiceAdapter`：Java 如何隔离语音容器故障；
 10. `speech-service/app` 与前端 `speech` Store：识别、自然分段、预合成和播放取消；
-11. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
+11. [语音录音停止与识别问题修复日志](docs/VOICE_INPUT_RECORDING_BUGFIX_20260812.md)：录音按钮状态回路、排查证据、修复方案与回归验证；
+12. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
 
 ## 10. 验证命令
 

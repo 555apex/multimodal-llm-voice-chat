@@ -161,7 +161,7 @@ onUnmounted(() => {
 
         <form class="chat-composer" @submit.prevent="send">
           <VoiceInputButton
-            :disabled="running || recording"
+            :disabled="running"
             :available="Boolean(speechCapabilities?.asrAvailable)"
             :max-recording-seconds="speechCapabilities?.maxRecordingSeconds ?? 60"
             :max-audio-bytes="speechCapabilities?.maxAudioBytes ?? 10485760"

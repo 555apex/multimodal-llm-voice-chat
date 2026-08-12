@@ -183,12 +183,13 @@ onUnmounted(cancelRecording)
     <button
       type="button"
       class="voice-input-button"
-      :disabled="disabled || (!available && status === 'idle')"
+      :disabled="status === 'idle' && (disabled || !available)"
       :aria-label="label"
       :title="label"
       @click="toggle"
     >
       <span aria-hidden="true">{{ status === 'recording' ? '■' : status === 'transcribing' ? '…' : '🎙' }}</span>
+      <span v-if="status === 'recording'" class="voice-stop-label">停止</span>
     </button>
     <span v-if="status === 'recording'" class="voice-recording-actions">
       <span class="voice-recording-time">{{ elapsedSeconds }}秒</span>

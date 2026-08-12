@@ -328,9 +328,11 @@ button:disabled { cursor: not-allowed; opacity: .55; }
   background: #f3f9f8; box-shadow: none; font-size: 17px;
 }
 .voice-input-control[data-status='recording'] .voice-input-button {
+  width: 64px; display: flex; gap: 6px;
   color: #fff; border-color: #c54b43; background: #c54b43;
   animation: pulse 1.2s infinite;
 }
+.voice-stop-label { font-size: 11px; }
 .voice-input-control[data-status='transcribing'] .voice-input-button { color: #98691c; background: #fff4da; }
 .voice-recording-actions {
   position: absolute; left: 50%; bottom: calc(100% + 5px); z-index: 5;
