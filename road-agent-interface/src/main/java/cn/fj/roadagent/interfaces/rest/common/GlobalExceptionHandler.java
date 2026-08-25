@@ -4,6 +4,8 @@ import cn.fj.roadagent.application.exception.ExternalServiceException;
 import cn.fj.roadagent.application.exception.BusinessRuleException;
 import cn.fj.roadagent.domain.traffic.InvalidTrafficQueryException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -12,6 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
+    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(
@@ -82,6 +85,7 @@ public final class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        LOGGER.error("Unhandled request failure traceId={}", traceId(request), exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 ApiResponse.error("INTERNAL_ERROR", "系统处理请求时发生异常", traceId(request))
         );

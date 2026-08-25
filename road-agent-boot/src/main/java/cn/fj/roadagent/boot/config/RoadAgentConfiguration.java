@@ -91,10 +91,15 @@ public class RoadAgentConfiguration {
             requireSecret(model.getApiKey(), "启用模型Bearer鉴权时必须设置ROADAGENT_MODEL_API_KEY");
         }
         Duration timeout = Duration.ofSeconds(model.getTimeoutSeconds());
-        HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
+        // vLLM/Uvicorn does not accept the Java client's cleartext HTTP/2 (h2c)
+        // upgrade. Force HTTP/1.1 so the internal plain-HTTP request body is kept.
+        HttpClient client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(timeout)
+                .build();
         return new OpenAiCompatibleChatModelAdapter(
                 client, objectMapper, model.getEndpoint(), model.getApiKey(), model.getModelName(),
-                model.isAuthEnabled(), timeout
+                model.isAuthEnabled(), model.getEnableThinking(), timeout
         );
     }
 

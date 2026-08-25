@@ -89,6 +89,9 @@ roadagent:
     # DeepSeek需要Bearer密钥；无鉴权的内网服务器模型可设为false
     auth-enabled: ${ROADAGENT_MODEL_AUTH_ENABLED:true}
 
+    # 可选：ROADAGENT_MODEL_ENABLE_THINKING 会直接绑定到配置对象。
+    # 未设置时请求体保持原样；DGX Qwen 部署显式设为 false，确保结构化JSON稳定。
+
     # 模型请求超时时间，单位：秒。流式回答比普通API耗时更长
     timeout-seconds: ${ROADAGENT_MODEL_TIMEOUT_SECONDS:60}
 

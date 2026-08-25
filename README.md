@@ -3,12 +3,12 @@
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
 ```text
-交通问答：自然语言 → DeepSeek 识别道路/区域范围 → 交通 Skill → 高德 Tool → Java确定性回答
+交通问答：自然语言 → OpenAI-compatible 模型识别道路/区域范围 → 交通 Skill → 高德 Tool → Java确定性回答
 应急调度：MySQL 异常事件 → 顶部告警卡 → 模型生成版本化工单 → 人工审批或返工 → 数据库留痕
-语音交互：浏览器录音 → Java语音接口 → Docker内faster-whisper识别；回答摘要 → Edge-TTS分段合成 → 浏览器播放
+语音交互：浏览器录音 → Java语音接口 → Docker内faster-whisper识别；回答摘要 → 本地Qwen3-TTS分段合成 → 浏览器播放
 ```
 
-DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答、Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单、修改业务状态或改写交通事实。
+OpenAI-compatible 模型负责意图理解和应急方案生成；DGX 部署使用本地 Qwen3.6-35B。Java 负责交通事实回答、Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单、修改业务状态或改写交通事实。
 
 ## 1. 环境要求
 
@@ -19,11 +19,11 @@ DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答
 - 能访问项目负责人共享的 MySQL 8 数据库；
 - 无需安装全局 Maven。仓库已包含 Maven Wrapper 3.3.4，并固定 Maven 3.9.16。
 
-语音服务的 Python 3.11、faster-whisper 和 Edge-TTS 全部安装在 Docker 镜像中。本机不需要安装 Python、Conda、FFmpeg 或相关依赖；不启动语音容器时，文字问答、交通查询和应急调度仍可正常使用。
+语音服务的 Python 3.12、faster-whisper、Qwen3-TTS 和 FFmpeg 全部安装在 Docker 镜像中。本机不需要安装 Python 或 Conda；不启动语音容器时，文字问答、交通查询和应急调度仍可正常使用。
 
-当前只支持 `small + CPU + int8`。不要把 `SPEECH_ASR_DEVICE` 改成 `cuda`：当前镜像没有安装 CUDA、cuBLAS 或 cuDNN。faster-whisper 官方基准中，small/int8 的 ASR 进程约使用 1.5 GB 内存；为容器和依赖预留额外空间，建议 Docker 至少可使用 4 GB 内存。
+ASR 固定为 `small + CPU + int8`；TTS 使用 Qwen3-TTS 0.6B、Serena 中文女声和 NVIDIA GPU。DGX 专用容器基于 NVIDIA PyTorch ARM64 镜像，两个模型均需先下载到只读模型目录。
 
-本版在 Apple Silicon/ARM64 上实测：运行镜像约 711 MB，`small` 模型卷约 467 MB，模型就绪后的容器空闲内存约 389 MiB；推理时占用会升高，不同 Docker 版本和 CPU 架构也会有差异。首次构建还需要保存基础镜像和构建缓存，建议至少预留 2 GB 可用磁盘空间。
+DGX 运行镜像包含 NVIDIA PyTorch、Qwen3-TTS 和音频依赖，镜像及模型占用明显高于旧版 CPU-only 语音容器。部署前应至少预留 20 GB 磁盘，并按 `deploy/dgx/README.md` 固定镜像和模型 revision。
 
 ## 2. 拉取指定版本
 
@@ -123,8 +123,8 @@ Java 配置和 Docker 配置是两套独立配置，不能互相替代：
 
 | 本地文件 | 谁读取 | 主要内容 |
 |---|---|---|
-| `config/api-test.env` / `config/api-test.ps1` | 当前终端中的 Java 后端 | MySQL、高德、DeepSeek，以及 `ROADAGENT_SPEECH_*` |
-| 根目录 `.env` | `docker compose` | ASR 模型、CPU计算方式、下载源和 Edge-TTS 音色等 `SPEECH_*` |
+| `config/api-test.env` / `config/api-test.ps1` | 当前终端中的 Java 后端 | MySQL、高德、OpenAI-compatible 模型，以及 `ROADAGENT_SPEECH_*` |
+| 根目录 `.env` | `docker compose` | 本地 ASR/TTS 模型路径、计算设备和音色等 `SPEECH_*` |
 
 Docker 语音服务已有可直接运行的默认值。需要查看或修改时，在项目根目录执行：
 
@@ -195,7 +195,7 @@ docker compose -f compose.speech.yml ps
 docker compose -f compose.speech.yml logs -f speech-service
 ```
 
-`logs -f` 会持续显示日志，按 `Ctrl+C` 只退出日志查看，不会停止容器。第一次启动会构建 Python 镜像并下载 faster-whisper `small` 模型，下载和载入期间容器会显示为 `starting` 或未就绪。可另开终端分别检查存活和就绪状态：
+`logs -f` 会持续显示日志，按 `Ctrl+C` 只退出日志查看，不会停止容器。ASR/TTS 权重必须先下载到 `.env` 的 `SPEECH_MODEL_ROOT`；容器只读加载模型，不会在运行时联网下载。加载期间容器会显示为 `starting` 或未就绪。可另开终端分别检查存活和就绪状态：
 
 ```bash
 curl http://localhost:8091/health/live
@@ -204,13 +204,13 @@ curl http://localhost:8091/health/ready
 
 `/health/live` 返回 `status: UP` 表示进程已启动；`/health/ready` 返回 `status: UP`、`asrAvailable: true` 和 `ttsAvailable: true` 后，页面语音功能才可用。
 
-模型保存在 Docker 命名卷中。停止并删除容器、但保留已下载模型，使用：
+模型保存在宿主机中央模型目录并只读挂载。停止并删除容器不会删除模型：
 
 ```bash
 docker compose -f compose.speech.yml down
 ```
 
-普通 `down` 后，下次启动会复用模型。不要随意执行 `docker compose -f compose.speech.yml down -v`，因为 `-v` 会同时删除模型卷，下次必须重新下载。Java 后端不会因语音容器离线而启动失败。
+普通 `down` 后，下次启动会复用同一模型目录。Java 后端不会因语音容器离线而启动失败。
 
 ### 5.2 后端
 
@@ -306,7 +306,7 @@ npm run dev
 - 每条已完成的助手消息均有独立的播放、暂停、继续和重播按钮，同一时刻只播放一条；
 - 中文按自然标点分段，播放当前段时预合成下一段，以降低首段等待和段间停顿；
 - 交通查询朗读 Java 根据结构化事实生成的简短结论、最多 3 条重点道路和出行建议，不逐行朗读表格或坐标；省略明细时会提示查看页面；
-- 应急告警卡和正式调度工单不会自动朗读；Edge-TTS 不需要 API Key，但必须联网，并会把待朗读文本发送到 Microsoft 在线语音服务；
+- 应急告警卡和正式调度工单不会自动朗读；Qwen3-TTS 在 DGX 本地离线合成，不会把待朗读文本发送到外部服务；
 - 语音容器不可用、ASR/TTS 失败或被用户取消时，只影响语音功能，不影响已有文字和其他业务流程。
 
 ## 7. 工程模块
@@ -316,11 +316,11 @@ npm run dev
 | `road-agent-domain` | 纯业务对象和规则 | 福建城市、行政区边界、区域交通指标、事件和版本化调度方案 |
 | `road-agent-application` | 模块间稳定契约 | UseCase、Port、命令、结果、Agent 事件 |
 | `road-agent-core` | Agent 和业务工作流 | 意图规划、Skill 注册、交通 Skill、调度生成与审批编排 |
-| `road-agent-adapters` | 外部能力实现 | 高德、DeepSeek、MySQL 事件与工单仓储、事务适配器、内存会话 |
+| `road-agent-adapters` | 外部能力实现 | 高德、OpenAI-compatible 模型、MySQL 事件与工单仓储、事务适配器、内存会话 |
 | `road-agent-interface` | HTTP 边界 | REST、SSE、请求响应 DTO 和错误转换 |
 | `road-agent-boot` | 统一装配 | Spring Boot 启动、配置和具体实现选择 |
 | `frontend` | 对话界面 | 数字人、流式消息、交通卡片、独立应急告警状态和审批交互 |
-| `speech-service` | Docker语音服务 | FastAPI、faster-whisper、Edge-TTS、健康检查和无外部依赖的替身测试 |
+| `speech-service` | Docker语音服务 | FastAPI、faster-whisper、Qwen3-TTS、MP3转码、健康检查和离线替身测试 |
 
 依赖方向：
 
@@ -366,7 +366,7 @@ POST /api/v1/speech/syntheses
 
 ## 10. 验证命令
 
-自动测试不会请求真实高德或 DeepSeek。设置共享数据库环境变量后，后端集成测试会验证真实 MySQL 仓储：
+自动测试不会请求真实高德或外部模型。设置共享数据库环境变量后，后端集成测试会验证真实 MySQL 仓储：
 
 ```bash
 ./mvnw test
@@ -375,7 +375,7 @@ cd frontend && npm run build
 docker compose -f compose.speech.yml --profile test run --rm speech-tests
 ```
 
-Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS。Docker 运行时人工验收还应检查 ARM64/amd64 构建、首次模型加载、普通 `down` 后模型卷复用、福建道路名称识别，以及交通表格不逐行朗读。
+Python 测试使用替身 ASR/TTS，不下载模型，也不会访问外网。Docker 运行时人工验收还应检查 ARM64 构建、固定模型加载、福建道路名称识别、Serena 中文 MP3，以及交通表格不逐行朗读。
 
 ## 11. 常见问题
 
@@ -399,20 +399,13 @@ Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS�
 
 ### 语音按钮不可用或容器一直未就绪
 
-先执行 `docker version`。如果看不到 Server 信息，说明 Docker 引擎尚未启动；先打开 Docker Desktop 或启动 Docker Engine。然后执行 `docker compose -f compose.speech.yml ps` 和 `docker compose -f compose.speech.yml logs -f speech-service`。首次启动通常是在下载或载入模型；确认 Docker 能访问模型下载地址，并给 Docker 至少 4 GB 可用内存。`GET /api/v1/speech/capabilities` 会反映 Java 当前探测到的 ASR/TTS 状态，容器恢复后刷新页面即可。
+先执行 `docker version`。如果看不到 Server 信息，说明 Docker 引擎尚未启动；先启动 Docker Engine。然后执行 `docker compose -f compose.speech.yml ps` 和 `docker compose -f compose.speech.yml logs -f speech-service`。首次启动通常是在载入 Qwen3-TTS、编译 GPU 内核或载入 ASR；检查固定模型目录、容器 GPU 和内存。`GET /api/v1/speech/capabilities` 会反映 Java 当前探测到的 ASR/TTS 状态，容器恢复后刷新页面即可。
 
 如果日志提示 `8091` 端口已被占用，先停止占用该端口的旧进程或旧容器，再重新启动。本项目把语音端口绑定到 `127.0.0.1`，不要为了协作调试直接改成 `0.0.0.0` 暴露到局域网。
 
-如果模型日志长时间停在 Hugging Face 下载且健康状态一直为 `starting`，可以在项目根目录本地 `.env` 中添加下面两行，再重新执行 `docker compose -f compose.speech.yml up --build -d`：
+如果日志提示模型目录不存在或 manifest 校验失败，在 DGX 执行 `deploy/dgx/dgx-stack download-models`，完成后再启动服务。模型下载与运行分离，Speech 容器本身没有外网访问能力。
 
-```dotenv
-SPEECH_HF_ENDPOINT=https://hf-mirror.com
-SPEECH_ASR_MODEL_BASE_URL=https://hf-mirror.com/Systran/faster-whisper-small/resolve/main
-```
-
-第二项会启用容器内可恢复的标准 HTTP 下载，网络中断时从模型卷里的 `.part` 文件继续，不重复下载已经完成的部分。`.env` 已被 Git 忽略，这些配置只影响语音容器；协作者所在网络可正常访问 Hugging Face 时无需设置。
-
-如果只有 TTS 失败，检查容器能否访问互联网；Edge-TTS 依赖 Microsoft 在线语音服务。麦克风无权限时，检查浏览器站点权限；远程部署需使用 HTTPS，本机 `http://localhost` 可直接调试。
+如果只有 TTS 失败，检查 Qwen3-TTS 模型目录、GPU、BF16、SDPA 和 FFmpeg 日志；Speech 容器运行期不需要互联网。麦克风无权限时，检查浏览器站点权限；远程部署需使用 HTTPS，本机 `http://localhost` 可直接调试。
 
 ### 当前尚未实现的部分
 

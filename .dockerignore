@@ -1,0 +1,14 @@
+.git
+.idea
+**/target
+frontend/node_modules
+frontend/dist
+frontend/coverage
+.npm-cache
+**/.download-venv
+speech-service/models
+tmp
+*.log
+.env
+config/api-test.env
+config/api-test.ps1

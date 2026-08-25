@@ -4,26 +4,36 @@ services:
       context: ./speech-service
       dockerfile: Dockerfile
       target: runtime
+      args:
+        SPEECH_BASE_IMAGE: ${SPEECH_BASE_IMAGE:-nvcr.io/nvidia/pytorch@sha256:d724ba5b68075cd3b96eefbc510a45d36e60dd16fd70b217708625f1f4b37bc1}
+    gpus: all
+    ipc: host
     ports:
       - "127.0.0.1:8091:8091"
     environment:
       SPEECH_ASR_MODEL: ${SPEECH_ASR_MODEL:-small}
+      SPEECH_ASR_MODEL_PATH: ${SPEECH_ASR_MODEL_PATH:-/models/Systran--faster-whisper-small}
       SPEECH_ASR_DEVICE: ${SPEECH_ASR_DEVICE:-cpu}
       SPEECH_ASR_COMPUTE_TYPE: ${SPEECH_ASR_COMPUTE_TYPE:-int8}
       SPEECH_ASR_DOWNLOAD_ROOT: /models
       SPEECH_ASR_LANGUAGE: ${SPEECH_ASR_LANGUAGE:-zh}
-      SPEECH_ASR_MODEL_BASE_URL: ${SPEECH_ASR_MODEL_BASE_URL:-}
-      HF_ENDPOINT: ${SPEECH_HF_ENDPOINT:-https://huggingface.co}
-      HF_HUB_DISABLE_XET: ${SPEECH_HF_DISABLE_XET:-1}
+      SPEECH_ASR_MODEL_BASE_URL: ""
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
       SPEECH_ASR_MAX_CONCURRENCY: ${SPEECH_ASR_MAX_CONCURRENCY:-1}
       SPEECH_MAX_AUDIO_BYTES: ${SPEECH_MAX_AUDIO_BYTES:-10485760}
-      SPEECH_TTS_VOICE: ${SPEECH_TTS_VOICE:-zh-CN-XiaoxiaoNeural}
+      SPEECH_TTS_MODEL_PATH: ${SPEECH_TTS_MODEL_PATH:-/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice}
+      SPEECH_TTS_VOICE: ${SPEECH_TTS_VOICE:-Serena}
+      SPEECH_TTS_LANGUAGE: ${SPEECH_TTS_LANGUAGE:-Chinese}
+      SPEECH_TTS_DEVICE: ${SPEECH_TTS_DEVICE:-cuda:0}
+      SPEECH_TTS_DTYPE: ${SPEECH_TTS_DTYPE:-bfloat16}
+      SPEECH_TTS_MAX_CONCURRENCY: ${SPEECH_TTS_MAX_CONCURRENCY:-1}
       SPEECH_TTS_RATE: ${SPEECH_TTS_RATE:-+0%}
       SPEECH_TTS_VOLUME: ${SPEECH_TTS_VOLUME:-+0%}
       SPEECH_TTS_PITCH: ${SPEECH_TTS_PITCH:-+0Hz}
       SPEECH_MAX_TTS_CHARACTERS: ${SPEECH_MAX_TTS_CHARACTERS:-500}
     volumes:
-      - roadagent-speech-models:/models
+      - ${SPEECH_MODEL_ROOT:-./speech-service/models}:/models:ro
     restart: unless-stopped
 
   speech-tests:
@@ -33,6 +43,3 @@ services:
       dockerfile: Dockerfile
       target: test
     command: ["python", "-m", "pytest", "-q"]
-
-volumes:
-  roadagent-speech-models:

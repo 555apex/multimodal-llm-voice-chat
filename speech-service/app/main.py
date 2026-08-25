@@ -12,10 +12,11 @@ from pydantic import BaseModel, Field
 from .config import Settings
 from .engines import (
     AsrEngine,
-    EdgeTtsEngine,
     FasterWhisperAsrEngine,
+    Qwen3TtsEngine,
     TtsEngine,
     load_asr,
+    load_tts,
 )
 
 LOGGER = logging.getLogger("uvicorn.error")
@@ -41,7 +42,7 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
     resolved_asr = asr_engine or FasterWhisperAsrEngine(resolved_settings)
-    resolved_tts = tts_engine or EdgeTtsEngine(resolved_settings)
+    resolved_tts = tts_engine or Qwen3TtsEngine(resolved_settings)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
@@ -54,6 +55,14 @@ def create_app(
                 resolved_settings.asr_compute_type,
             )
             await load_asr(resolved_asr)
+            LOGGER.info(
+                "Loading Qwen3-TTS model=%s device=%s dtype=%s voice=%s",
+                resolved_settings.tts_model_path,
+                resolved_settings.tts_device,
+                resolved_settings.tts_dtype,
+                resolved_settings.tts_voice,
+            )
+            await load_tts(resolved_tts)
         application.state.ready = True
         yield
         application.state.ready = False
@@ -68,6 +77,9 @@ def create_app(
     application.state.tts = resolved_tts
     application.state.asr_semaphore = asyncio.Semaphore(
         resolved_settings.asr_max_concurrency
+    )
+    application.state.tts_semaphore = asyncio.Semaphore(
+        resolved_settings.tts_max_concurrency
     )
     application.state.ready = False
 
@@ -124,7 +136,8 @@ def create_app(
         if len(text) > resolved_settings.max_tts_characters:
             raise HTTPException(status_code=413, detail="Text is too long")
         try:
-            audio = await resolved_tts.synthesize(text)
+            async with application.state.tts_semaphore:
+                audio = await resolved_tts.synthesize(text)
         except Exception as exception:
             LOGGER.exception("TTS synthesis failed")
             raise HTTPException(status_code=503, detail="TTS synthesis failed") from exception

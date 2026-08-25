@@ -1,0 +1,124 @@
+name: road-agent-dgx
+
+x-log-options: &log-options
+  driver: json-file
+  options:
+    max-size: 100m
+    max-file: "5"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/dgx/Dockerfile.backend
+      args:
+        JAVA_BUILD_IMAGE: ${JAVA_BUILD_IMAGE:-eclipse-temurin:17-jdk-jammy}
+        JAVA_RUNTIME_IMAGE: ${JAVA_RUNTIME_IMAGE:-eclipse-temurin:17-jre-jammy}
+    image: road-agent-dgx-backend:local
+    container_name: road-agent-dgx-backend
+    env_file: deploy/dgx/.env
+    environment:
+      ROADAGENT_MODEL_ENDPOINT: http://qwen:8000/v1/chat/completions
+      ROADAGENT_MODEL_NAME: qwen3.6-35b-a3b-nvfp4
+      ROADAGENT_MODEL_AUTH_ENABLED: "false"
+      ROADAGENT_MODEL_ENABLE_THINKING: "false"
+      ROADAGENT_SPEECH_ENABLED: "true"
+      ROADAGENT_SPEECH_SERVICE_URL: http://speech-service:8091
+    networks:
+      - frontend-private
+      - speech-private
+      - dgx-ai
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *log-options
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/api/v1/speech/capabilities"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  speech-service:
+    build:
+      context: speech-service
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        SPEECH_BASE_IMAGE: ${SPEECH_BASE_IMAGE:-nvcr.io/nvidia/pytorch@sha256:d724ba5b68075cd3b96eefbc510a45d36e60dd16fd70b217708625f1f4b37bc1}
+    image: road-agent-dgx-speech:local
+    container_name: road-agent-dgx-speech
+    gpus: all
+    ipc: host
+    environment:
+      HF_HUB_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      SPEECH_ASR_MODEL: ${SPEECH_ASR_MODEL:-small}
+      SPEECH_ASR_MODEL_PATH: ${SPEECH_ASR_MODEL_PATH:-/models/Systran--faster-whisper-small}
+      SPEECH_ASR_DEVICE: ${SPEECH_ASR_DEVICE:-cpu}
+      SPEECH_ASR_COMPUTE_TYPE: ${SPEECH_ASR_COMPUTE_TYPE:-int8}
+      SPEECH_ASR_LANGUAGE: ${SPEECH_ASR_LANGUAGE:-zh}
+      SPEECH_ASR_MAX_CONCURRENCY: ${SPEECH_ASR_MAX_CONCURRENCY:-1}
+      SPEECH_TTS_MODEL_PATH: ${SPEECH_TTS_MODEL_PATH:-/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice}
+      SPEECH_TTS_VOICE: ${SPEECH_TTS_VOICE:-Serena}
+      SPEECH_TTS_LANGUAGE: ${SPEECH_TTS_LANGUAGE:-Chinese}
+      SPEECH_TTS_DEVICE: ${SPEECH_TTS_DEVICE:-cuda:0}
+      SPEECH_TTS_DTYPE: ${SPEECH_TTS_DTYPE:-bfloat16}
+      SPEECH_TTS_MAX_CONCURRENCY: ${SPEECH_TTS_MAX_CONCURRENCY:-1}
+      SPEECH_MAX_AUDIO_BYTES: ${SPEECH_MAX_AUDIO_BYTES:-10485760}
+      SPEECH_MAX_TTS_CHARACTERS: ${SPEECH_MAX_TTS_CHARACTERS:-500}
+      HOME: /tmp/speech
+      XDG_CACHE_HOME: /tmp/speech/cache
+    volumes:
+      - /home/whtc/models/Systran--faster-whisper-small:/models/Systran--faster-whisper-small:ro
+      - /home/whtc/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice:/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice:ro
+    tmpfs:
+      - /tmp:size=8g,mode=1777
+    networks:
+      - speech-private
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *log-options
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health/ready', timeout=5).read()"
+      interval: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 15m
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/dgx/Dockerfile.frontend
+      args:
+        NODE_BUILD_IMAGE: ${NODE_BUILD_IMAGE:-node:22-bookworm-slim}
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginxinc/nginx-unprivileged:1.29-alpine}
+    image: road-agent-dgx-frontend:local
+    container_name: road-agent-dgx-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18080:8080"
+    networks:
+      - frontend-private
+      - frontend-ingress
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging: *log-options
+
+networks:
+  frontend-private:
+    internal: true
+  frontend-ingress:
+  speech-private:
+    internal: true
+  dgx-ai:
+    external: true

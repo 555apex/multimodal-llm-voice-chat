@@ -11,6 +11,8 @@ $env:ROADAGENT_MODEL_ENDPOINT = 'https://api.deepseek.com/chat/completions'
 $env:ROADAGENT_MODEL_API_KEY = 'replace-with-your-own-deepseek-key'
 $env:ROADAGENT_MODEL_NAME = 'deepseek-v4-flash'
 $env:ROADAGENT_MODEL_AUTH_ENABLED = 'true'
+# 可选；DGX Qwen 部署取消下一行注释。
+# $env:ROADAGENT_MODEL_ENABLE_THINKING = 'false'
 
 # 云 MySQL 信息由项目负责人通过安全渠道提供。
 $env:ROADAGENT_DB_URL = 'jdbc:mysql://database-host:3306/road_agent?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'

@@ -16,6 +16,9 @@ class FakeAsr:
 
 
 class FakeTts:
+    def load(self) -> None:
+        return None
+
     async def synthesize(self, text: str) -> bytes:
         assert text == "当前道路通行平稳。"
         return b"ID3-fake-mp3"
@@ -24,6 +27,7 @@ class FakeTts:
 def settings() -> Settings:
     return Settings(
         asr_model="small",
+        asr_model_path="",
         asr_device="cpu",
         asr_compute_type="int8",
         asr_download_root="/tmp/models",
@@ -32,7 +36,12 @@ def settings() -> Settings:
         asr_initial_prompt="福建道路",
         asr_max_concurrency=1,
         max_audio_bytes=1024,
-        tts_voice="zh-CN-XiaoxiaoNeural",
+        tts_model_path="/tmp/qwen3-tts",
+        tts_voice="Serena",
+        tts_language="Chinese",
+        tts_device="cuda:0",
+        tts_dtype="bfloat16",
+        tts_max_concurrency=1,
         tts_rate="+0%",
         tts_volume="+0%",
         tts_pitch="+0Hz",
@@ -74,7 +83,7 @@ def test_rejects_unsupported_and_oversized_audio() -> None:
         assert oversized.status_code == 413
 
 
-def test_returns_mp3_without_calling_online_tts() -> None:
+def test_returns_mp3_from_local_tts_engine() -> None:
     with client() as test_client:
         response = test_client.post(
             "/v1/tts/speech", json={"text": "当前道路通行平稳。"}

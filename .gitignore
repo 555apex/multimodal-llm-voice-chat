@@ -12,10 +12,12 @@ frontend/coverage/
 frontend/.vite/
 frontend/*.tsbuildinfo
 npm-debug.log*
+.npm-cache/
 
 # Python
 **/__pycache__/
 **/.pytest_cache/
+**/.download-venv/
 *.py[cod]
 
 # Local configuration and secrets

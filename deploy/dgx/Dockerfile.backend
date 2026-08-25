@@ -1,0 +1,28 @@
+ARG JAVA_BUILD_IMAGE=eclipse-temurin:17-jdk-jammy
+ARG JAVA_RUNTIME_IMAGE=eclipse-temurin:17-jre-jammy
+
+FROM ${JAVA_BUILD_IMAGE} AS build
+
+WORKDIR /workspace
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY . .
+RUN chmod +x mvnw \
+    && ./mvnw -B verify
+
+FROM ${JAVA_RUNTIME_IMAGE} AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 roadagent \
+    && useradd --create-home --uid 10001 --gid 10001 roadagent
+
+WORKDIR /app
+COPY --from=build /workspace/road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar /app/road-agent.jar
+
+USER roadagent
+EXPOSE 8080
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/road-agent.jar"]
