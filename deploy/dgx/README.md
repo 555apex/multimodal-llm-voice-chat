@@ -36,7 +36,7 @@ deploy/dgx/dgx-stack up
 deploy/dgx/dgx-stack status
 ```
 
-`up` 会保证 `dgx-ai` 网络存在、切换现有 model-serving 到 `daily` Qwen profile、把 Qwen 附加到共享网络，然后启动 Backend、Speech 和 Frontend。
+`up` 会保证 `dgx-ai` 网络存在；仅在 Qwen 容器没有运行时切换 model-serving 到 `daily` profile，已运行时保持当前本地模型进程，避免重复启动造成页面短暂中断。随后脚本会把 Qwen 附加到共享网络，并启动 Backend、Speech 和 Frontend。
 
 DGX 当前直连 Docker Hub 会超时，Java、Node、Nginx 和测试 Python 基础镜像通过 `dockerproxy.net` 代理拉取；Speech GPU 运行镜像仍固定为 NGC digest。
 
@@ -56,6 +56,32 @@ deploy/dgx/dgx-stack smoke --tts-concurrency 2 --test-speech-limits
 ```
 
 浏览器录音的 ASR 验收在 HTTPS 页面中完成，固定语句为“福州五四路现在拥堵吗”。
+
+### 从 Windows 一键启动并查看
+
+在迁移副本根目录运行：
+
+```powershell
+.\deploy\dgx\start-and-view.ps1
+```
+
+该脚本会依次执行远端 `up`、`status` 和一次包含 Qwen、TTS、高德、Agent SSE 的冒烟测试，然后建立本机到 DGX `127.0.0.1:18080` 的 SSH 隧道并打开浏览器。默认地址：
+
+- 主页面：`http://127.0.0.1:18080/`
+- 数字人演示：`http://127.0.0.1:18080/digital-human-demo.html`
+
+本机回环地址可用于 Tailscale Serve 获批前的查看和测试，不会新增 DGX 对公网或校园网的监听。常用控制命令：
+
+```powershell
+# 只查看本机隧道和页面状态
+.\deploy\dgx\start-and-view.ps1 -Action Status
+
+# 关闭脚本创建的 SSH 隧道；不停止 DGX 服务
+.\deploy\dgx\start-and-view.ps1 -Action Stop
+
+# DGX 服务已经启动时，只建立隧道
+.\deploy\dgx\start-and-view.ps1 -SkipRemoteStart
+```
 
 ## 5. Tailscale HTTPS
 

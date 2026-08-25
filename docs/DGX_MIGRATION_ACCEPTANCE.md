@@ -38,6 +38,7 @@ Road Agent 已在 DGX Spark 上完成构建和部署，Qwen Agent、共享 MySQL
 | Speech 单元测试 | 通过 | 6 个测试全部通过，覆盖替身、路由、模型路径和 MP3 转码 |
 | 模型 manifest 校验 | 通过 | ASR/TTS 固定 revision 的全部 manifest 文件离线重算 SHA-256 通过 |
 | Docker Compose/镜像 | 通过 | Backend、Frontend、Speech 三个 ARM64 镜像构建完成并健康运行 |
+| 幂等重复启动 | 通过 | Qwen 已运行时，`dgx-stack up` 保持原模型进程；重复执行前后容器 `StartedAt` 均为 `2026-08-25T15:11:00.940479943Z`，重启次数为 0 |
 | Git 内容检查 | 通过 | 迁移分支 `migration/dgx`；原仓库仍为 `version/roadagent-v1@18074e8`，原工作树内容未被迁移任务改写 |
 
 ## DGX 端到端
@@ -82,6 +83,7 @@ Road Agent 已在 DGX Spark 上完成构建和部署，Qwen Agent、共享 MySQL
 2. PyPI torchaudio 与 NVIDIA 预览版 PyTorch ABI 不一致；Serena 不使用声纹克隆，故将仅供声纹克隆的 torchaudio 导入改为惰性加载。
 3. Java `HttpClient` 默认 h2c 升级会被 vLLM/Uvicorn 拒绝并丢失 POST body；模型客户端现固定 HTTP/1.1。
 4. Frontend 增加独立 ingress 网络后，宿主机回环端口可以发布，同时 Backend/Speech 仍不暴露。
+5. 初版重复执行 `up` 会无条件切换 `daily` profile 并短暂重启健康的 Qwen；现仅在 Qwen 容器未运行时切换，已运行时只等待健康并验证模型，避免页面出现瞬时 `MODEL_UPSTREAM_ERROR`。
 
 ## 待完成项
 

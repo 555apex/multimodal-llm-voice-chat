@@ -78,7 +78,13 @@ ensure_qwen() {
     echo "model stack not found: $MODEL_STACK_DIR" >&2
     exit 1
   }
-  "$MODEL_STACK_DIR/scripts/model-stack" switch daily
+  local qwen_running
+  qwen_running="$(docker inspect --format '{{.State.Running}}' model-serving-qwen 2>/dev/null || true)"
+  if [[ "$qwen_running" == "true" ]]; then
+    echo "model-serving-qwen is already running; keeping the current local model process"
+  else
+    "$MODEL_STACK_DIR/scripts/model-stack" switch daily
+  fi
   if ! docker inspect model-serving-qwen --format '{{json .NetworkSettings.Networks}}' | grep -q '"dgx-ai"'; then
     docker network connect --alias qwen dgx-ai model-serving-qwen
   fi
