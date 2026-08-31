@@ -30,9 +30,17 @@ config/api-test.ps1
 config/local.env
 speech-service/models/
 speech-service/tmp/
+*.mp3
+*.wav
+*.webm
+*.m4a
+*.ogg
+*.aac
+*.flac
 
 # IDE and operating system
 .DS_Store
+.claude/settings.local.json
 *.log
 .idea/
 **/.idea/
