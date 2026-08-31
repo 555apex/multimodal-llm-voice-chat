@@ -6,6 +6,7 @@ import cn.fj.roadagent.domain.dispatch.EmergencyResource;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /** 没有甲方资源接口前，用可控台账打通调度流程。 */
 public final class MockResourceDataAdapter implements ResourceDataPort {
@@ -26,6 +27,26 @@ public final class MockResourceDataAdapter implements ResourceDataPort {
                 .filter(resource -> sameCity(resource.city(), query.city()))
                 .filter(resource -> matchesType(resource, query.resourceTypes()))
                 .toList();
+    }
+
+    @Override
+    public List<EmergencyResource> listActiveForPlanning(String eventType) {
+        return resources.stream().filter(EmergencyResource::available).toList();
+    }
+
+    @Override
+    public List<EmergencyResource> lockByTypeCodes(Set<String> typeCodes) {
+        return resources.stream().filter(item -> typeCodes.contains(item.typeCode())).toList();
+    }
+
+    @Override
+    public List<EmergencyResource> lockByResourceIds(Set<String> resourceIds) {
+        return resources.stream().filter(item -> resourceIds.contains(item.resourceId())).toList();
+    }
+
+    @Override
+    public boolean updateInventory(EmergencyResource resource, long expectedLockVersion) {
+        throw new UnsupportedOperationException("Mock资源不支持正式库存更新");
     }
 
     private boolean sameCity(String resourceCity, String queryCity) {

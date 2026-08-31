@@ -4,24 +4,30 @@ import cn.fj.roadagent.adapters.memory.InMemoryConversationMemoryAdapter;
 import cn.fj.roadagent.adapters.model.openai.OpenAiCompatibleChatModelAdapter;
 import cn.fj.roadagent.adapters.speech.http.PythonSpeechServiceAdapter;
 import cn.fj.roadagent.adapters.transaction.SpringUnitOfWork;
-import cn.fj.roadagent.adapters.tool.QueryAreaTrafficTool;
-import cn.fj.roadagent.adapters.tool.QueryRealtimeTrafficTool;
-import cn.fj.roadagent.adapters.traffic.amap.AmapAdministrativeAreaAdapter;
-import cn.fj.roadagent.adapters.traffic.amap.AmapAreaTrafficDataAdapter;
-import cn.fj.roadagent.adapters.traffic.amap.AmapTrafficDataAdapter;
+import cn.fj.roadagent.adapters.traffic.mysql.InMemoryHighwayTrafficSnapshotCache;
+import cn.fj.roadagent.adapters.traffic.mysql.InMemoryRoadCapacitySnapshotCache;
+import cn.fj.roadagent.adapters.traffic.mysql.MysqlHighwayTrafficSnapshotSource;
+import cn.fj.roadagent.adapters.traffic.mysql.MysqlRoadCapacitySnapshotSource;
+import cn.fj.roadagent.adapters.traffic.mysql.MysqlRegionalTrafficRepository;
+import cn.fj.roadagent.adapters.traffic.mysql.MysqlVehicleTravelPatternRepository;
 import cn.fj.roadagent.application.agent.ConverseWithAgentUseCase;
-import cn.fj.roadagent.application.port.AdministrativeAreaPort;
 import cn.fj.roadagent.application.port.AbnormalEventPort;
-import cn.fj.roadagent.application.port.AreaTrafficDataPort;
-import cn.fj.roadagent.application.port.AreaTrafficQueryTool;
 import cn.fj.roadagent.application.port.ChatModelPort;
+import cn.fj.roadagent.application.port.CityDistancePort;
 import cn.fj.roadagent.application.port.ConversationMemoryPort;
 import cn.fj.roadagent.application.port.DispatchRepository;
+import cn.fj.roadagent.application.port.EmergencyWorkflowRepository;
+import cn.fj.roadagent.application.port.ResourceAllocationPort;
+import cn.fj.roadagent.application.port.ResourceDataPort;
+import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
+import cn.fj.roadagent.application.port.HighwayTrafficSnapshotSource;
+import cn.fj.roadagent.application.port.RoadCapacitySnapshotPort;
+import cn.fj.roadagent.application.port.RoadCapacitySnapshotSource;
+import cn.fj.roadagent.application.port.RegionalTrafficDataPort;
+import cn.fj.roadagent.application.port.VehicleTravelPatternPort;
 import cn.fj.roadagent.application.port.SpeechCapabilityPort;
 import cn.fj.roadagent.application.port.SpeechRecognitionPort;
 import cn.fj.roadagent.application.port.SpeechSynthesisPort;
-import cn.fj.roadagent.application.port.TrafficDataPort;
-import cn.fj.roadagent.application.port.TrafficQueryTool;
 import cn.fj.roadagent.application.port.UnitOfWork;
 import cn.fj.roadagent.core.agent.AgentRuntime;
 import cn.fj.roadagent.core.agent.AgentSkill;
@@ -29,14 +35,22 @@ import cn.fj.roadagent.core.agent.IntentPlanner;
 import cn.fj.roadagent.core.agent.SkillRegistry;
 import cn.fj.roadagent.core.dispatch.DispatchApplicationService;
 import cn.fj.roadagent.core.dispatch.EmergencyDispatchSkill;
+import cn.fj.roadagent.core.dispatch.EmergencyResourceAllocator;
 import cn.fj.roadagent.core.speech.SpeechApplicationService;
-import cn.fj.roadagent.core.traffic.RealtimeTrafficSkill;
+import cn.fj.roadagent.core.traffic.HighwayTrafficService;
+import cn.fj.roadagent.core.traffic.HighwayTrafficSkill;
+import cn.fj.roadagent.core.traffic.RoadCapacityService;
+import cn.fj.roadagent.core.traffic.RegionalTrafficService;
+import cn.fj.roadagent.core.traffic.UnifiedTrafficQueryService;
+import cn.fj.roadagent.core.traffic.VehiclePatternService;
+import cn.fj.roadagent.application.traffic.QueryHighwayTrafficUseCase;
 import cn.fj.roadagent.interfaces.rest.common.TraceIdFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -68,18 +82,6 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(prefix = "roadagent.traffic", name = "provider",
-            havingValue = "amap", matchIfMissing = true)
-    TrafficDataPort amapTrafficDataPort(RoadAgentProperties properties, Clock clock) {
-        RoadAgentProperties.Amap amap = properties.getTraffic().getAmap();
-        requireSecret(amap.getApiKey(), "使用高德数据时必须设置AMAP_API_KEY");
-        return new AmapTrafficDataAdapter(
-                createHttpRestClient(amap.getTimeoutSeconds()),
-                amap.getEndpoint(), amap.getApiKey(), amap.getRoadLevel(), clock
-        );
-    }
-
-    @Bean
     @ConditionalOnProperty(prefix = "roadagent.model", name = "provider",
             havingValue = "openai-compatible", matchIfMissing = true)
     ChatModelPort openAiCompatibleChatModelPort(
@@ -99,47 +101,132 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
-    TrafficQueryTool trafficQueryTool(TrafficDataPort trafficDataPort) {
-        return new QueryRealtimeTrafficTool(trafficDataPort);
-    }
-
-    @Bean
-    AdministrativeAreaPort administrativeAreaPort(RoadAgentProperties properties, Clock clock) {
-        RoadAgentProperties.Amap amap = properties.getTraffic().getAmap();
-        return new AmapAdministrativeAreaAdapter(
-                createHttpRestClient(amap.getTimeoutSeconds()), amap.getDistrictEndpoint(),
-                amap.getApiKey(), clock, Duration.ofHours(amap.getDistrictCacheHours())
-        );
-    }
-
-    @Bean(destroyMethod = "close")
-    AreaTrafficDataPort areaTrafficDataPort(RoadAgentProperties properties, Clock clock) {
-        RoadAgentProperties.Amap amap = properties.getTraffic().getAmap();
-        return new AmapAreaTrafficDataAdapter(
-                createHttpRestClient(amap.getTimeoutSeconds()), amap.getAreaEndpoint(),
-                amap.getApiKey(), clock, amap.getAreaTileSizeKm(), amap.getAreaMaxTiles(),
-                amap.getAreaConcurrency(), Duration.ofSeconds(amap.getAreaCacheSeconds())
-        );
-    }
-
-    @Bean
-    AreaTrafficQueryTool areaTrafficQueryTool(
-            AdministrativeAreaPort administrativeAreaPort,
-            AreaTrafficDataPort areaTrafficDataPort
+    HighwayTrafficSnapshotSource highwayTrafficSnapshotSource(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            Clock clock
     ) {
-        return new QueryAreaTrafficTool(administrativeAreaPort, areaTrafficDataPort);
+        return new MysqlHighwayTrafficSnapshotSource(
+                jdbcTemplate, new TransactionTemplate(transactionManager), clock
+        );
     }
 
-    @Bean
-    RealtimeTrafficSkill realtimeTrafficSkill(
-            TrafficQueryTool trafficQueryTool,
-            AreaTrafficQueryTool areaTrafficQueryTool,
+    @Bean(initMethod = "start", destroyMethod = "close")
+    InMemoryHighwayTrafficSnapshotCache highwayTrafficSnapshotCache(
+            HighwayTrafficSnapshotSource source,
             RoadAgentProperties properties,
             Clock clock
     ) {
-        Duration staleAfter = Duration.ofMinutes(properties.getTraffic().getStaleAfterMinutes());
-        return new RealtimeTrafficSkill(
-                trafficQueryTool, areaTrafficQueryTool, clock, staleAfter
+        RoadAgentProperties.Traffic traffic = properties.getTraffic();
+        return new InMemoryHighwayTrafficSnapshotCache(
+                source,
+                clock,
+                Duration.ofSeconds(traffic.getSnapshotPollSeconds()),
+                Duration.ofSeconds(traffic.getSnapshotStableSeconds())
+        );
+    }
+
+    @Bean
+    HighwayTrafficService highwayTrafficService(
+            HighwayTrafficSnapshotPort snapshotPort,
+            ChatModelPort chatModelPort
+    ) {
+        return new HighwayTrafficService(snapshotPort, chatModelPort);
+    }
+
+    @Bean
+    RoadCapacitySnapshotSource roadCapacitySnapshotSource(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            Clock clock
+    ) {
+        return new MysqlRoadCapacitySnapshotSource(
+                jdbcTemplate, new TransactionTemplate(transactionManager), clock
+        );
+    }
+
+    @Bean(initMethod = "start", destroyMethod = "close")
+    InMemoryRoadCapacitySnapshotCache roadCapacitySnapshotCache(
+            RoadCapacitySnapshotSource source,
+            RoadAgentProperties properties,
+            Clock clock
+    ) {
+        RoadAgentProperties.Traffic traffic = properties.getTraffic();
+        return new InMemoryRoadCapacitySnapshotCache(
+                source,
+                clock,
+                Duration.ofSeconds(traffic.getSnapshotPollSeconds()),
+                Duration.ofSeconds(traffic.getSnapshotStableSeconds())
+        );
+    }
+
+    @Bean
+    RoadCapacityService roadCapacityService(
+            RoadCapacitySnapshotPort snapshotPort,
+            ChatModelPort chatModelPort
+    ) {
+        return new RoadCapacityService(snapshotPort, chatModelPort);
+    }
+
+    @Bean
+    RegionalTrafficDataPort regionalTrafficDataPort(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            Clock clock
+    ) {
+        return new MysqlRegionalTrafficRepository(
+                jdbcTemplate, new TransactionTemplate(transactionManager), clock
+        );
+    }
+
+    @Bean
+    RegionalTrafficService regionalTrafficService(
+            RegionalTrafficDataPort dataPort,
+            ChatModelPort chatModelPort
+    ) {
+        return new RegionalTrafficService(dataPort, chatModelPort);
+    }
+
+    @Bean
+    VehicleTravelPatternPort vehicleTravelPatternPort(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            ObjectMapper objectMapper
+    ) {
+        return new MysqlVehicleTravelPatternRepository(
+                jdbcTemplate, new TransactionTemplate(transactionManager), objectMapper
+        );
+    }
+
+    @Bean
+    VehiclePatternService vehiclePatternService(
+            VehicleTravelPatternPort dataPort,
+            ChatModelPort chatModelPort
+    ) {
+        return new VehiclePatternService(dataPort, chatModelPort);
+    }
+
+    @Bean
+    QueryHighwayTrafficUseCase queryHighwayTrafficUseCase(
+            HighwayTrafficService trafficService,
+            RoadCapacityService capacityService,
+            RegionalTrafficService regionalTrafficService,
+            VehiclePatternService vehiclePatternService
+    ) {
+        return new UnifiedTrafficQueryService(
+                trafficService, capacityService, regionalTrafficService, vehiclePatternService
+        );
+    }
+
+    @Bean
+    HighwayTrafficSkill highwayTrafficSkill(
+            HighwayTrafficService trafficService,
+            RoadCapacityService capacityService,
+            RegionalTrafficService regionalTrafficService,
+            VehiclePatternService vehiclePatternService
+    ) {
+        return new HighwayTrafficSkill(
+                trafficService, capacityService, regionalTrafficService, vehiclePatternService
         );
     }
 
@@ -154,10 +241,19 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
+    EmergencyResourceAllocator emergencyResourceAllocator(CityDistancePort cityDistancePort) {
+        return new EmergencyResourceAllocator(cityDistancePort);
+    }
+
+    @Bean
     DispatchApplicationService dispatchApplicationService(
             AbnormalEventPort eventPort,
             DispatchRepository repository,
+            EmergencyWorkflowRepository workflowRepository,
             ChatModelPort chatModelPort,
+            ResourceDataPort resourceDataPort,
+            ResourceAllocationPort resourceAllocationPort,
+            EmergencyResourceAllocator resourceAllocator,
             UnitOfWork unitOfWork,
             RoadAgentProperties properties,
             Clock clock
@@ -165,7 +261,11 @@ public class RoadAgentConfiguration {
         return new DispatchApplicationService(
                 eventPort,
                 repository,
+                workflowRepository,
                 chatModelPort,
+                resourceDataPort,
+                resourceAllocationPort,
+                resourceAllocator,
                 unitOfWork,
                 clock,
                 Duration.ofSeconds(properties.getDispatch().getStaleGeneratingSeconds())
@@ -235,14 +335,6 @@ public class RoadAgentConfiguration {
             Clock clock
     ) {
         return new AgentRuntime(planner, registry, memoryPort, clock);
-    }
-
-    private org.springframework.web.client.RestClient createHttpRestClient(int timeoutSeconds) {
-        Duration timeout = Duration.ofSeconds(timeoutSeconds);
-        HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
-        var requestFactory = new org.springframework.http.client.JdkClientHttpRequestFactory(client);
-        requestFactory.setReadTimeout(timeout);
-        return org.springframework.web.client.RestClient.builder().requestFactory(requestFactory).build();
     }
 
     private void requireSecret(String value, String message) {

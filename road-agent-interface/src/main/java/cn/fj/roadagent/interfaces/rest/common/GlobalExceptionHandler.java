@@ -2,10 +2,10 @@ package cn.fj.roadagent.interfaces.rest.common;
 
 import cn.fj.roadagent.application.exception.ExternalServiceException;
 import cn.fj.roadagent.application.exception.BusinessRuleException;
-import cn.fj.roadagent.domain.traffic.InvalidTrafficQueryException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -27,13 +27,13 @@ public final class GlobalExceptionHandler {
         );
     }
 
-    @ExceptionHandler(InvalidTrafficQueryException.class)
-    public ResponseEntity<ApiResponse<Void>> handleDomainValidation(
-            InvalidTrafficQueryException exception,
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnreadableRequest(
+            HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
         return ResponseEntity.badRequest().body(
-                ApiResponse.error("INVALID_TRAFFIC_QUERY", exception.getMessage(), traceId(request))
+                ApiResponse.error("INVALID_REQUEST", "请求JSON格式或枚举值不正确", traceId(request))
         );
     }
 
@@ -54,7 +54,8 @@ public final class GlobalExceptionHandler {
     ) {
         HttpStatus status;
         if ("DISPATCH_NOT_FOUND".equals(exception.errorCode())
-                || "EVENT_NOT_FOUND".equals(exception.errorCode())) {
+                || "EVENT_NOT_FOUND".equals(exception.errorCode())
+                || "WORKFLOW_NOT_FOUND".equals(exception.errorCode())) {
             status = HttpStatus.NOT_FOUND;
         } else if (exception.errorCode().startsWith("TRAFFIC_")
                 || "AREA_QUERY_TOO_LARGE".equals(exception.errorCode())) {

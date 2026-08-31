@@ -1,0 +1,16 @@
+package cn.fj.roadagent.domain.dispatch;
+
+public enum WorkflowActionType {
+    GENERATION_STARTED,
+    GENERATION_COMPLETED,
+    GENERATION_FAILED,
+    GENERATION_RETRIED,
+    LEVEL_1_SUBMITTED,
+    LEVEL_1_RETURNED,
+    LEVEL_2_PASSED,
+    LEVEL_2_RETURNED,
+    LEVEL_3_RETURNED,
+    LEVEL_3_PUBLISHED,
+    RESOURCES_RELEASED,
+    NO_DISPATCH
+}

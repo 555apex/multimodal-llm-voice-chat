@@ -10,7 +10,9 @@ public record EmergencyEventResponse(
         Instant occurrenceTime,
         String eventType,
         String eventTypeName,
-        String description
+        String description,
+        String cityCode,
+        String cityName
 ) {
     public static EmergencyEventResponse from(EmergencyEvent event) {
         return new EmergencyEventResponse(
@@ -19,7 +21,9 @@ public record EmergencyEventResponse(
                 event.occurrenceTime(),
                 event.eventType(),
                 typeName(event.eventType()),
-                event.description()
+                event.description(),
+                event.cityCode(),
+                event.cityName()
         );
     }
 
