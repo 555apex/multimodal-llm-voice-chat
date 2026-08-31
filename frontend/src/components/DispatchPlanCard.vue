@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { DispatchPlan } from '../types/dispatch'
+import { rescuePlanForDisplay, resourceNameForDisplay } from '../utils/dispatchPlanText'
 
-defineProps<{ plan: DispatchPlan; busy: boolean }>()
+withDefaults(defineProps<{
+  plan: DispatchPlan
+  busy: boolean
+  actionsEnabled?: boolean
+}>(), { actionsEnabled: true })
 const emit = defineEmits<{
   decide: [decision: 'APPROVE' | 'REJECT', comment: string]
 }>()
@@ -39,41 +44,53 @@ function submitReject() {
       </span>
     </header>
 
-    <div class="dispatch-section">
-      <strong>建议救援资源</strong>
-      <div v-if="plan.suggestedResources.length" class="suggested-resource-list">
-        <article v-for="resource in plan.suggestedResources" :key="`${resource.resourceName}-${resource.purpose}`">
+    <div class="dispatch-section dispatch-plan-section">
+      <strong>救援方案</strong>
+      <p class="dispatch-plan-text">{{ rescuePlanForDisplay(plan.rescuePlan) || '正在生成救援方案…' }}</p>
+    </div>
+
+    <div class="dispatch-section allocated-resource-section">
+      <strong>实际匹配资源</strong>
+      <div v-if="plan.allocatedResources?.length" class="suggested-resource-list allocated-resource-list">
+        <article v-for="resource in plan.allocatedResources" :key="resource.resourceId">
           <div>
-            <strong>{{ resource.resourceName }}</strong>
-            <span>{{ resource.resourceType }}</span>
+            <strong>{{ resourceNameForDisplay(resource.resourceName) }}</strong>
+            <span>{{ resource.resourceTypeName }} · {{ resource.resourceTypeCode }}</span>
           </div>
           <b>{{ resource.quantity }} {{ resource.unit }}</b>
           <p>{{ resource.purpose }}</p>
+          <small :class="resource.dispatchScope === 'CROSS_CITY' ? 'cross-city' : 'local-city'">
+            调度城市：{{ resource.sourceCityName }}
+          </small>
         </article>
       </div>
-      <p v-else class="muted">尚未生成建议资源清单。</p>
-      <small class="resource-disclaimer">资源由模型基于通用知识建议，不代表真实库存或当前可用性。</small>
+      <p v-else class="muted">当前没有匹配到可调度资源。</p>
+      <small class="resource-disclaimer">资源来自数据库库存并已完成软占用。</small>
     </div>
 
-    <div class="dispatch-section">
-      <strong>救援方案</strong>
-      <p class="dispatch-plan-text">{{ plan.rescuePlan || '正在生成救援方案…' }}</p>
+    <div v-if="plan.resourceShortages?.length" class="resource-shortage-panel">
+      <strong>资源缺口</strong>
+      <article v-for="shortage in plan.resourceShortages" :key="shortage.resourceTypeCode">
+        <span>{{ shortage.resourceTypeName }}</span>
+        <b>需求 {{ shortage.requiredQuantity }} {{ shortage.unit }} · 已匹配 {{ shortage.allocatedQuantity }} · 缺口 {{ shortage.shortageQuantity }}</b>
+        <small>{{ shortage.reason }}</small>
+      </article>
     </div>
 
     <div v-if="plan.errorMessage" class="dispatch-warning">{{ plan.errorMessage }}</div>
 
-    <div v-if="plan.status === 'WAITING_APPROVAL'" class="approval-gate">
-      <div><strong>人工审批</strong><small>审批通过后事件才会标记为已处理</small></div>
+    <div v-if="actionsEnabled && plan.status === 'WAITING_APPROVAL'" class="approval-gate">
+      <div><strong>一级现场确认</strong><small>确认后事件和方案将上报市交通应急办复核</small></div>
       <div class="approval-actions">
-        <button class="reject-button" :disabled="busy" @click="rejecting = true">驳回返工</button>
+        <button class="reject-button" :disabled="busy" @click="rejecting = true">退回AI返工</button>
         <button class="approve-button" :disabled="busy" @click="emit('decide', 'APPROVE', '')">
-          {{ busy ? '处理中…' : '批准工单' }}
+          {{ busy ? '处理中…' : '确认并上报二级' }}
         </button>
       </div>
     </div>
 
     <div v-if="rejecting" class="rejection-editor">
-      <label for="dispatch-rejection">请说明工单需要修改的问题</label>
+      <label for="dispatch-rejection">请说明方案需要修改的问题</label>
       <textarea
         id="dispatch-rejection"
         v-model="rejectionComment"

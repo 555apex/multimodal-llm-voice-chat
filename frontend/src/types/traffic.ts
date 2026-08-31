@@ -1,59 +1,146 @@
-export type CongestionLevel = 'UNKNOWN' | 'SMOOTH' | 'SLOW' | 'CONGESTED'
-export type SummarySource = 'MODEL' | 'DETERMINISTIC'
-export type Freshness = 'FRESH' | 'STALE' | 'UNKNOWN'
-export type TrafficQueryScope = 'ROAD' | 'AREA_ALL' | 'AREA_MAJOR'
+export type TrafficQueryType =
+  | 'PROVINCE_OVERVIEW'
+  | 'PROVINCE_ABNORMAL'
+  | 'CITY_PAIR'
+  | 'ROUTE_DETAIL'
+  | 'CAPACITY_OVERVIEW'
+  | 'CAPACITY_BOTTLENECKS'
+  | 'CAPACITY_ROUTE_DETAIL'
+  | 'REGIONAL_TRAFFIC_OVERVIEW'
+  | 'CHECKPOINT_PRESSURE'
+  | 'CITY_PRESSURE'
+  | 'ROUTE_PRESSURE'
+  | 'VEHICLE_PATTERN_OVERVIEW'
+  | 'VEHICLE_STRUCTURE'
+  | 'VEHICLE_HOURLY_PATTERN'
+  | 'VEHICLE_DAY_TYPE_COMPARISON'
+
+export type TrafficStatus = 10 | 20 | 30 | 40 | 50
+export type CapacityLevel = 'NORMAL' | 'BOTTLENECK' | 'SEVERE_BOTTLENECK'
 
 export interface TrafficQueryPayload {
-  areaCode: string
-  roadName: string
-  direction?: string
+  queryType: TrafficQueryType
+  originCity?: string
+  destinationCity?: string
+  routeCode?: string
+  routeName?: string
+  selectedCities?: string[]
+  analysisCity?: string
+}
+
+export interface RouteTrafficSummary {
+  routeCode: string
+  routeName: string
+  averageSpeedKmh: number
+  status: TrafficStatus
+  statusName: string
 }
 
 export interface TrafficSegment {
-  roadName: string
-  direction: string
-  congestionLevel: CongestionLevel
-  averageSpeedKmh?: number
-  polyline?: string
+  routeCode: string
+  routeName: string
+  routeSection: string
+  distanceKm?: number
+  averageSpeedKmh: number
+  status: TrafficStatus
+  statusName: string
+  severity: number
 }
 
-export interface TrafficEvaluation {
-  totalSegments: number
-  smoothSegments: number
-  slowSegments: number
-  congestedSegments: number
-  unknownSegments: number
-  smoothRatio: number
-  slowRatio: number
-  congestedRatio: number
-  unknownRatio: number
-  averageSpeedKmh?: number
+export interface RoadCapacityRow {
+  routeCode: string
+  routeName: string
+  actualCapacityVph: number
+  designCapacityVph: number
+  utilizationRatio: number
+  capacityLevel: CapacityLevel
+  capacityLevelName: string
 }
 
-export interface TrafficCoverage {
-  totalTiles: number
-  succeededTiles: number
-  failedTiles: number
-  coverageRatio: number
-  complete: boolean
+export interface SelectedRegion {
+  regionCode: string
+  regionName: string
+}
+
+export interface TransportHubRow {
+  checkpointNo: string
+  routeCode: string
+  routeName: string
+  averageSpeedKmh: number
+  dailyAverageFlow: number
+}
+
+export interface RegionPressureRow {
+  regionCode: string
+  regionName: string
+  activeHubCount: number
+  totalDailyFlow: number
+  hubShareRatio: number
+  interpretation: string
+}
+
+export interface RoutePressureRow {
+  routeCode: string
+  routeName: string
+  totalDailyFlow: number
+  checkpointCount: number
+  averageSpeedKmh: number
+}
+
+export type VehicleType = 'CAR' | 'BUS' | 'TRUCK'
+
+export interface VehicleStructureRow {
+  vehicleType: VehicleType
+  vehicleTypeName: string
+  weeklyVolume: number
+  shareRatio: number
+}
+
+export interface VehicleTimeFeatureRow {
+  vehicleType: VehicleType
+  vehicleTypeName: string
+  peakHour: string
+  peakVolume: number
+  morningPeakRatio: number
+  eveningPeakRatio: number
+  characteristic: string
+}
+
+export interface VehicleDayTypeRow {
+  vehicleType: VehicleType
+  vehicleTypeName: string
+  weekdayVolume: number
+  weekendVolume: number
+}
+
+export interface HourlyVehicleFlow {
+  hour: string
+  car: number
+  bus: number
+  truck: number
 }
 
 export interface TrafficQueryResult {
-  /** 旧会话数据可能没有该字段，界面会按ROAD兼容。 */
-  queryScope?: TrafficQueryScope
-  areaCode: string
-  areaName?: string
-  roadName?: string
-  direction?: string
+  queryType: TrafficQueryType
+  title: string
   summary: string
-  summarySource: SummarySource
+  routeSummaries: RouteTrafficSummary[]
   segments: TrafficSegment[]
-  evaluation?: TrafficEvaluation
-  coverage?: TrafficCoverage
-  source: string
+  capacityRows: RoadCapacityRow[]
+  selectedRegions?: SelectedRegion[]
+  hubRows?: TransportHubRow[]
+  regionPressureRows?: RegionPressureRow[]
+  routePressureRows?: RoutePressureRow[]
+  analysisCity?: string
+  vehicleStructureRows?: VehicleStructureRow[]
+  vehicleTimeFeatureRows?: VehicleTimeFeatureRow[]
+  vehicleDayTypeRows?: VehicleDayTypeRow[]
+  hourlyVehicleSeries?: HourlyVehicleFlow[]
+  totalSegmentCount: number
+  displayedSegmentCount: number
+  truncated: boolean
+  source: 'MYSQL'
   acquiredAt: string
-  freshness: Freshness
-  mock: boolean
   warnings: string[]
   traceId: string
 }

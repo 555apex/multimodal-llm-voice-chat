@@ -19,6 +19,7 @@ export const useSpeechStore = defineStore('speech', {
     capabilitiesLoading: false,
     capabilityError: '',
     autoReadEnabled: false,
+    surfaceActive: true,
     playbackMessageId: '',
     playbackStatus: 'idle' as SpeechPlaybackStatus,
     playbackError: '',
@@ -48,6 +49,11 @@ export const useSpeechStore = defineStore('speech', {
       if (!this.autoReadEnabled) this.stop()
     },
 
+    setSurfaceActive(active: boolean) {
+      this.surfaceActive = active
+      if (!active) this.stop()
+    },
+
     async toggleMessage(messageId: string, speechText: string) {
       if (this.playbackMessageId === messageId) {
         if (this.playbackStatus === 'playing') {
@@ -75,7 +81,7 @@ export const useSpeechStore = defineStore('speech', {
 
     async speak(messageId: string, speechText: string) {
       const segments = splitSpeechText(speechText)
-      if (!segments.length || !this.capabilities?.ttsAvailable) return
+      if (!segments.length || !this.capabilities?.ttsAvailable || !this.surfaceActive) return
       this.stop(false)
       const generation = playbackGeneration
       activeAbort = new AbortController()

@@ -1,12 +1,13 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { decideDispatch } from '../api/dispatchApi'
+import { generateEmergencyDispatch, markEmergencyNoDispatch } from '../api/emergencyApi'
 import {
-  fetchNextEmergency,
-  generateEmergencyDispatch,
-  markEmergencyNoDispatch,
-} from '../api/emergencyApi'
-import type { DispatchPlan, EmergencyAlert } from '../types/dispatch'
+  decideLevel1Workflow,
+  fetchWorkflowHistory,
+  fetchWorkflowInbox,
+  releaseWorkflowResources,
+} from '../api/workflowApi'
+import type { DispatchPlan, EmergencyWorkflowItem, WorkflowInbox } from '../types/dispatch'
 import { useAgentStore } from './agent'
 import { useEmergencyStore } from './emergency'
 
@@ -16,140 +17,113 @@ vi.mock('../api/emergencyApi', () => ({
   markEmergencyNoDispatch: vi.fn(),
 }))
 
-vi.mock('../api/dispatchApi', () => ({
-  decideDispatch: vi.fn(),
+vi.mock('../api/workflowApi', () => ({
+  fetchWorkflowInbox: vi.fn(),
+  decideLevel1Workflow: vi.fn(),
+  reviewEmergencyWorkflow: vi.fn(),
+  decideCommandWorkflow: vi.fn(),
+  fetchWorkflowHistory: vi.fn(),
+  releaseWorkflowResources: vi.fn(),
 }))
 
 const event = {
-  eventId: '202607280000000001',
-  customId: 'AGT20260728EVT000000000000000001',
-  occurrenceTime: '2026-07-28T00:00:00Z',
-  eventType: 'DT01',
-  description: '边坡崩塌',
+  eventId: '202607280000000001', customId: 'EVT-1',
+  occurrenceTime: '2026-07-28T00:00:00Z', eventType: 'DT01', description: '边坡崩塌',
 }
 
 const waitingPlan: DispatchPlan = {
-  planId: 'DP-1',
-  event,
-  suggestedResources: [{
-    resourceType: '抢险队伍',
-    resourceName: '道路抢险人员',
-    quantity: 1,
-    unit: '组',
-    purpose: '现场警戒',
-  }],
-  rescuePlan: '先警戒，再抢通。',
-  status: 'WAITING_APPROVAL',
-  version: 1,
-  createdAt: '2026-07-28T00:00:00Z',
-  updatedAt: '2026-07-28T00:00:01Z',
+  planId: 'DP-1', event,
+  suggestedResources: [{ resourceType: '抢险队伍', resourceName: '道路抢险人员', quantity: 1, unit: '组', purpose: '现场警戒' }],
+  rescuePlan: '先警戒，再抢通。', status: 'WAITING_APPROVAL', version: 1,
+  createdAt: '2026-07-28T00:00:00Z', updatedAt: '2026-07-28T00:00:01Z',
 }
 
-const alert: EmergencyAlert = { event, pendingCount: 2 }
+const item: EmergencyWorkflowItem = {
+  workflowId: 'WF-1', currentStage: 'LEVEL_1',
+  workflowStatus: 'WAITING_LEVEL_1_SUBMISSION', workflowVersion: 1,
+  event, currentPlan: waitingPlan, timeline: [],
+}
 
-describe('emergency store', () => {
+const inbox: WorkflowInbox = { item, counts: { level1: 2, level2: 1, level3: 1 } }
+
+describe('emergency workflow store', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
     sessionStorage.clear()
     setActivePinia(createPinia())
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      value: 'visible',
-    })
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' })
+    vi.mocked(fetchWorkflowInbox).mockResolvedValue(inbox)
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  afterEach(() => vi.useRealTimers())
 
-  it('polls every five seconds only while the page is visible', async () => {
-    vi.mocked(fetchNextEmergency).mockResolvedValue(alert)
+  it('polls the selected stage every five seconds only while visible', async () => {
     const store = useEmergencyStore()
-
     store.startPolling()
-    await vi.waitFor(() => expect(fetchNextEmergency).toHaveBeenCalledTimes(1))
-    expect(store.queryStatus).toBe('ready')
+    await vi.waitFor(() => expect(fetchWorkflowInbox).toHaveBeenCalledTimes(1))
     await vi.advanceTimersByTimeAsync(5000)
-    expect(fetchNextEmergency).toHaveBeenCalledTimes(2)
-
-    Object.defineProperty(document, 'visibilityState', {
-      configurable: true,
-      value: 'hidden',
-    })
+    expect(fetchWorkflowInbox).toHaveBeenCalledTimes(2)
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' })
     await vi.advanceTimersByTimeAsync(10000)
-    expect(fetchNextEmergency).toHaveBeenCalledTimes(2)
+    expect(fetchWorkflowInbox).toHaveBeenCalledTimes(2)
     store.stopPolling()
   })
 
-  it('generates a formal order without occupying the chat running state', async () => {
+  it('generates a formal plan without occupying the chat running state', async () => {
     vi.mocked(generateEmergencyDispatch).mockResolvedValue(waitingPlan)
     const agentStore = useAgentStore()
-    const emergencyStore = useEmergencyStore()
+    const store = useEmergencyStore()
     agentStore.running = true
-    emergencyStore.alert = alert
-
-    await emergencyStore.generate()
-
+    store.item = { ...item, workflowId: undefined, currentPlan: undefined, workflowVersion: 0 }
+    await store.generate()
     expect(agentStore.running).toBe(true)
-    expect(emergencyStore.alert?.dispatch).toEqual(waitingPlan)
+    expect(generateEmergencyDispatch).toHaveBeenCalledWith(event.eventId)
+    expect(fetchWorkflowInbox).toHaveBeenCalled()
   })
 
-  it('switches to the next event after approval', async () => {
-    const nextAlert: EmergencyAlert = {
-      event: { ...event, eventId: '202607280000000002', customId: 'EVT-2' },
-      pendingCount: 1,
-    }
-    vi.mocked(decideDispatch).mockResolvedValue({ ...waitingPlan, status: 'APPROVED' })
-    vi.mocked(fetchNextEmergency).mockResolvedValue(nextAlert)
+  it('switches between the three pending queues', async () => {
     const store = useEmergencyStore()
-    store.alert = { ...alert, dispatch: waitingPlan }
-
-    await store.decide('APPROVE')
-
-    expect(store.alert?.event.eventId).toBe('202607280000000002')
-    expect(fetchNextEmergency).toHaveBeenCalledTimes(1)
+    await store.selectStage('LEVEL_2')
+    expect(store.selectedStage).toBe('LEVEL_2')
+    expect(fetchWorkflowInbox).toHaveBeenCalledWith('LEVEL_2')
   })
 
-  it('submits no-dispatch through the dedicated workflow and loads the next event', async () => {
-    const nextAlert: EmergencyAlert = {
-      event: { ...event, eventId: '202607280000000003', customId: 'EVT-3' },
-      pendingCount: 1,
-    }
+  it('submits level one and refreshes the current queue', async () => {
+    vi.mocked(decideLevel1Workflow).mockResolvedValue(item)
+    const store = useEmergencyStore()
+    store.item = item
+    await store.decideLevel1('SUBMIT')
+    expect(decideLevel1Workflow).toHaveBeenCalledWith('WF-1', 'SUBMIT', '', 1)
+    expect(fetchWorkflowInbox).toHaveBeenCalled()
+  })
+
+  it('keeps no-dispatch as a level-one-only path', async () => {
     vi.mocked(markEmergencyNoDispatch).mockResolvedValue()
-    vi.mocked(fetchNextEmergency).mockResolvedValue(nextAlert)
     const store = useEmergencyStore()
-    store.alert = alert
-
+    store.item = { ...item, workflowId: undefined, currentPlan: undefined }
     await store.markNoDispatch('现场已经自行恢复')
-
-    expect(markEmergencyNoDispatch).toHaveBeenCalledWith(
-      '202607280000000001',
-      '现场已经自行恢复',
-    )
-    expect(store.alert?.event.eventId).toBe('202607280000000003')
+    expect(markEmergencyNoDispatch).toHaveBeenCalledWith(event.eventId, '现场已经自行恢复')
   })
 
-  it('shows an explicit empty state when no pending event is returned', async () => {
-    vi.mocked(fetchNextEmergency).mockResolvedValue(null)
+  it('loads completed workflow history independently from pending queues', async () => {
+    vi.mocked(fetchWorkflowHistory).mockResolvedValue({ items: [item], page: 0, size: 20, total: 1 })
     const store = useEmergencyStore()
-
-    await store.refresh()
-
-    expect(store.alert).toBeNull()
-    expect(store.queryStatus).toBe('empty')
-    expect(store.errorMessage).toBe('')
+    await store.showHistory()
+    expect(store.viewMode).toBe('history')
+    expect(store.history?.total).toBe(1)
   })
 
-  it('keeps the current alert visible when polling fails', async () => {
+  it('releases a published plan and refreshes its history page', async () => {
+    vi.mocked(releaseWorkflowResources).mockResolvedValue({ ...item, resourcesReleased: true })
+    vi.mocked(fetchWorkflowHistory).mockResolvedValue({ items: [], page: 2, size: 20, total: 0 })
     const store = useEmergencyStore()
-    store.alert = alert
-    vi.mocked(fetchNextEmergency).mockRejectedValueOnce(new Error('后端暂时不可用'))
+    store.viewMode = 'history'
+    store.history = { items: [item], page: 2, size: 20, total: 41 }
 
-    await store.refresh()
+    await store.releaseResources('WF-1', 4, '演练完成后资源归队')
 
-    expect(store.alert).toEqual(alert)
-    expect(store.queryStatus).toBe('error')
-    expect(store.errorMessage).toContain('后端暂时不可用')
+    expect(releaseWorkflowResources).toHaveBeenCalledWith('WF-1', '演练完成后资源归队', 4)
+    expect(fetchWorkflowHistory).toHaveBeenCalledWith(2, 20)
   })
 })

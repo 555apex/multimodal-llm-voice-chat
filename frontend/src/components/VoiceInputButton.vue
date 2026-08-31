@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { transcribeSpeech } from '../api/speechApi'
 import { useSpeechStore } from '../stores/speech'
 
 const props = withDefaults(defineProps<{
+  active?: boolean
   disabled?: boolean
   available: boolean
   maxRecordingSeconds: number
   maxAudioBytes: number
-}>(), { disabled: false })
+}>(), { active: true, disabled: false })
 const emit = defineEmits<{
   transcribed: [text: string]
   recordingChanged: [recording: boolean]
@@ -175,6 +176,10 @@ function chooseMimeType() {
   return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? ''
 }
 
+watch(() => props.active, (active) => {
+  if (!active && status.value !== 'idle') cancelRecording()
+})
+
 onUnmounted(cancelRecording)
 </script>
 
@@ -183,16 +188,22 @@ onUnmounted(cancelRecording)
     <button
       type="button"
       class="voice-input-button"
-      :disabled="status === 'idle' && (disabled || !available)"
+      :disabled="(disabled || !available) && status === 'idle'"
       :aria-label="label"
       :title="label"
       @click="toggle"
     >
       <span aria-hidden="true">{{ status === 'recording' ? '■' : status === 'transcribing' ? '…' : '🎙' }}</span>
-      <span v-if="status === 'recording'" class="voice-stop-label">停止</span>
     </button>
     <span v-if="status === 'recording'" class="voice-recording-actions">
-      <span class="voice-recording-time">{{ elapsedSeconds }}秒</span>
+      <button
+        type="button"
+        class="voice-input-finish"
+        aria-label="停止录音并开始识别"
+        @click="stopRecording"
+      >
+        停止并识别
+      </button>
       <button type="button" class="voice-input-cancel" aria-label="取消本次录音" @click="cancelRecording">
         取消
       </button>

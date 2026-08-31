@@ -1,23 +1,49 @@
 import { defineStore } from 'pinia'
-import { decideDispatch } from '../api/dispatchApi'
 import {
   fetchNextEmergency,
   generateEmergencyDispatch,
   markEmergencyNoDispatch,
 } from '../api/emergencyApi'
-import type { EmergencyAlert } from '../types/dispatch'
+import {
+  decideCommandWorkflow,
+  decideLevel1Workflow,
+  fetchWorkflowHistory,
+  fetchWorkflowInbox,
+  reviewEmergencyWorkflow,
+  releaseWorkflowResources,
+} from '../api/workflowApi'
+import type {
+  EmergencyWorkflowItem,
+  ProfessionalReviewInput,
+  WorkflowCounts,
+  WorkflowHistoryPage,
+  WorkflowStage,
+} from '../types/dispatch'
 
 export type EmergencyQueryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
+export type EmergencyViewMode = 'inbox' | 'history'
+
+const emptyCounts = (): WorkflowCounts => ({ level1: 0, level2: 0, level3: 0 })
 
 export const useEmergencyStore = defineStore('emergency', {
   state: () => ({
-    alert: null as EmergencyAlert | null,
+    selectedStage: 'LEVEL_1' as WorkflowStage,
+    viewMode: 'inbox' as EmergencyViewMode,
+    item: null as EmergencyWorkflowItem | null,
+    counts: emptyCounts(),
+    history: null as WorkflowHistoryPage | null,
     polling: false,
     actionBusy: false,
     queryStatus: 'idle' as EmergencyQueryStatus,
     errorMessage: '',
     timerId: 0,
   }),
+
+  getters: {
+    totalPending(state): number {
+      return state.counts.level1 + state.counts.level2 + state.counts.level3
+    },
+  },
 
   actions: {
     startPolling() {
@@ -39,45 +65,83 @@ export const useEmergencyStore = defineStore('emergency', {
       if (document.visibilityState === 'visible') void this.refresh()
     },
 
+    async selectStage(stage: WorkflowStage) {
+      this.selectedStage = stage
+      this.viewMode = 'inbox'
+      this.item = null
+      await this.refresh()
+    },
+
+    async showHistory() {
+      this.viewMode = 'history'
+      await this.loadHistory()
+    },
+
+    async showInbox() {
+      this.viewMode = 'inbox'
+      await this.refresh()
+    },
+
     async refresh() {
       if (this.polling || this.actionBusy) return
+      if (this.viewMode === 'history') {
+        await this.loadHistory()
+        return
+      }
       this.polling = true
-      if (!this.alert) this.queryStatus = 'loading'
+      if (!this.item) this.queryStatus = 'loading'
       try {
-        const nextAlert = await fetchNextEmergency()
-        this.alert = nextAlert
-        this.queryStatus = nextAlert ? 'ready' : 'empty'
+        const inbox = await fetchWorkflowInbox(this.selectedStage)
+        this.item = inbox.item
+        this.counts = inbox.counts
+        this.queryStatus = inbox.item ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
-        // 轮询失败时保留当前告警，避免一次网络抖动让待处理工单从页面消失。
+        // 单次网络波动时保留当前待办，避免用户正在填写的表单消失。
         this.queryStatus = 'error'
-        this.errorMessage = error instanceof Error ? error.message : '紧急事件查询失败'
+        this.errorMessage = error instanceof Error ? error.message : '应急工作流查询失败'
+      } finally {
+        this.polling = false
+      }
+    },
+
+    async loadHistory(page = 0) {
+      if (this.polling || this.actionBusy) return
+      this.polling = true
+      this.queryStatus = 'loading'
+      try {
+        this.history = await fetchWorkflowHistory(page, 20)
+        this.queryStatus = this.history.items.length ? 'ready' : 'empty'
+        this.errorMessage = ''
+      } catch (error) {
+        this.queryStatus = 'error'
+        this.errorMessage = error instanceof Error ? error.message : '流程记录查询失败'
       } finally {
         this.polling = false
       }
     },
 
     async generate() {
-      if (!this.alert || this.actionBusy) return
+      if (!this.item || this.actionBusy) return
       this.actionBusy = true
       this.errorMessage = ''
       try {
-        this.alert.dispatch = await generateEmergencyDispatch(this.alert.event.eventId)
+        await generateEmergencyDispatch(this.item.event.eventId)
       } catch (error) {
         this.errorMessage = error instanceof Error ? error.message : '调度工单生成失败'
-        await this.refreshAfterAction()
       } finally {
         this.actionBusy = false
       }
+      await this.refresh()
     },
 
     async markNoDispatch(reason: string) {
-      if (!this.alert || this.actionBusy) return
+      if (!this.item || this.actionBusy) return
       this.actionBusy = true
       this.errorMessage = ''
       try {
-        await markEmergencyNoDispatch(this.alert.event.eventId, reason)
-        this.alert = null
+        await markEmergencyNoDispatch(this.item.event.eventId, reason)
+        this.item = null
       } catch (error) {
         this.errorMessage = error instanceof Error ? error.message : '事件处置失败'
       } finally {
@@ -86,37 +150,64 @@ export const useEmergencyStore = defineStore('emergency', {
       await this.refresh()
     },
 
-    async decide(decision: 'APPROVE' | 'REJECT', comment = '') {
-      if (!this.alert?.dispatch || this.actionBusy) return
+    async decideLevel1(decision: 'SUBMIT' | 'REJECT', comment = '') {
+      if (!this.item?.workflowId || this.actionBusy) return
+      await this.runWorkflowAction(async () => {
+        await decideLevel1Workflow(
+          this.item!.workflowId!, decision, comment, this.item!.workflowVersion,
+        )
+      })
+    },
+
+    async review(input: ProfessionalReviewInput) {
+      if (!this.item?.workflowId || this.actionBusy) return
+      await this.runWorkflowAction(async () => {
+        await reviewEmergencyWorkflow(
+          this.item!.workflowId!, input, this.item!.workflowVersion,
+        )
+      })
+    },
+
+    async decideCommand(decision: 'APPROVE' | 'REJECT', comment = '') {
+      if (!this.item?.workflowId || this.actionBusy) return
+      await this.runWorkflowAction(async () => {
+        await decideCommandWorkflow(
+          this.item!.workflowId!, decision, comment, this.item!.workflowVersion,
+        )
+      })
+    },
+
+    async releaseResources(workflowId: string, expectedVersion: number, reason: string) {
+      if (this.actionBusy) return
       this.actionBusy = true
       this.errorMessage = ''
-      const plan = this.alert.dispatch
       try {
-        const updated = await decideDispatch(
-          plan.planId,
-          decision,
-          plan.version,
-          `${plan.planId}-${plan.version}-${crypto.randomUUID()}`,
-          comment,
-        )
-        if (decision === 'APPROVE') {
-          this.alert = null
-        } else {
-          this.alert.dispatch = updated
-        }
+        await releaseWorkflowResources(workflowId, reason, expectedVersion)
       } catch (error) {
-        this.errorMessage = error instanceof Error ? error.message : '工单审批失败'
-        await this.refreshAfterAction()
+        this.errorMessage = error instanceof Error ? error.message : '已调度资源归还失败'
       } finally {
         this.actionBusy = false
       }
-      if (decision === 'APPROVE') await this.refresh()
+      await this.loadHistory(this.history?.page ?? 0)
     },
 
-    async refreshAfterAction() {
-      this.actionBusy = false
-      await this.refresh()
+    async runWorkflowAction(operation: () => Promise<void>) {
       this.actionBusy = true
+      this.errorMessage = ''
+      try {
+        await operation()
+        this.item = null
+      } catch (error) {
+        this.errorMessage = error instanceof Error ? error.message : '应急工作流操作失败'
+      } finally {
+        this.actionBusy = false
+      }
+      await this.refresh()
+    },
+
+    /** 旧接口只留给兼容测试或迁移诊断，不参与新版三级页面。 */
+    async refreshLegacyPending() {
+      return fetchNextEmergency()
     },
   },
 })

@@ -1,114 +1,206 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import type { CongestionLevel, TrafficQueryResult } from '../types/traffic'
+import { computed } from 'vue'
+import type { CapacityLevel, TrafficQueryResult, TrafficStatus } from '../types/traffic'
+import VehiclePatternCharts from './VehiclePatternCharts.vue'
 
 const props = defineProps<{ result: TrafficQueryResult; compact?: boolean }>()
 
-const levelText: Record<CongestionLevel, string> = {
-  UNKNOWN: '未知',
-  SMOOTH: '畅通',
-  SLOW: '缓行',
-  CONGESTED: '拥堵',
+const statusText: Record<TrafficStatus, string> = {
+  10: '畅通', 20: '轻度拥堵', 30: '中度拥堵', 40: '重度拥堵', 50: '堵塞',
+}
+const statusClass: Record<TrafficStatus, string> = {
+  10: 'smooth', 20: 'light_congestion', 30: 'moderate_congestion', 40: 'severe_congestion', 50: 'blocked',
+}
+const capacityClass: Record<CapacityLevel, string> = {
+  NORMAL: 'capacity-normal', BOTTLENECK: 'capacity-bottleneck', SEVERE_BOTTLENECK: 'capacity-severe',
 }
 
-const pageSize = 50
-const roadSearch = ref('')
-const levelFilter = ref<'ALL' | CongestionLevel>('ALL')
-const currentPage = ref(1)
-const isArea = computed(() => (props.result.queryScope ?? 'ROAD') !== 'ROAD')
-const areaScopeText = computed(() => props.result.queryScope === 'AREA_MAJOR' ? '主要道路' : '全体道路')
+const overview = computed(() => props.result.queryType === 'PROVINCE_OVERVIEW')
+const abnormal = computed(() => props.result.queryType === 'PROVINCE_ABNORMAL')
+const capacityQuery = computed(() => props.result.queryType.startsWith('CAPACITY_'))
+const regionalQuery = computed(() => [
+  'REGIONAL_TRAFFIC_OVERVIEW', 'CHECKPOINT_PRESSURE', 'CITY_PRESSURE', 'ROUTE_PRESSURE',
+].includes(props.result.queryType))
+const vehicleQuery = computed(() => props.result.queryType.startsWith('VEHICLE_'))
 
-const filteredSegments = computed(() => {
-  const keyword = roadSearch.value.trim().toLowerCase()
-  return props.result.segments.filter((segment) => {
-    const matchesRoad = !keyword || segment.roadName.toLowerCase().includes(keyword)
-    const matchesLevel = levelFilter.value === 'ALL' || segment.congestionLevel === levelFilter.value
-    return matchesRoad && matchesLevel
-  })
-})
+const hubRows = computed(() => props.result.hubRows ?? [])
+const regionRows = computed(() => props.result.regionPressureRows ?? [])
+const routePressureRows = computed(() => props.result.routePressureRows ?? [])
+const structureRows = computed(() => props.result.vehicleStructureRows ?? [])
+const timeFeatureRows = computed(() => props.result.vehicleTimeFeatureRows ?? [])
+const dayTypeRows = computed(() => props.result.vehicleDayTypeRows ?? [])
+const hourlySeries = computed(() => props.result.hourlyVehicleSeries ?? [])
+const regionScopeCount = computed(() => Math.max(
+  props.result.selectedRegions?.length ?? 0,
+  regionRows.value.length,
+))
+const hubSectionTitle = computed(() => rankedSectionTitle('高流量卡口枢纽', hubRows.value.length, 20, '个卡口'))
+const regionSectionTitle = computed(() => regionRows.value.length >= 5 && regionScopeCount.value > 5
+  ? '城市交通压力 Top5'
+  : `城市交通压力（${regionRows.value.length}个城市）`)
+const routeSectionTitle = computed(() => rankedSectionTitle('重点路线交通压力', routePressureRows.value.length, 10, '条路线'))
+const eyebrow = computed(() => regionalQuery.value ? '福建区域交通压力'
+  : vehicleQuery.value ? `${props.result.analysisCity ?? ''}车型出行特征` : '福建普通国省干线')
+const hasDisplayData = computed(() => capacityQuery.value
+  ? props.result.capacityRows.length > 0
+  : regionalQuery.value
+    ? hubRows.value.length + regionRows.value.length + routePressureRows.value.length > 0
+    : vehicleQuery.value
+      ? structureRows.value.length + timeFeatureRows.value.length + dayTypeRows.value.length + hourlySeries.value.length > 0
+      : overview.value ? props.result.routeSummaries.length > 0 : props.result.segments.length > 0)
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredSegments.value.length / pageSize)))
-const visibleSegments = computed(() => {
-  if (!isArea.value) return props.result.segments
-  const start = (currentPage.value - 1) * pageSize
-  return filteredSegments.value.slice(start, start + pageSize)
-})
-
-watch([roadSearch, levelFilter], () => { currentPage.value = 1 })
-watch(totalPages, (pages) => {
-  if (currentPage.value > pages) currentPage.value = pages
-})
+function formatNumber(value: number | null | undefined, digits = 2) {
+  return value == null ? '未提供' : value.toFixed(digits)
+}
+function formatInteger(value: number | null | undefined) {
+  return value == null ? '未提供' : value.toLocaleString('zh-CN')
+}
+function formatPercentage(value: number | null | undefined) {
+  return value == null ? '未提供' : `${(value * 100).toFixed(2)}%`
+}
+function rankedSectionTitle(label: string, displayedCount: number, limit: number, unit: string) {
+  return displayedCount >= limit ? `${label} Top${limit}` : `${label}（${displayedCount}${unit}）`
+}
 </script>
 
 <template>
-  <section class="traffic-answer" :class="{ 'area-traffic-answer': isArea }" aria-live="polite">
+  <section class="traffic-answer mysql-traffic-answer" aria-live="polite">
     <header class="traffic-answer-header">
       <div>
-        <p class="eyebrow">{{ isArea ? '区域交通态势' : '道路查询结果' }}</p>
-        <h2>{{ isArea ? result.areaName : result.roadName }}</h2>
-        <small v-if="isArea" class="scope-caption">查询范围：{{ areaScopeText }}</small>
+        <p class="eyebrow">{{ eyebrow }}</p>
+        <h2>{{ result.title }}</h2>
+        <small class="scope-caption">数据时间：{{ new Date(result.acquiredAt).toLocaleString('zh-CN') }}</small>
       </div>
     </header>
-
     <p v-if="!compact && result.summary" class="traffic-summary">{{ result.summary }}</p>
 
-    <div v-if="isArea && result.segments.length" class="area-list-tools">
-      <label>
-        <span class="sr-only">搜索道路名称</span>
-        <input v-model="roadSearch" type="search" placeholder="搜索道路名称" />
-      </label>
-      <label>
-        <span class="sr-only">筛选拥堵等级</span>
-        <select v-model="levelFilter">
-          <option value="ALL">全部状态</option>
-          <option value="CONGESTED">拥堵</option>
-          <option value="SLOW">缓行</option>
-          <option value="SMOOTH">畅通</option>
-          <option value="UNKNOWN">未知</option>
-        </select>
-      </label>
-      <span>已筛选 {{ filteredSegments.length }} 条</span>
-    </div>
+    <template v-if="regionalQuery">
+      <section v-if="hubRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">{{ hubSectionTitle }}</h3>
+        <div class="traffic-table-wrap">
+          <table class="traffic-table hub-pressure-table">
+            <thead><tr><th>卡口编号</th><th>所在路线</th><th>路线名称</th><th>均速</th><th>日均流量</th></tr></thead>
+            <tbody><tr v-for="row in hubRows" :key="row.checkpointNo">
+              <td data-label="卡口编号"><strong>{{ row.checkpointNo }}</strong></td>
+              <td data-label="所在路线">{{ row.routeCode }}</td><td data-label="路线名称">{{ row.routeName }}</td>
+              <td data-label="均速">{{ formatNumber(row.averageSpeedKmh) }} km/h</td>
+              <td data-label="日均流量"><strong>{{ formatInteger(row.dailyAverageFlow) }}</strong> 辆/日</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section v-if="regionRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">{{ regionSectionTitle }}</h3>
+        <div class="traffic-table-wrap">
+          <table class="traffic-table region-pressure-table">
+            <thead><tr><th>区域</th><th>活跃卡口数</th><th>日总流量</th><th>交通枢纽占比</th><th>解读</th></tr></thead>
+            <tbody><tr v-for="row in regionRows" :key="row.regionCode">
+              <td data-label="区域"><strong>{{ row.regionName }}</strong></td><td data-label="活跃卡口数">{{ row.activeHubCount }}</td>
+              <td data-label="日总流量">{{ formatInteger(row.totalDailyFlow) }} 辆/日</td>
+              <td data-label="交通枢纽占比">{{ formatPercentage(row.hubShareRatio) }}</td>
+              <td data-label="解读" class="row-interpretation">{{ row.interpretation }}</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section v-if="routePressureRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">{{ routeSectionTitle }}</h3>
+        <div class="traffic-table-wrap">
+          <table class="traffic-table route-pressure-table">
+            <thead><tr><th>路线编号</th><th>路线名称</th><th>日总流量</th><th>卡口数</th><th>均速</th></tr></thead>
+            <tbody><tr v-for="row in routePressureRows" :key="row.routeCode">
+              <td data-label="路线编号"><strong>{{ row.routeCode }}</strong></td><td data-label="路线名称">{{ row.routeName }}</td>
+              <td data-label="日总流量">{{ formatInteger(row.totalDailyFlow) }} 辆/日</td><td data-label="卡口数">{{ row.checkpointCount }}</td>
+              <td data-label="均速">{{ formatNumber(row.averageSpeedKmh) }} km/h</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </section>
+    </template>
 
-    <div v-if="visibleSegments.length" class="traffic-table-wrap">
-      <table class="traffic-table">
-        <thead>
-          <tr>
-            <th scope="col">道路名称</th>
-            <th scope="col">方向</th>
-            <th scope="col">拥堵程度</th>
-            <th scope="col">平均速度</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="(segment, index) in visibleSegments"
-            :key="`${segment.roadName}-${segment.direction}-${segment.polyline ?? index}`"
-          >
-            <td data-label="道路名称"><strong>{{ segment.roadName }}</strong></td>
-            <td data-label="方向">{{ segment.direction || '方向未提供' }}</td>
-            <td data-label="拥堵程度">
-              <span class="level" :class="segment.congestionLevel.toLowerCase()">
-                {{ levelText[segment.congestionLevel] }}
-              </span>
-            </td>
-            <td data-label="平均速度" class="speed">
-              {{ segment.averageSpeedKmh == null ? '速度未提供' : `${segment.averageSpeedKmh} km/h` }}
-            </td>
-          </tr>
-        </tbody>
+    <template v-else-if="vehicleQuery">
+      <section v-if="structureRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">车型结构占比</h3>
+        <div class="traffic-table-wrap"><table class="traffic-table vehicle-structure-table">
+          <thead><tr><th>车型</th><th>一周通行量</th><th>车型占比</th></tr></thead>
+          <tbody><tr v-for="row in structureRows" :key="row.vehicleType">
+            <td data-label="车型"><strong>{{ row.vehicleTypeName }}</strong></td><td data-label="一周通行量">{{ formatInteger(row.weeklyVolume) }} 辆</td>
+            <td data-label="车型占比">{{ formatPercentage(row.shareRatio) }}</td>
+          </tr></tbody>
+        </table></div>
+      </section>
+      <section v-if="timeFeatureRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">出行时间特征</h3>
+        <div class="traffic-table-wrap"><table class="traffic-table vehicle-time-table">
+          <thead><tr><th>车型</th><th>最高峰时段</th><th>峰值流量</th><th>早高峰占比</th><th>晚高峰占比</th><th>典型特征</th></tr></thead>
+          <tbody><tr v-for="row in timeFeatureRows" :key="row.vehicleType">
+            <td data-label="车型"><strong>{{ row.vehicleTypeName }}</strong></td><td data-label="最高峰时段">{{ row.peakHour }}</td>
+            <td data-label="峰值流量">{{ formatInteger(row.peakVolume) }} 辆</td><td data-label="早高峰占比">{{ formatPercentage(row.morningPeakRatio) }}</td>
+            <td data-label="晚高峰占比">{{ formatPercentage(row.eveningPeakRatio) }}</td><td data-label="典型特征" class="row-interpretation">{{ row.characteristic }}</td>
+          </tr></tbody>
+        </table></div>
+      </section>
+      <section v-if="dayTypeRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">工作日与周末车型通行量</h3>
+        <div class="traffic-table-wrap"><table class="traffic-table vehicle-daytype-table">
+          <thead><tr><th>车型</th><th>工作日5天合计</th><th>周末2天合计</th></tr></thead>
+          <tbody><tr v-for="row in dayTypeRows" :key="row.vehicleType">
+            <td data-label="车型"><strong>{{ row.vehicleTypeName }}</strong></td><td data-label="工作日5天合计">{{ formatInteger(row.weekdayVolume) }} 辆</td>
+            <td data-label="周末2天合计">{{ formatInteger(row.weekendVolume) }} 辆</td>
+          </tr></tbody>
+        </table></div>
+      </section>
+      <VehiclePatternCharts :structure-rows="structureRows" :hourly-series="hourlySeries" :day-type-rows="dayTypeRows" />
+    </template>
+
+    <div v-else-if="capacityQuery && result.capacityRows.length" class="traffic-table-wrap">
+      <table class="traffic-table capacity-table">
+        <thead><tr><th>评估等级</th><th>路线</th><th>名称</th><th>实际通行能力</th><th>设计通行能力</th><th>通行能力利用率</th></tr></thead>
+        <tbody><tr v-for="row in result.capacityRows" :key="row.routeCode">
+          <td data-label="评估等级"><span class="level" :class="capacityClass[row.capacityLevel]"><i class="status-dot" aria-hidden="true"></i>{{ row.capacityLevelName }}</span></td>
+          <td data-label="路线"><strong>{{ row.routeCode }}</strong></td><td data-label="名称">{{ row.routeName }}</td>
+          <td data-label="实际通行能力" class="capacity-value">{{ formatNumber(row.actualCapacityVph) }} 辆/小时</td>
+          <td data-label="设计通行能力" class="capacity-value">{{ formatNumber(row.designCapacityVph) }} 辆/小时</td>
+          <td data-label="通行能力利用率"><strong>{{ formatPercentage(row.utilizationRatio) }}</strong></td>
+        </tr></tbody>
       </table>
     </div>
-
-    <div v-else class="empty-result">
-      {{ result.segments.length ? '没有符合当前筛选条件的道路。' : '本次查询没有返回道路分段。' }}
+    <div v-else-if="overview && result.routeSummaries.length" class="traffic-table-wrap">
+      <table class="traffic-table"><thead><tr><th>路线</th><th>名称</th><th>均速</th><th>状态</th></tr></thead>
+        <tbody><tr v-for="route in result.routeSummaries" :key="route.routeCode">
+          <td data-label="路线"><strong>{{ route.routeCode }}</strong></td><td data-label="名称">{{ route.routeName }}</td>
+          <td data-label="均速" class="speed">{{ formatNumber(route.averageSpeedKmh) }} km/h</td>
+          <td data-label="状态"><span class="level" :class="statusClass[route.status]"><i class="status-dot" aria-hidden="true"></i>{{ statusText[route.status] }}</span></td>
+        </tr></tbody></table>
+    </div>
+    <div v-else-if="result.segments.length" class="traffic-table-wrap">
+      <table class="traffic-table"><thead>
+        <tr v-if="abnormal"><th>拥堵程度</th><th>路线</th><th>路段</th><th>距离</th><th>拥堵指数</th></tr>
+        <tr v-else><th>路线</th><th>名称</th><th>路段</th><th>状态</th><th>均速</th><th>距离</th><th>拥堵指数</th></tr>
+      </thead><tbody><tr v-for="segment in result.segments" :key="`${segment.routeCode}-${segment.routeSection}`">
+        <template v-if="abnormal">
+          <td data-label="拥堵程度"><span class="level" :class="statusClass[segment.status]"><i class="status-dot" aria-hidden="true"></i>{{ statusText[segment.status] }}</span></td>
+          <td data-label="路线"><strong>{{ segment.routeCode }}</strong></td><td data-label="路段">{{ segment.routeSection }}</td>
+          <td data-label="距离">{{ formatNumber(segment.distanceKm) }} km</td><td data-label="拥堵指数">{{ formatNumber(segment.severity) }}</td>
+        </template><template v-else>
+          <td data-label="路线"><strong>{{ segment.routeCode }}</strong></td><td data-label="名称">{{ segment.routeName }}</td><td data-label="路段">{{ segment.routeSection }}</td>
+          <td data-label="状态"><span class="level" :class="statusClass[segment.status]"><i class="status-dot" aria-hidden="true"></i>{{ statusText[segment.status] }}</span></td>
+          <td data-label="均速" class="speed">{{ formatNumber(segment.averageSpeedKmh) }} km/h</td><td data-label="距离">{{ formatNumber(segment.distanceKm) }} km</td>
+          <td data-label="拥堵指数">{{ formatNumber(segment.severity) }}</td>
+        </template>
+      </tr></tbody></table>
     </div>
 
-    <nav v-if="isArea && filteredSegments.length > pageSize" class="area-pagination" aria-label="道路分页">
-      <button :disabled="currentPage === 1" @click="currentPage--">上一页</button>
-      <span>第 {{ currentPage }} / {{ totalPages }} 页</span>
-      <button :disabled="currentPage === totalPages" @click="currentPage++">下一页</button>
-    </nav>
-
+    <div v-if="!hasDisplayData" class="empty-result">
+      {{ capacityQuery
+        ? (result.queryType === 'CAPACITY_BOTTLENECKS' ? '当前没有通行能力利用率低于80%的瓶颈路线。' : '本次查询没有返回可展示的通行能力数据。')
+        : regionalQuery ? '本次查询范围内没有可展示的卡口交通压力数据。'
+          : vehicleQuery ? '该城市暂无可展示的车型出行特征数据。'
+            : (abnormal ? '当前没有status≥20的拥堵异常路段。' : '本次查询没有返回可展示的交通数据。') }}
+    </div>
+    <p v-if="result.truncated && !regionalQuery && !vehicleQuery" class="traffic-truncated">
+      <template v-if="capacityQuery">共 {{ result.totalSegmentCount }} 条瓶颈路线，当前展示利用率最低的前 {{ result.displayedSegmentCount }} 条。</template>
+      <template v-else>共 {{ result.totalSegmentCount }} 条路段，当前展示拥堵程度较高的前 {{ result.displayedSegmentCount }} 条。</template>
+    </p>
   </section>
 </template>
