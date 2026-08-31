@@ -1,48 +1,54 @@
 package cn.fj.roadagent.interfaces.rest.traffic;
 
-import cn.fj.roadagent.application.traffic.Freshness;
-import cn.fj.roadagent.application.traffic.SummarySource;
-import cn.fj.roadagent.application.traffic.TrafficQueryResult;
+import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
+import cn.fj.roadagent.application.traffic.HighwayTrafficSegmentResultItem;
+import cn.fj.roadagent.application.traffic.RouteTrafficResultItem;
+import cn.fj.roadagent.application.traffic.RoadCapacityResultItem;
+import cn.fj.roadagent.application.traffic.SelectedRegionResultItem;
+import cn.fj.roadagent.application.traffic.TransportHubResultItem;
+import cn.fj.roadagent.application.traffic.RegionPressureResultItem;
+import cn.fj.roadagent.application.traffic.RoutePressureResultItem;
+import cn.fj.roadagent.application.traffic.VehicleStructureResultItem;
+import cn.fj.roadagent.application.traffic.VehicleTimeFeatureResultItem;
+import cn.fj.roadagent.application.traffic.VehicleDayTypeResultItem;
+import cn.fj.roadagent.application.traffic.HourlyVehicleFlowResultItem;
+import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 
 import java.time.Instant;
 import java.util.List;
 
 public record TrafficQueryResponse(
-        String areaCode,
-        String roadName,
-        String direction,
+        TrafficQueryType queryType,
+        String title,
         String summary,
-        SummarySource summarySource,
-        List<TrafficSegmentResponse> segments,
+        List<RouteTrafficResultItem> routeSummaries,
+        List<HighwayTrafficSegmentResultItem> segments,
+        List<RoadCapacityResultItem> capacityRows,
+        List<SelectedRegionResultItem> selectedRegions,
+        List<TransportHubResultItem> hubRows,
+        List<RegionPressureResultItem> regionPressureRows,
+        List<RoutePressureResultItem> routePressureRows,
+        String analysisCity,
+        List<VehicleStructureResultItem> vehicleStructureRows,
+        List<VehicleTimeFeatureResultItem> vehicleTimeFeatureRows,
+        List<VehicleDayTypeResultItem> vehicleDayTypeRows,
+        List<HourlyVehicleFlowResultItem> hourlyVehicleSeries,
+        int totalSegmentCount,
+        int displayedSegmentCount,
+        boolean truncated,
         String source,
         Instant acquiredAt,
-        Freshness freshness,
-        boolean mock,
-        List<String> warnings
+        List<String> warnings,
+        String traceId
 ) {
-    public static TrafficQueryResponse from(TrafficQueryResult result) {
-        List<TrafficSegmentResponse> segments = result.segments().stream()
-                .map(segment -> new TrafficSegmentResponse(
-                        segment.roadName(),
-                        segment.direction(),
-                        segment.congestionLevel(),
-                        segment.averageSpeedKmh(),
-                        segment.polyline()
-                ))
-                .toList();
-
+    public static TrafficQueryResponse from(HighwayTrafficResult result) {
         return new TrafficQueryResponse(
-                result.query().areaCode(),
-                result.query().roadName(),
-                result.query().direction(),
-                result.summary(),
-                result.summarySource(),
-                segments,
-                result.source(),
-                result.acquiredAt(),
-                result.freshness(),
-                result.mock(),
-                result.warnings()
+                result.queryType(), result.title(), result.summary(), result.routeSummaries(),
+                result.segments(), result.capacityRows(), result.selectedRegions(), result.hubRows(),
+                result.regionPressureRows(), result.routePressureRows(), result.analysisCity(),
+                result.vehicleStructureRows(), result.vehicleTimeFeatureRows(), result.vehicleDayTypeRows(),
+                result.hourlyVehicleSeries(), result.totalSegmentCount(), result.displayedSegmentCount(),
+                result.truncated(), result.source(), result.acquiredAt(), result.warnings(), result.traceId()
         );
     }
 }

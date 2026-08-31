@@ -100,12 +100,14 @@ class OpenAiCompatibleChatModelAdapterTest {
     @Test
     void shouldRepairInvalidStructuredJsonOnce() {
         AtomicInteger calls = new AtomicInteger();
+        AtomicReference<String> repairRequest = new AtomicReference<>();
         server.createContext("/chat/completions", exchange -> {
             if (calls.incrementAndGet() == 1) {
                 sendJson(exchange, """
                         {"choices":[{"message":{"content":"not-json"}}]}
                         """);
             } else {
+                repairRequest.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
                 sendJson(exchange, """
                         {"choices":[{"message":{"content":"{\\\"intent\\\":\\\"TRAFFIC_QUERY\\\"}"}}]}
                         """);
@@ -119,6 +121,9 @@ class OpenAiCompatibleChatModelAdapterTest {
 
         assertEquals("TRAFFIC_QUERY", result.intent());
         assertEquals(2, calls.get());
+        assertTrue(repairRequest.get().contains("上次响应不符合目标JSON数据结构"));
+        assertTrue(repairRequest.get().contains("not-json"));
+        assertTrue(repairRequest.get().contains("\"temperature\":0.0"));
     }
 
     @Test
@@ -134,6 +139,23 @@ class OpenAiCompatibleChatModelAdapterTest {
                 ));
 
         assertEquals("MODEL_INVALID_JSON", exception.errorCode());
+        assertEquals("模型连续两次返回的JSON不符合目标数据结构", exception.getMessage());
+    }
+
+    @Test
+    void strictStructuredOutputRepairsOnceAndStillRejectsInvalidResult() {
+        AtomicInteger requestCount = new AtomicInteger();
+        server.createContext("/chat/completions", exchange -> {
+            requestCount.incrementAndGet();
+            sendJson(exchange, """
+                    {"choices":[{"message":{"content":"not-json"}}]}
+                    """);
+        });
+        server.start();
+
+        assertThrows(ExternalServiceException.class, () -> adapter()
+                .generateStructuredStrict(new ModelRequest("system", "traffic facts", 0.1), IntentJson.class));
+        assertEquals(2, requestCount.get());
     }
 
     private OpenAiCompatibleChatModelAdapter adapter() {

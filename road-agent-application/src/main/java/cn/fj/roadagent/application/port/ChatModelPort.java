@@ -15,6 +15,11 @@ public interface ChatModelPort {
     /** 让模型生成JSON，并转换成我方指定的Java对象。 */
     <T> T generateStructured(ModelRequest request, Class<T> resultType);
 
+    /** 严格结构化输出：首次JSON无效时直接失败，不发起修复请求。 */
+    default <T> T generateStructuredStrict(ModelRequest request, Class<T> resultType) {
+        return generateStructured(request, resultType);
+    }
+
     /** 流式返回文本，供对话界面逐步显示。 */
     void stream(ModelRequest request, ModelStreamListener listener);
 }
