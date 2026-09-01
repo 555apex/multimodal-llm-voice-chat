@@ -73,7 +73,127 @@ cd C:\Users\Lenovo\Desktop\DGX_S534\multimodal-llm-voice-chat-dgx
 
 页面仍显示旧内容时按 `Ctrl+F5` 强制刷新。
 
-## 4. 手工启动流程
+## 4. Windows 本机运行合并后的源码
+
+本节用于在 Windows 上修改和调试最新版合并代码。运行关系如下：
+
+```text
+Windows Vite（5173）──/api──> Windows Java（8080）
+                                  ├── Tailscale ──> DGX Qwen（8001）
+                                  └── 外部共享 MySQL
+```
+
+此模式下 Agent 仍使用 DGX 本地的 `qwen3.6-35b-a3b-nvfp4`，不会调用 DeepSeek 或其他外部大模型。DGX Speech 容器不发布宿主机端口，因此本机源码调试默认关闭语音；需要同时测试 ASR/TTS 时，使用第 2 节的一键启动方式访问 DGX 完整服务。
+
+### 4.1 本机准备
+
+安装并确认以下工具可用：
+
+- JDK 17；
+- Node.js 20 或更高版本及 npm；
+- PowerShell 5.1 或 PowerShell 7；
+- 能通过 Tailscale 访问 DGX 的 `100.119.145.78:8001`；
+- 能访问项目使用的共享 MySQL。
+
+在 PowerShell 中检查版本：
+
+```powershell
+java -version
+node --version
+npm --version
+```
+
+`java -version` 应显示 17，Node.js 应为 20 或更高版本。
+
+首次运行时，在项目根目录创建本机私密配置：
+
+```powershell
+cd C:\Users\Lenovo\Desktop\DGX_S534\multimodal-llm-voice-chat-dgx
+if (-not (Test-Path .\config\api-test.ps1)) {
+    Copy-Item .\config\api-test.ps1.example .\config\api-test.ps1
+}
+notepad .\config\api-test.ps1
+```
+
+只填写真实的 `ROADAGENT_DB_URL`、`ROADAGENT_DB_USERNAME` 和 `ROADAGENT_DB_PASSWORD`。`config/api-test.ps1` 已被 Git 忽略，不要把密码写入示例文件或提交到仓库。
+
+### 4.2 检查本机到 DGX Qwen 的连接
+
+DGX 的 Qwen 端口只绑定在 Tailscale 地址上。启动本机后端前执行：
+
+```powershell
+$qwenModels = Invoke-RestMethod `
+  -Uri 'http://100.119.145.78:8001/v1/models' `
+  -TimeoutSec 15
+$qwenModels.data.id
+```
+
+正常应输出 `qwen3.6-35b-a3b-nvfp4`。如果连接失败，先确认本机 Tailscale 已连接，再在 DGX 执行 `deploy/dgx/dgx-stack status`；不要重复启动或切换模型。
+
+### 4.3 启动本机 Java 后端
+
+打开第二个 PowerShell 窗口：
+
+```powershell
+cd C:\Users\Lenovo\Desktop\DGX_S534\multimodal-llm-voice-chat-dgx
+. .\config\api-test.ps1
+
+$env:ROADAGENT_MODEL_PROVIDER = 'openai-compatible'
+$env:ROADAGENT_MODEL_ENDPOINT = 'http://100.119.145.78:8001/v1/chat/completions'
+$env:ROADAGENT_MODEL_NAME = 'qwen3.6-35b-a3b-nvfp4'
+$env:ROADAGENT_MODEL_AUTH_ENABLED = 'false'
+$env:ROADAGENT_MODEL_ENABLE_THINKING = 'false'
+$env:ROADAGENT_SPEECH_ENABLED = 'false'
+Remove-Item Env:ROADAGENT_MODEL_API_KEY -ErrorAction SilentlyContinue
+
+.\mvnw.cmd -B -DskipTests package
+$roadAgentJar = Get-ChildItem .\road-agent-boot\target\road-agent-boot-*.jar |
+    Where-Object Name -NotLike '*.original' |
+    Select-Object -First 1
+java -jar $roadAgentJar.FullName
+```
+
+看到后端在 `8080` 端口启动后保持该窗口运行。上述覆盖项必须放在加载私密配置之后，以保证本机不会沿用示例中的外部模型设置。
+
+### 4.4 启动本机前端并查看
+
+打开第三个 PowerShell 窗口：
+
+```powershell
+cd C:\Users\Lenovo\Desktop\DGX_S534\multimodal-llm-voice-chat-dgx\frontend
+npm ci
+npm run dev -- --host 127.0.0.1
+```
+
+浏览器访问：
+
+- 本机开发主页面：<http://127.0.0.1:5173/>
+- 本机开发数字人演示：<http://127.0.0.1:5173/digital-human-demo.html>
+
+Vite 会把 `/api` 自动转发到本机 `8080` 后端。可以测试 MySQL 交通查询、Agent 对话、三级待办和大屏页面；语音能力显示不可用是本机源码模式的预期结果。
+
+### 4.5 本机测试与关闭
+
+执行后端测试：
+
+```powershell
+cd C:\Users\Lenovo\Desktop\DGX_S534\multimodal-llm-voice-chat-dgx
+.\mvnw.cmd test
+```
+
+执行前端测试与生产构建：
+
+```powershell
+cd C:\Users\Lenovo\Desktop\DGX_S534\multimodal-llm-voice-chat-dgx\frontend
+npm test
+npm run build
+```
+
+关闭时，在前端和后端两个 PowerShell 窗口中分别按 `Ctrl+C`。这不会停止 DGX 上的 Qwen、Open WebUI 或 Road Agent 容器。
+
+> 不要在 Windows 上直接运行 `deploy/dgx/compose.yaml`。Speech 镜像、NVIDIA 运行时和 `/home/whtc/models` 只读挂载均针对 DGX ARM64/GB10 环境；Windows 上需要完整语音能力时请使用第 2 节的 SSH 隧道访问 DGX 完整服务。
+
+## 5. 手工启动流程
 
 登录 DGX：
 
@@ -105,7 +225,7 @@ deploy/dgx/dgx-stack up
 - 等待 Qwen 健康后启动 Backend、Speech 和 Frontend；
 - 只将前端绑定到 DGX 的 `127.0.0.1:18080`。
 
-## 5. 最新版首次同步与数据库迁移
+## 6. 最新版首次同步与数据库迁移
 
 从 Windows 同步代码，默认保留 DGX 已有 `.env`：
 
@@ -140,7 +260,7 @@ deploy/dgx/dgx-stack up
 deploy/dgx/dgx-stack db-restore 20260901T120000Z --confirm=20260901T120000Z
 ```
 
-## 6. 标准测试命令
+## 7. 标准测试命令
 
 基础测试：
 
@@ -164,7 +284,7 @@ deploy/dgx/dgx-stack smoke --tts-concurrency 2 --test-speech-limits
 
 这些命令会验证 Qwen 模型名、普通响应、SSE、严格 JSON、交通意图/摘要、资源需求/调度方案、Serena MP3、四类 MySQL 交通查询、三级待办和 Agent SSE。
 
-## 7. 状态与日志
+## 8. 状态与日志
 
 ```bash
 deploy/dgx/dgx-stack status
@@ -181,7 +301,7 @@ cd /home/whtc/workspace/projects/model-serving
 scripts/model-stack logs qwen
 ```
 
-## 8. 关闭服务
+## 9. 关闭服务
 
 只关闭 Windows 浏览器隧道，不停止 DGX 服务：
 
@@ -214,7 +334,7 @@ scripts/model-stack stop
 
 日常关闭 Road Agent 不要执行 `model-stack stop-all`，它会影响 Open WebUI 和其他模型用户。
 
-## 9. 常见问题
+## 10. 常见问题
 
 ### 页面提示 `MODEL_UPSTREAM_ERROR`
 
