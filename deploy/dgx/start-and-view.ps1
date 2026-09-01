@@ -73,7 +73,7 @@ if (-not $SkipRemoteStart) {
         "deploy/dgx/dgx-stack status"
     )
     if (-not $SkipSmoke) {
-        $RemoteCommands += "deploy/dgx/dgx-stack smoke --model-iterations 3 --with-tts --with-traffic --with-agent"
+        $RemoteCommands += "deploy/dgx/dgx-stack smoke --model-iterations 3 --with-tts --with-traffic --with-workflow --with-agent"
     }
 
     & ssh -i $ResolvedIdentity -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=10 `

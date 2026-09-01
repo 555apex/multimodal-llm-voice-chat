@@ -1,44 +1,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { queryRealtimeTraffic, TrafficApiError } from './trafficApi'
+import { queryHighwayTraffic, TrafficApiError } from './trafficApi'
 
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
+afterEach(() => vi.unstubAllGlobals())
 
-describe('queryRealtimeTraffic', () => {
-  it('returns the standard API envelope', async () => {
-    const payload = {
-      code: 'OK',
-      message: 'success',
-      traceId: 'trace-1',
-      timestamp: '2026-07-17T08:00:00Z',
-      data: { roadName: '五四路' },
-    }
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+describe('queryHighwayTraffic', () => {
+  it('posts the unified MySQL traffic contract', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => payload,
+      json: async () => ({ code: 'OK', message: 'success', data: { source: 'MYSQL' }, traceId: 'trace-1' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const response = await queryHighwayTraffic({
+      queryType: 'CITY_PAIR', originCity: '宁德市', destinationCity: '福州市',
+    })
+
+    expect(response.data.source).toBe('MYSQL')
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/traffic/queries', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({
+        queryType: 'CITY_PAIR', originCity: '宁德市', destinationCity: '福州市',
+      }),
     }))
-
-    const result = await queryRealtimeTraffic({ areaCode: '350100', roadName: '五四路' })
-
-    expect(result.traceId).toBe('trace-1')
-    expect(fetch).toHaveBeenCalledWith('/api/v1/traffic/queries', expect.objectContaining({ method: 'POST' }))
   })
 
-  it('converts backend errors into a readable exception', async () => {
+  it('surfaces backend refreshing errors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
-      json: async () => ({ code: 'AMAP_AUTH_OR_PERMISSION_ERROR', message: '高德Key无权限', traceId: 'trace-2' }),
+      json: async () => ({
+        code: 'TRAFFIC_DATA_REFRESHING', message: '交通数据正在更新', traceId: 'trace-2',
+      }),
     }))
 
-    try {
-      await queryRealtimeTraffic({ areaCode: '350100', roadName: '五四路' })
-      throw new Error('expected query to fail')
-    } catch (error) {
-      expect(error).toBeInstanceOf(TrafficApiError)
-      const apiError = error as TrafficApiError
-      expect(apiError.code).toBe('AMAP_AUTH_OR_PERMISSION_ERROR')
-      expect(apiError.traceId).toBe('trace-2')
-    }
+    await expect(queryHighwayTraffic({ queryType: 'PROVINCE_OVERVIEW' }))
+      .rejects.toMatchObject({
+        code: 'TRAFFIC_DATA_REFRESHING', traceId: 'trace-2',
+      } satisfies Partial<TrafficApiError>)
   })
 })

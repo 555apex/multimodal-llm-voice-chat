@@ -39,37 +39,9 @@ roadagent:
 
   # ===== 交通数据源配置 =====
   traffic:
-    # 当前运行时只使用amap（高德真实API）。未来甲方数据接入时增加新的Adapter。
-    provider: ${ROADAGENT_TRAFFIC_PROVIDER:amap}
-
-    # 数据过期阈值，单位：分钟。数据超过这个时间没更新就标记为 STALE
-    stale-after-minutes: ${ROADAGENT_TRAFFIC_STALE_AFTER_MINUTES:5}
-
-    # ===== 高德地图API配置（仅 provider=amap 时生效） =====
-    amap:
-      # 高德交通态势API地址（Web服务API v3）
-      endpoint: ${AMAP_TRAFFIC_ENDPOINT:https://restapi.amap.com/v3/traffic/status/road}
-      # 行政区区域交通使用矩形态势接口
-      area-endpoint: ${AMAP_AREA_TRAFFIC_ENDPOINT:https://restapi.amap.com/v3/traffic/status/rectangle}
-      # 根据市、区、县名称取得可信adcode和行政边界
-      district-endpoint: ${AMAP_DISTRICT_ENDPOINT:https://restapi.amap.com/v3/config/district}
-      # 高德API密钥，在 console.amap.com 注册应用后获取
-      # 默认值为空，使用高德时必须设置环境变量 AMAP_API_KEY
-      api-key: ${AMAP_API_KEY:}
-      # 道路等级过滤：1=高速 2=国道 3=省道 4=县道 5=全部（默认查所有级别道路）
-      road-level: ${AMAP_ROAD_LEVEL:5}
-      # HTTP请求超时时间，单位：秒
-      timeout-seconds: ${AMAP_TIMEOUT_SECONDS:8}
-      # 区域矩形边长约6公里，对角线低于高德10公里限制
-      area-tile-size-km: ${AMAP_AREA_TILE_SIZE_KM:6}
-      # 防止异常边界产生无限请求
-      area-max-tiles: ${AMAP_AREA_MAX_TILES:500}
-      # 同一行政区内并发请求数
-      area-concurrency: ${AMAP_AREA_CONCURRENCY:4}
-      # 区域路况短时缓存，避免连续提问重复采集
-      area-cache-seconds: ${AMAP_AREA_CACHE_SECONDS:120}
-      # 行政边界变化很少，开发阶段缓存24小时
-      district-cache-hours: ${AMAP_DISTRICT_CACHE_HOURS:24}
+    # MySQL为唯一交通数据源。路况和通行能力使用互相独立的快照，已有完整旧批次冷启动立即发布。
+    snapshot-poll-seconds: ${ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS:5}
+    snapshot-stable-seconds: ${ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS:30}
 
   # ===== 大模型配置 =====
   model:

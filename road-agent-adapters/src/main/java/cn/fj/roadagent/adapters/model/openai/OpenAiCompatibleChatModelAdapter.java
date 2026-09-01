@@ -26,7 +26,7 @@ import java.util.stream.Stream;
 
 /**
  * 直接调用OpenAI兼容HTTP接口，不依赖LangChain。
- * DeepSeek和未来兼容OpenAI协议的服务器模型都可以使用该适配器。
+ * DGX 本地 Qwen 和其他兼容 OpenAI 协议的服务器模型都可以使用该适配器。
  */
 public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenAiCompatibleChatModelAdapter.class);
@@ -60,6 +60,20 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         this.requestTimeout = requestTimeout;
     }
 
+    /** 保留未配置 Qwen thinking 参数的 OpenAI-compatible 调用方式。 */
+    public OpenAiCompatibleChatModelAdapter(
+            HttpClient httpClient,
+            ObjectMapper objectMapper,
+            String endpoint,
+            String apiKey,
+            String modelName,
+            boolean authEnabled,
+            Duration requestTimeout
+    ) {
+        this(httpClient, objectMapper, endpoint, apiKey, modelName,
+                authEnabled, null, requestTimeout);
+    }
+
     @Override
     public ModelResponse generate(ModelRequest request) {
         String content = complete(request, false);
@@ -72,22 +86,31 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         try {
             return objectMapper.readValue(cleanJson(first), resultType);
         } catch (JsonProcessingException firstException) {
-            // 仅修复一次格式，不用规则内容代替模型结果。
+            // 仅修复一次格式；把具体字段错误和原响应反馈给模型，避免重复相同错误。
             ModelRequest repairRequest = new ModelRequest(
                     request.systemPrompt(),
-                    request.userPrompt() + "\n\n上次输出无法解析。请重新输出严格JSON，不要使用Markdown代码块。",
+                    request.userPrompt() + repairInstruction(first, firstException, resultType),
                     request.history(),
-                    request.temperature()
+                    0.0
             );
             String repaired = complete(repairRequest, true);
             try {
                 return objectMapper.readValue(cleanJson(repaired), resultType);
             } catch (JsonProcessingException secondException) {
                 throw new ExternalServiceException(
-                        "CHAT_MODEL", "MODEL_INVALID_JSON", "模型连续两次没有返回有效JSON", secondException
+                        // 保留既有错误码，避免破坏已按错误码处理的客户端。
+                        "CHAT_MODEL", "MODEL_INVALID_JSON",
+                        "模型连续两次返回的JSON不符合目标数据结构", secondException
                 );
             }
         }
+    }
+
+    @Override
+    public <T> T generateStructuredStrict(ModelRequest request, Class<T> resultType) {
+        // “严格”表示最终结果必须通过目标类型校验且绝不发布半成品；首次响应仅有
+        // JSON结构、句数或字段格式偏差时，允许在服务端静默修复一次再作最终判定。
+        return generateStructured(request, resultType);
     }
 
     @Override
@@ -233,6 +256,38 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
                     .replaceFirst("\\s*```$", "");
         }
         return cleaned;
+    }
+
+    private String repairInstruction(
+            String invalidContent,
+            JsonProcessingException exception,
+            Class<?> resultType
+    ) {
+        return """
+
+
+                上次响应不符合目标JSON数据结构，请根据下面的解析反馈完整重写。
+                目标类型：%s
+                解析反馈：%s
+                上次响应：
+                %s
+                只输出修复后的严格JSON对象，不要解释，不要使用Markdown代码块。
+                """.formatted(
+                resultType.getSimpleName(),
+                truncate(singleLine(exception.getOriginalMessage()), 1000),
+                truncate(invalidContent, 6000)
+        );
+    }
+
+    private String singleLine(String value) {
+        return value == null ? "未知结构错误" : value.replaceAll("[\\r\\n]+", " ").trim();
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value == null ? "" : value;
+        }
+        return value.substring(0, maxLength) + "…";
     }
 
     private void requireSuccess(int statusCode, String message) {

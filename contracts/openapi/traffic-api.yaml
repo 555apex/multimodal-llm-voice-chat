@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: 福建应急交通Agent API
-  version: 0.5.0
-  description: 对话式道路交通查询、数据库异常事件应急调度和Docker语音服务接口
+  version: 0.9.0
+  description: 对话式道路交通查询、福建九市库存资源调度、三级上报与通告、Docker语音服务接口
 servers:
   - url: http://localhost:8080
 paths:
@@ -24,7 +24,7 @@ paths:
             schema:
               $ref: '#/components/schemas/AgentMessageRequest'
             example:
-              message: 福州五四路现在堵吗
+              message: 福建省哪些国省道路段处于拥堵异常状态
       responses:
         '200':
           description: |
@@ -37,7 +37,7 @@ paths:
                 type: string
               example: |-
                 event: answer.delta
-                data: {"content":"五四路当前"}
+                data: {"content":"当前福建国省干线异常路段已按拥堵程度排序。未来1至2小时，预计重点路段可能持续拥堵。"}
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -200,8 +200,8 @@ paths:
 
   /api/v1/dispatches/{planId}/approvals:
     post:
-      summary: 批准或驳回调度方案
-      description: 批准会结束事件；驳回必须填写意见并生成下一版本。聊天文字不能审批。
+      summary: 兼容旧版的一级上报或返工接口
+      description: APPROVE仅代表一级确认并上报二级，不会办结事件；REJECT填写意见后生成新版本。
       operationId: approveDispatchPlan
       parameters:
         - $ref: '#/components/parameters/PlanId'
@@ -219,7 +219,7 @@ paths:
               idempotencyKey: browser-generated-uuid
       responses:
         '200':
-          description: 批准后状态为APPROVED；驳回后返回新生成的WAITING_APPROVAL版本
+          description: 上报后方案仍为WAITING_APPROVAL；返工后返回新生成的WAITING_APPROVAL版本
           content:
             application/json:
               schema:
@@ -235,10 +235,173 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/emergency-workflows/inbox:
+    get:
+      summary: 查询指定层级最早待办及三级数量
+      operationId: getEmergencyWorkflowInbox
+      parameters:
+        - in: query
+          name: stage
+          required: true
+          schema:
+            $ref: '#/components/schemas/WorkflowStage'
+      responses:
+        '200':
+          description: 待办为空时item为null，counts仍返回
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowInboxApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/emergency-workflows/{workflowId}/level-1-decisions:
+    post:
+      summary: 一级现场席位上报或驳回AI返工
+      operationId: decideEmergencyWorkflowLevel1
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Level1DecisionRequest'
+      responses:
+        '200':
+          description: 更新后的完整工作流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyWorkflowApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/emergency-workflows/{workflowId}/professional-reviews:
+    post:
+      summary: 二级市交通应急办专业复核
+      operationId: reviewEmergencyWorkflow
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfessionalReviewRequest'
+      responses:
+        '200':
+          description: 更新后的完整工作流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyWorkflowApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/emergency-workflows/{workflowId}/command-decisions:
+    post:
+      summary: 三级省级决策退回或批准并形成通告
+      operationId: decideEmergencyWorkflowCommand
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommandDecisionRequest'
+      responses:
+        '200':
+          description: 批准时包含不可修改的noticeSnapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyWorkflowApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/emergency-workflows/{workflowId}/resource-releases:
+    post:
+      summary: 已通告工作流整单归还已调度资源
+      description: 最终通告快照保持不变；库存由已调度恢复为可用，原因和幂等键写入动作流水。
+      operationId: releaseEmergencyWorkflowResources
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResourceReleaseRequest'
+      responses:
+        '200':
+          description: 归还后的完整工作流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyWorkflowApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /api/v1/emergency-workflows/history:
+    get:
+      summary: 分页查询已通告和无需调度记录
+      operationId: getEmergencyWorkflowHistory
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: 办结工作流和完整时间线
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowHistoryApiResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/emergency-workflows/{workflowId}:
+    get:
+      summary: 查询单个工作流及完整时间线
+      operationId: getEmergencyWorkflow
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      responses:
+        '200':
+          description: 完整工作流
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyWorkflowApiResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/v1/traffic/queries:
     post:
-      summary: 使用结构化参数查询实时路况（兼容接口）
-      operationId: queryRealtimeTraffic
+      summary: 使用结构化参数查询MySQL交通业务数据
+      description: 支持国省干线路况与通行能力、区域卡口/城市/路线交通压力，以及福州或厦门车型出行特征。两城市区域分析使用两市卡口并集，不表示OD流量。模型轻微格式偏差会修复或按结构化事实安全规范化；模型服务不可用或连续返回不可解析结构时整次请求失败。
+      operationId: queryHighwayTraffic
       parameters:
         - $ref: '#/components/parameters/TraceId'
       requestBody:
@@ -248,9 +411,9 @@ paths:
             schema:
               $ref: '#/components/schemas/TrafficQueryRequest'
             example:
-              areaCode: '350100'
-              roadName: 五四路
-              direction: 南向北
+              queryType: CITY_PAIR
+              originCity: 宁德市
+              destinationCity: 福州市
       responses:
         '200':
           description: 查询及模型总结完成
@@ -261,40 +424,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '502':
-          description: 高德或模型服务失败
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/v1/traffic/area-queries:
-    post:
-      summary: 使用结构化参数查询行政区交通态势
-      description: AREA_ALL查全体命名道路，AREA_MAJOR按高德道路等级4查主要道路。
-      operationId: queryAreaTraffic
-      parameters:
-        - $ref: '#/components/parameters/TraceId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AreaTrafficQueryRequest'
-            example:
-              city: 厦门
-              areaName: 思明区
-              scope: AREA_ALL
-      responses:
-        '200':
-          description: 区域路况摘要、Java统计指标、分片覆盖率和全部去重路段
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AreaTrafficApiResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '502':
-          description: 高德或模型服务失败
+          description: MySQL快照尚未发布、数据库不可用或模型服务/结构连续失败
           content:
             application/json:
               schema:
@@ -315,6 +445,12 @@ components:
       required: true
       schema:
         type: string
+    WorkflowId:
+      in: path
+      name: workflowId
+      required: true
+      schema:
+        type: string
     EventId:
       in: path
       name: eventId
@@ -332,7 +468,13 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     NotFound:
-      description: 事件或调度方案不存在
+      description: 事件、调度方案或工作流不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 工作流版本、幂等键或当前阶段冲突
       content:
         application/json:
           schema:
@@ -378,132 +520,231 @@ components:
 
     TrafficQueryRequest:
       type: object
-      required: [areaCode, roadName]
+      required: [queryType]
       properties:
-        areaCode:
+        queryType:
           type: string
-          pattern: '^\d{6}$'
-        roadName:
-          type: string
-          maxLength: 100
-        direction:
+          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON]
+        originCity:
           type: [string, 'null']
-          maxLength: 50
+          maxLength: 20
+        destinationCity:
+          type: [string, 'null']
+          maxLength: 20
+        routeCode:
+          type: [string, 'null']
+          maxLength: 20
+        routeName:
+          type: [string, 'null']
+          maxLength: 100
+        selectedCities:
+          type: array
+          maxItems: 2
+          items: { type: string, maxLength: 20 }
+          description: 区域交通压力筛选城市；为空时统计全省，一至两个城市时统计所选城市卡口并集
+        analysisCity:
+          type: [string, 'null']
+          maxLength: 20
+          description: 车型出行特征查询城市，本期为福州市或厦门市
 
-    AreaTrafficQueryRequest:
+    TrafficStatus:
+      type: integer
+      description: 数据库原生五级状态：10畅通、20轻度拥堵、30中度拥堵、40重度拥堵、50堵塞
+      enum: [10, 20, 30, 40, 50]
+
+    RouteTrafficSummary:
       type: object
-      required: [city, areaName, scope]
+      required: [routeCode, routeName, averageSpeedKmh, status, statusName]
       properties:
-        city:
-          type: string
-          maxLength: 30
-        areaName:
-          type: string
-          maxLength: 50
-        scope:
-          type: string
-          enum: [AREA_ALL, AREA_MAJOR]
+        routeCode: { type: string }
+        routeName: { type: string }
+        averageSpeedKmh: { type: number, minimum: 0 }
+        status: { $ref: '#/components/schemas/TrafficStatus' }
+        statusName: { type: string }
 
     TrafficSegment:
       type: object
-      required: [roadName, direction, congestionLevel]
+      required: [routeCode, routeName, routeSection, distanceKm, averageSpeedKmh, status, statusName, severity]
       properties:
-        roadName:
-          type: string
-        direction:
-          type: string
-        congestionLevel:
-          type: string
-          enum: [UNKNOWN, SMOOTH, SLOW, CONGESTED]
-        averageSpeedKmh:
+        routeCode: { type: string }
+        routeName: { type: string }
+        routeSection: { type: string }
+        distanceKm:
           type: [number, 'null']
-        polyline:
-          type: [string, 'null']
+          minimum: 0
+        averageSpeedKmh: { type: number, minimum: 0 }
+        status: { $ref: '#/components/schemas/TrafficStatus' }
+        statusName: { type: string }
+        severity: { type: number, minimum: 0, maximum: 1 }
+
+    CapacityLevel:
+      type: string
+      description: 项目三级评估口径：利用率不低于0.80正常，大于0.30且低于0.80瓶颈，不高于0.30严重瓶颈
+      enum: [NORMAL, BOTTLENECK, SEVERE_BOTTLENECK]
+
+    RoadCapacityRow:
+      type: object
+      required: [routeCode, routeName, actualCapacityVph, designCapacityVph, utilizationRatio, capacityLevel, capacityLevelName]
+      properties:
+        routeCode: { type: string }
+        routeName: { type: string }
+        actualCapacityVph:
+          type: number
+          minimum: 0
+          description: 直接取w_road_capacity.avg_previous_hour，单位辆/小时
+        designCapacityVph:
+          type: number
+          minimum: 0
+          description: 直接取w_road_capacity.design_flow，单位辆/小时
+        utilizationRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 直接取w_road_capacity.utilization_perc
+        capacityLevel: { $ref: '#/components/schemas/CapacityLevel' }
+        capacityLevelName: { type: string, enum: [正常, 瓶颈, 严重瓶颈] }
+
+    SelectedRegion:
+      type: object
+      required: [regionCode, regionName]
+      properties:
+        regionCode: { type: string }
+        regionName: { type: string }
+
+    TransportHubRow:
+      type: object
+      required: [checkpointNo, routeCode, routeName, averageSpeedKmh, dailyAverageFlow]
+      properties:
+        checkpointNo: { type: string }
+        routeCode: { type: string }
+        routeName: { type: string }
+        averageSpeedKmh: { type: number, minimum: 0 }
+        dailyAverageFlow: { type: integer, minimum: 0, description: 辆/日 }
+
+    RegionPressureRow:
+      type: object
+      required: [regionCode, regionName, activeHubCount, totalDailyFlow, hubShareRatio, interpretation]
+      properties:
+        regionCode: { type: string }
+        regionName: { type: string }
+        activeHubCount: { type: integer, minimum: 0, description: daily_avg_flow大于100的卡口数 }
+        totalDailyFlow: { type: integer, minimum: 0 }
+        hubShareRatio: { type: number, minimum: 0, maximum: 1, description: 城市活跃卡口数除以当前查询范围全部卡口数 }
+        interpretation: { type: string }
+
+    RoutePressureRow:
+      type: object
+      required: [routeCode, routeName, totalDailyFlow, checkpointCount, averageSpeedKmh]
+      properties:
+        routeCode: { type: string }
+        routeName: { type: string }
+        totalDailyFlow: { type: integer, minimum: 0 }
+        checkpointCount: { type: integer, minimum: 0 }
+        averageSpeedKmh: { type: number, minimum: 0 }
+
+    VehicleStructureRow:
+      type: object
+      required: [vehicleType, vehicleTypeName, weeklyVolume, shareRatio]
+      properties:
+        vehicleType: { type: string, enum: [CAR, BUS, TRUCK] }
+        vehicleTypeName: { type: string, enum: [小型客车, 中型客车, 大型货车] }
+        weeklyVolume: { type: integer, minimum: 0 }
+        shareRatio: { type: number, minimum: 0, maximum: 1 }
+
+    VehicleTimeFeatureRow:
+      type: object
+      required: [vehicleType, vehicleTypeName, peakHour, peakVolume, morningPeakRatio, eveningPeakRatio, characteristic]
+      properties:
+        vehicleType: { type: string, enum: [CAR, BUS, TRUCK] }
+        vehicleTypeName: { type: string }
+        peakHour: { type: string }
+        peakVolume: { type: integer, minimum: 0 }
+        morningPeakRatio: { type: number, minimum: 0, maximum: 1 }
+        eveningPeakRatio: { type: number, minimum: 0, maximum: 1 }
+        characteristic: { type: string }
+
+    VehicleDayTypeRow:
+      type: object
+      required: [vehicleType, vehicleTypeName, weekdayVolume, weekendVolume]
+      properties:
+        vehicleType: { type: string, enum: [CAR, BUS, TRUCK] }
+        vehicleTypeName: { type: string }
+        weekdayVolume: { type: integer, minimum: 0, description: 工作日5天合计 }
+        weekendVolume: { type: integer, minimum: 0, description: 周末2天合计 }
+
+    HourlyVehicleFlow:
+      type: object
+      required: [hour, car, bus, truck]
+      properties:
+        hour: { type: string, pattern: '^([01][0-9]|2[0-3]):00$' }
+        car: { type: integer, minimum: 0 }
+        bus: { type: integer, minimum: 0 }
+        truck: { type: integer, minimum: 0 }
 
     TrafficQueryResult:
       type: object
-      required: [areaCode, roadName, summary, summarySource, segments, source, acquiredAt, freshness, mock, warnings]
+      required: [queryType, title, summary, routeSummaries, segments, capacityRows, selectedRegions, hubRows, regionPressureRows, routePressureRows, vehicleStructureRows, vehicleTimeFeatureRows, vehicleDayTypeRows, hourlyVehicleSeries, totalSegmentCount, displayedSegmentCount, truncated, source, acquiredAt, warnings, traceId]
       properties:
-        areaCode:
+        queryType:
           type: string
-        roadName:
-          type: string
-        direction:
-          type: [string, 'null']
+          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON]
+        title: { type: string }
         summary:
           type: string
-        summarySource:
-          type: string
-          enum: [MODEL, DETERMINISTIC]
-        segments:
+          description: 路况查询通常为3至4句当前态势摘要加1句未来1至2小时定性趋势，容量查询通常为3至5句研判；服务允许少量句数、标点和同义写法差异。趋势属于基于当前路况事实与模型常识的启发式研判，不是精确交通预测模型
+        routeSummaries:
           type: array
-          items:
-            $ref: '#/components/schemas/TrafficSegment'
-        source:
-          type: string
-          examples: [AMAP]
-        acquiredAt:
-          type: string
-          format: date-time
-        freshness:
-          type: string
-          enum: [FRESH, STALE, UNKNOWN]
-        mock:
-          type: boolean
-          const: false
-        warnings:
-          type: array
-          items:
-            type: string
-
-    TrafficEvaluation:
-      type: object
-      required: [totalSegments, smoothSegments, slowSegments, congestedSegments, unknownSegments, smoothRatio, slowRatio, congestedRatio, unknownRatio]
-      properties:
-        totalSegments: { type: integer, minimum: 0 }
-        smoothSegments: { type: integer, minimum: 0 }
-        slowSegments: { type: integer, minimum: 0 }
-        congestedSegments: { type: integer, minimum: 0 }
-        unknownSegments: { type: integer, minimum: 0 }
-        smoothRatio: { type: number, minimum: 0, maximum: 1 }
-        slowRatio: { type: number, minimum: 0, maximum: 1 }
-        congestedRatio: { type: number, minimum: 0, maximum: 1 }
-        unknownRatio: { type: number, minimum: 0, maximum: 1 }
-        averageSpeedKmh: { type: [number, 'null'] }
-
-    TrafficCoverage:
-      type: object
-      required: [totalTiles, succeededTiles, failedTiles, coverageRatio, complete]
-      properties:
-        totalTiles: { type: integer, minimum: 1 }
-        succeededTiles: { type: integer, minimum: 0 }
-        failedTiles: { type: integer, minimum: 0 }
-        coverageRatio: { type: number, minimum: 0, maximum: 1 }
-        complete: { type: boolean }
-
-    AreaTrafficResult:
-      type: object
-      required: [queryScope, areaCode, areaName, city, summary, summarySource, evaluation, coverage, segments, source, acquiredAt, freshness, warnings]
-      properties:
-        queryScope:
-          type: string
-          enum: [AREA_ALL, AREA_MAJOR]
-        areaCode: { type: string, pattern: '^35\d{4}$' }
-        areaName: { type: string }
-        city: { type: string }
-        summary: { type: string }
-        summarySource: { type: string, enum: [MODEL, DETERMINISTIC] }
-        evaluation: { $ref: '#/components/schemas/TrafficEvaluation' }
-        coverage: { $ref: '#/components/schemas/TrafficCoverage' }
+          items: { $ref: '#/components/schemas/RouteTrafficSummary' }
         segments:
           type: array
           items: { $ref: '#/components/schemas/TrafficSegment' }
-        source: { type: string, examples: [AMAP] }
+        capacityRows:
+          type: array
+          items: { $ref: '#/components/schemas/RoadCapacityRow' }
+        selectedRegions:
+          type: array
+          items: { $ref: '#/components/schemas/SelectedRegion' }
+        hubRows:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/TransportHubRow' }
+        regionPressureRows:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/RegionPressureRow' }
+        routePressureRows:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/RoutePressureRow' }
+        analysisCity: { type: [string, 'null'] }
+        vehicleStructureRows:
+          type: array
+          items: { $ref: '#/components/schemas/VehicleStructureRow' }
+        vehicleTimeFeatureRows:
+          type: array
+          items: { $ref: '#/components/schemas/VehicleTimeFeatureRow' }
+        vehicleDayTypeRows:
+          type: array
+          items: { $ref: '#/components/schemas/VehicleDayTypeRow' }
+        hourlyVehicleSeries:
+          type: array
+          maxItems: 24
+          items: { $ref: '#/components/schemas/HourlyVehicleFlow' }
+        totalSegmentCount:
+          type: integer
+          minimum: 0
+          description: 路况查询表示路段总数；容量查询表示符合当前范围的路线总数
+        displayedSegmentCount:
+          type: integer
+          minimum: 0
+          description: 路况查询表示展示路段数；容量查询表示展示路线数
+        truncated: { type: boolean }
+        source: { type: string, const: MYSQL }
         acquiredAt: { type: string, format: date-time }
-        freshness: { type: string, enum: [FRESH, STALE, UNKNOWN] }
         warnings:
           type: array
           items: { type: string }
+        traceId: { type: string }
 
     DispatchApprovalRequest:
       type: object
@@ -522,6 +763,89 @@ components:
           type: string
           minLength: 1
 
+    WorkflowStage:
+      type: string
+      enum: [LEVEL_1, LEVEL_2, LEVEL_3]
+
+    WorkflowStatus:
+      type: string
+      enum:
+        - WAITING_GENERATION
+        - GENERATING
+        - WAITING_LEVEL_1_SUBMISSION
+        - WAITING_LEVEL_2_REVIEW
+        - WAITING_LEVEL_3_DECISION
+        - REVISING
+        - GENERATION_FAILED
+        - PUBLISHED
+        - NO_DISPATCH
+
+    Level1DecisionRequest:
+      type: object
+      required: [decision, expectedWorkflowVersion, idempotencyKey]
+      properties:
+        decision:
+          type: string
+          enum: [SUBMIT, REJECT]
+        comment:
+          type: [string, 'null']
+          maxLength: 500
+          description: REJECT时必填
+        expectedWorkflowVersion: { type: integer, minimum: 0 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 100 }
+
+    ProfessionalReviewRequest:
+      type: object
+      required: [decision, expectedWorkflowVersion, idempotencyKey]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        eventSeverity:
+          type: [string, 'null']
+          enum: [GENERAL, LARGER, MAJOR, ESPECIALLY_MAJOR, null]
+          description: APPROVE时必填
+        resourceFeasibility:
+          type: [string, 'null']
+          enum: [FEASIBLE, FEASIBLE_WITH_GAP, NEEDS_ADJUSTMENT, null]
+          description: 无缺口时通过必须为FEASIBLE；有缺口时必须为FEASIBLE_WITH_GAP
+        impactAssessment:
+          type: [string, 'null']
+          maxLength: 1000
+          description: APPROVE时必填
+        coordinationRequirements:
+          type: [string, 'null']
+          maxLength: 1000
+          description: 有资源缺口但仍通过时必填
+        comment:
+          type: [string, 'null']
+          maxLength: 500
+          description: 通过时为专业意见，退回时为退回意见，均必填
+        expectedWorkflowVersion: { type: integer, minimum: 0 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 100 }
+
+    CommandDecisionRequest:
+      type: object
+      required: [decision, expectedWorkflowVersion, idempotencyKey]
+      properties:
+        decision:
+          type: string
+          enum: [APPROVE, REJECT]
+        comment:
+          type: [string, 'null']
+          maxLength: 500
+          description: 退回时必填；带资源缺口方案批准时也必填
+        expectedWorkflowVersion: { type: integer, minimum: 0 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 100 }
+
+    ResourceReleaseRequest:
+      type: object
+      required: [reason, expectedWorkflowVersion, idempotencyKey]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        expectedWorkflowVersion: { type: integer, minimum: 0 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 100 }
+
     EmergencyEvent:
       type: object
       required: [eventId, customId, eventType, description]
@@ -534,7 +858,16 @@ components:
           type: [string, 'null']
           format: date-time
         eventType: { type: string }
+        eventTypeName:
+          type: [string, 'null']
+          description: 工作流事件视图中的中文类型名
         description: { type: string }
+        cityCode:
+          type: [string, 'null']
+          description: 福建地级市行政区划编码，正式生成工单时不能为空
+        cityName:
+          type: [string, 'null']
+          description: 事件归属的市级调度范围
 
     SuggestedResource:
       type: object
@@ -545,6 +878,47 @@ components:
         quantity: { type: integer, minimum: 1 }
         unit: { type: string }
         purpose: { type: string }
+
+    ResourceRequirement:
+      type: object
+      required: [resourceTypeCode, resourceTypeName, quantity, unit, purpose]
+      properties:
+        resourceTypeCode: { type: string }
+        resourceTypeName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit: { type: string }
+        purpose: { type: string }
+
+    AllocatedResource:
+      type: object
+      required: [resourceId, resourceTypeCode, resourceTypeName, resourceName, sourceCityCode, sourceCityName, quantity, unit, purpose, estimatedDistanceKm, dispatchScope]
+      properties:
+        resourceId: { type: string }
+        resourceTypeCode: { type: string }
+        resourceTypeName: { type: string }
+        resourceName: { type: string }
+        sourceCityCode: { type: string }
+        sourceCityName: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        unit: { type: string }
+        purpose: { type: string }
+        estimatedDistanceKm:
+          type: number
+          minimum: 0
+          description: 城市中心直线估算距离，仅用于排序
+        dispatchScope: { type: string, enum: [LOCAL, CROSS_CITY] }
+
+    ResourceShortage:
+      type: object
+      required: [resourceTypeCode, resourceTypeName, requiredQuantity, allocatedQuantity, shortageQuantity, unit, reason]
+      properties:
+        resourceTypeCode: { type: string }
+        resourceTypeName: { type: string }
+        requiredQuantity: { type: integer, minimum: 1 }
+        allocatedQuantity: { type: integer, minimum: 0 }
+        shortageQuantity: { type: integer, minimum: 1 }
+        unit: { type: string }
+        reason: { type: string }
 
     NoDispatchRequest:
       type: object
@@ -560,13 +934,23 @@ components:
 
     DispatchPlan:
       type: object
-      required: [planId, event, suggestedResources, rescuePlan, status, version, createdAt, updatedAt, approvalRequired]
+      required: [planId, event, suggestedResources, resourceRequirements, allocatedResources, resourceShortages, rescuePlan, status, version, createdAt, updatedAt, approvalRequired]
       properties:
         planId: { type: string }
         event: { $ref: '#/components/schemas/EmergencyEvent' }
         suggestedResources:
           type: array
           items: { $ref: '#/components/schemas/SuggestedResource' }
+          description: 兼容投影，内容来自实际分配资源
+        resourceRequirements:
+          type: array
+          items: { $ref: '#/components/schemas/ResourceRequirement' }
+        allocatedResources:
+          type: array
+          items: { $ref: '#/components/schemas/AllocatedResource' }
+        resourceShortages:
+          type: array
+          items: { $ref: '#/components/schemas/ResourceShortage' }
         rescuePlan:
           type: [string, 'null']
         status:
@@ -590,6 +974,169 @@ components:
             - type: 'null'
         pendingCount: { type: integer, minimum: 1 }
 
+    ProfessionalReview:
+      type: object
+      required: [reviewId, workflowId, planId, planVersion, status, createdAt, updatedAt]
+      properties:
+        reviewId: { type: string }
+        workflowId: { type: string }
+        planId: { type: string }
+        planVersion: { type: integer, minimum: 1 }
+        status:
+          type: string
+          enum: [PENDING, PASSED, RETURNED]
+        eventSeverity:
+          type: [string, 'null']
+          enum: [GENERAL, LARGER, MAJOR, ESPECIALLY_MAJOR, null]
+        resourceFeasibility:
+          type: [string, 'null']
+          enum: [FEASIBLE, FEASIBLE_WITH_GAP, NEEDS_ADJUSTMENT, null]
+        impactAssessment: { type: [string, 'null'] }
+        coordinationRequirements: { type: [string, 'null'] }
+        reviewOpinion: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    NoticeSnapshot:
+      type: object
+      required: [noticeNumber, title, event, planId, planVersion, suggestedResources, resourceRequirements, allocatedResources, resourceShortages, rescuePlan, eventSeverity, impactAssessment, professionalOpinion, publishedAt]
+      properties:
+        noticeNumber: { type: string }
+        title: { type: string }
+        event: { $ref: '#/components/schemas/EmergencyEvent' }
+        planId: { type: string }
+        planVersion: { type: integer, minimum: 1 }
+        suggestedResources:
+          type: array
+          items: { $ref: '#/components/schemas/SuggestedResource' }
+        resourceRequirements:
+          type: array
+          items: { $ref: '#/components/schemas/ResourceRequirement' }
+        allocatedResources:
+          type: array
+          items: { $ref: '#/components/schemas/AllocatedResource' }
+        resourceShortages:
+          type: array
+          items: { $ref: '#/components/schemas/ResourceShortage' }
+        rescuePlan: { type: string }
+        eventSeverity:
+          type: string
+          enum: [GENERAL, LARGER, MAJOR, ESPECIALLY_MAJOR]
+        impactAssessment: { type: string }
+        coordinationRequirements: { type: [string, 'null'] }
+        professionalOpinion: { type: string }
+        commandOpinion: { type: [string, 'null'] }
+        publishedAt: { type: string, format: date-time }
+
+    CommandDecision:
+      type: object
+      required: [decisionId, workflowId, reviewId, planId, planVersion, status, createdAt, updatedAt]
+      properties:
+        decisionId: { type: string }
+        workflowId: { type: string }
+        reviewId: { type: string }
+        planId: { type: string }
+        planVersion: { type: integer, minimum: 1 }
+        status:
+          type: string
+          enum: [PENDING, RETURNED, PUBLISHED]
+        decisionOpinion: { type: [string, 'null'] }
+        noticeSnapshot:
+          oneOf:
+            - $ref: '#/components/schemas/NoticeSnapshot'
+            - type: 'null'
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    WorkflowAction:
+      type: object
+      required: [actionId, workflowId, actionType, toStatus, planVersion, idempotencyKey, createdAt]
+      properties:
+        actionId: { type: string }
+        workflowId: { type: string }
+        actionType:
+          type: string
+          enum: [GENERATION_STARTED, GENERATION_COMPLETED, GENERATION_FAILED, GENERATION_RETRIED, LEVEL_1_SUBMITTED, LEVEL_1_RETURNED, LEVEL_2_PASSED, LEVEL_2_RETURNED, LEVEL_3_RETURNED, LEVEL_3_PUBLISHED, RESOURCES_RELEASED, NO_DISPATCH]
+        fromStage:
+          oneOf:
+            - $ref: '#/components/schemas/WorkflowStage'
+            - type: 'null'
+        toStage:
+          oneOf:
+            - $ref: '#/components/schemas/WorkflowStage'
+            - type: 'null'
+        fromStatus:
+          oneOf:
+            - $ref: '#/components/schemas/WorkflowStatus'
+            - type: 'null'
+        toStatus: { $ref: '#/components/schemas/WorkflowStatus' }
+        planId: { type: [string, 'null'] }
+        planVersion: { type: integer, minimum: 0 }
+        comment: { type: [string, 'null'] }
+        detailJson: { type: [string, 'null'] }
+        idempotencyKey: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    EmergencyWorkflow:
+      type: object
+      required: [workflowStatus, workflowVersion, event, timeline, resourcesReleased]
+      properties:
+        workflowId: { type: [string, 'null'] }
+        currentStage:
+          oneOf:
+            - $ref: '#/components/schemas/WorkflowStage'
+            - type: 'null'
+        workflowStatus: { $ref: '#/components/schemas/WorkflowStatus' }
+        workflowVersion: { type: integer, minimum: 0 }
+        event: { $ref: '#/components/schemas/EmergencyEvent' }
+        currentPlan:
+          oneOf:
+            - $ref: '#/components/schemas/DispatchPlan'
+            - type: 'null'
+        professionalReview:
+          oneOf:
+            - $ref: '#/components/schemas/ProfessionalReview'
+            - type: 'null'
+        commandDecision:
+          oneOf:
+            - $ref: '#/components/schemas/CommandDecision'
+            - type: 'null'
+        timeline:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowAction' }
+        resourcesReleased:
+          type: boolean
+          description: 当前最终方案的实际调度资源是否已整单归还
+
+    WorkflowCounts:
+      type: object
+      required: [level1, level2, level3]
+      properties:
+        level1: { type: integer, minimum: 0 }
+        level2: { type: integer, minimum: 0 }
+        level3: { type: integer, minimum: 0 }
+
+    WorkflowInbox:
+      type: object
+      required: [counts]
+      properties:
+        item:
+          oneOf:
+            - $ref: '#/components/schemas/EmergencyWorkflow'
+            - type: 'null'
+        counts: { $ref: '#/components/schemas/WorkflowCounts' }
+
+    WorkflowHistory:
+      type: object
+      required: [items, page, size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/EmergencyWorkflow' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+
     TrafficQueryApiResponse:
       type: object
       required: [code, message, data, traceId, timestamp]
@@ -597,16 +1144,6 @@ components:
         code: { const: OK }
         message: { type: string }
         data: { $ref: '#/components/schemas/TrafficQueryResult' }
-        traceId: { type: string }
-        timestamp: { type: string, format: date-time }
-
-    AreaTrafficApiResponse:
-      type: object
-      required: [code, message, data, traceId, timestamp]
-      properties:
-        code: { const: OK }
-        message: { type: string }
-        data: { $ref: '#/components/schemas/AreaTrafficResult' }
         traceId: { type: string }
         timestamp: { type: string, format: date-time }
 
@@ -650,6 +1187,36 @@ components:
         code: { const: OK }
         message: { type: string }
         data: { $ref: '#/components/schemas/SpeechTranscription' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    WorkflowInboxApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/WorkflowInbox' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    EmergencyWorkflowApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/EmergencyWorkflow' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    WorkflowHistoryApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/WorkflowHistory' }
         traceId: { type: string }
         timestamp: { type: string, format: date-time }
 

@@ -1,71 +1,245 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 import TrafficResultPanel from './TrafficResultPanel.vue'
-import type { TrafficQueryResult, TrafficSegment } from '../types/traffic'
+import type { TrafficQueryResult } from '../types/traffic'
 
-function segment(index: number): TrafficSegment {
-  return {
-    roadName: index === 0 ? '成功大道' : `测试道路${index}`,
-    direction: '北向南',
-    congestionLevel: index % 3 === 0 ? 'CONGESTED' : 'SMOOTH',
-    averageSpeedKmh: index % 3 === 0 ? 12 : 36,
-    polyline: `118.${index},24.4;118.${index + 1},24.5`,
-  }
+const base: Omit<TrafficQueryResult, 'queryType' | 'title' | 'routeSummaries' | 'segments'> = {
+  summary: '当前交通数据已汇总。请留意当前异常。',
+  capacityRows: [],
+  totalSegmentCount: 0,
+  displayedSegmentCount: 0,
+  truncated: false,
+  source: 'MYSQL',
+  acquiredAt: '2026-08-13T08:00:00Z',
+  warnings: [],
+  traceId: 'trace-1',
 }
 
-const result: TrafficQueryResult = {
-  queryScope: 'AREA_ALL',
-  areaCode: '350203',
-  areaName: '思明区',
-  summary: '思明区整体交通态势已汇总。',
-  summarySource: 'MODEL',
-  segments: Array.from({ length: 55 }, (_, index) => segment(index)),
-  evaluation: {
-    totalSegments: 55, smoothSegments: 36, slowSegments: 0, congestedSegments: 19,
-    unknownSegments: 0, smoothRatio: 36 / 55, slowRatio: 0,
-    congestedRatio: 19 / 55, unknownRatio: 0, averageSpeedKmh: 27.7,
-  },
-  coverage: {
-    totalTiles: 10, succeededTiles: 9, failedTiles: 1,
-    coverageRatio: 0.9, complete: false,
-  },
-  source: 'AMAP', acquiredAt: '2026-07-21T08:00:00Z', freshness: 'FRESH',
-  mock: false, warnings: ['PARTIAL_AREA_COVERAGE'], traceId: 'trace-area',
-}
+describe('TrafficResultPanel MySQL highway modes', () => {
+  it('shows the qualitative trend only through the existing summary and adds no forecast column', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      summary: '当前全省国省干线总体通行平稳。未来1至2小时，预计整体趋势基本稳定。',
+      queryType: 'PROVINCE_OVERVIEW',
+      title: '福建省国省道整体交通态势',
+      routeSummaries: [{
+        routeCode: 'G104', routeName: '北京-平潭', averageSpeedKmh: 89.34, status: 10, statusName: '畅通',
+      }],
+      segments: [],
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: false } })
 
-describe('TrafficResultPanel area mode', () => {
-  it('shows a compact traffic table without aggregate metrics', async () => {
-    const wrapper = mount(TrafficResultPanel, {
-      props: { result, compact: true },
-    })
-
-    expect(wrapper.text()).toContain('思明区')
-    expect(wrapper.text()).toContain('道路名称')
-    expect(wrapper.text()).toContain('拥堵程度')
-    expect(wrapper.find('.traffic-answer')).toBeTruthy()
-    expect(wrapper.find('.area-metrics').exists()).toBe(false)
-    expect(wrapper.find('.coverage-card').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('AMAP')
-    expect(wrapper.text()).not.toContain('获取时间')
-    expect(wrapper.text()).not.toContain('新鲜度')
-    expect(wrapper.text()).not.toContain('覆盖')
-    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(50)
-
-    await wrapper.find('.area-pagination button:last-child').trigger('click')
-    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(5)
+    expect(wrapper.find('.traffic-summary').text()).toContain('未来1至2小时')
+    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual(['路线', '名称', '均速', '状态'])
   })
 
-  it('filters by road name and congestion level', async () => {
-    const wrapper = mount(TrafficResultPanel, {
-      props: { result, compact: true },
-    })
+  it('renders province overview with authoritative route values and five-level label', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'PROVINCE_OVERVIEW',
+      title: '福建省国省道整体交通态势',
+      routeSummaries: [{
+        routeCode: 'G104', routeName: '北京-平潭', averageSpeedKmh: 89.34, status: 10, statusName: '畅通',
+      }],
+      segments: [],
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
-    await wrapper.find('input[type="search"]').setValue('成功大道')
-    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(1)
-    expect(wrapper.text()).toContain('成功大道')
+    expect(wrapper.text()).toContain('G104')
+    expect(wrapper.text()).toContain('北京-平潭')
+    expect(wrapper.text()).toContain('89.34 km/h')
+    expect(wrapper.text()).toContain('畅通')
+  })
 
-    await wrapper.find('input[type="search"]').setValue('')
-    await wrapper.find('select').setValue('CONGESTED')
-    expect(wrapper.findAll('.traffic-table tbody tr')).toHaveLength(19)
+  it('renders abnormal top list with severity fixed to two decimals and truncation notice', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'PROVINCE_ABNORMAL',
+      title: '福建省拥堵异常路段',
+      routeSummaries: [],
+      segments: [{
+        routeCode: 'G316', routeName: '长乐-同仁', routeSection: 'FJ076→FJ085',
+        distanceKm: 45, averageSpeedKmh: 19, status: 40, statusName: '重度拥堵', severity: 0.8,
+      }],
+      totalSegmentCount: 25,
+      displayedSegmentCount: 10,
+      truncated: true,
+      warnings: [],
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('重度拥堵')
+    expect(wrapper.text()).toContain('0.80')
+    expect(wrapper.text()).toContain('共 25 条路段')
+  })
+
+  it('renders city-pair detail columns', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'CITY_PAIR',
+      title: '宁德市—福州市交通情况',
+      routeSummaries: [],
+      segments: [{
+        routeCode: 'G104', routeName: '北京-平潭', routeSection: 'FJ001→FJ002',
+        distanceKm: 10, averageSpeedKmh: 35.2, status: 20, statusName: '轻度拥堵', severity: 0.21,
+      }],
+      totalSegmentCount: 1,
+      displayedSegmentCount: 1,
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('路段')
+    expect(wrapper.text()).toContain('均速')
+    expect(wrapper.text()).toContain('拥堵指数')
+    expect(wrapper.text()).toContain('轻度拥堵')
+  })
+
+  it('renders route-detail table using the same deterministic segment fields', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'ROUTE_DETAIL',
+      title: 'G104 北京-平潭交通情况',
+      routeSummaries: [],
+      segments: [{
+        routeCode: 'G104', routeName: '北京-平潭', routeSection: 'FJ010→FJ011',
+        distanceKm: 8.5, averageSpeedKmh: 22, status: 30, statusName: '中度拥堵', severity: 0.58,
+      }],
+      totalSegmentCount: 1,
+      displayedSegmentCount: 1,
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('G104')
+    expect(wrapper.text()).toContain('FJ010→FJ011')
+    expect(wrapper.text()).toContain('中度拥堵')
+    expect(wrapper.text()).toContain('0.58')
+  })
+
+  it.each([
+    ['CAPACITY_OVERVIEW' as const, '福建省国省道通行能力总览'],
+    ['CAPACITY_BOTTLENECKS' as const, '福建省瓶颈路线排行'],
+    ['CAPACITY_ROUTE_DETAIL' as const, 'G104 北京-平潭通行能力'],
+  ])('renders %s capacity table with units, percentage and level', (queryType, title) => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType,
+      title,
+      routeSummaries: [],
+      segments: [],
+      capacityRows: [{
+        routeCode: 'G104', routeName: '北京-平潭', actualCapacityVph: 320,
+        designCapacityVph: 1920, utilizationRatio: 0.1667,
+        capacityLevel: 'SEVERE_BOTTLENECK', capacityLevelName: '严重瓶颈',
+      }],
+      totalSegmentCount: 1,
+      displayedSegmentCount: 1,
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('实际通行能力')
+    expect(wrapper.text()).toContain('320.00 辆/小时')
+    expect(wrapper.text()).toContain('1920.00 辆/小时')
+    expect(wrapper.text()).toContain('16.67%')
+    expect(wrapper.text()).toContain('严重瓶颈')
+  })
+
+  it('uses route wording for truncated bottleneck ranking', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'CAPACITY_BOTTLENECKS', title: '福建省瓶颈路线排行',
+      routeSummaries: [], segments: [],
+      capacityRows: [{
+        routeCode: 'S201', routeName: '柘荣-霞浦', actualCapacityVph: 100,
+        designCapacityVph: 1920, utilizationRatio: 0.2,
+        capacityLevel: 'SEVERE_BOTTLENECK', capacityLevelName: '严重瓶颈',
+      }],
+      totalSegmentCount: 12, displayedSegmentCount: 10, truncated: true,
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+    expect(wrapper.text()).toContain('共 12 条瓶颈路线')
+    expect(wrapper.text()).not.toContain('条路段')
+  })
+
+  it('uses actual displayed counts for regional headings below each ranking limit', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'REGIONAL_TRAFFIC_OVERVIEW', title: '福州市、厦门市区域交通压力综合分析',
+      routeSummaries: [], segments: [],
+      hubRows: [{ checkpointNo: 'FJ001', routeCode: 'G104', routeName: '北京-平潭', averageSpeedKmh: 35.2, dailyAverageFlow: 676 }],
+      regionPressureRows: [
+        { regionCode: '350100', regionName: '福州市', activeHubCount: 23, totalDailyFlow: 4651, hubShareRatio: 0.056, interpretation: '福州市当前交通流量压力值得持续关注。' },
+        { regionCode: '350200', regionName: '厦门市', activeHubCount: 18, totalDailyFlow: 4100, hubShareRatio: 0.044, interpretation: '厦门市当前交通流量压力值得持续关注。' },
+      ],
+      routePressureRows: [{ routeCode: 'G104', routeName: '北京-平潭', totalDailyFlow: 3200, checkpointCount: 12, averageSpeedKmh: 28.125 }],
+      selectedRegions: [
+        { regionCode: '350100', regionName: '福州市' },
+        { regionCode: '350200', regionName: '厦门市' },
+      ],
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('高流量卡口枢纽（1个卡口）')
+    expect(wrapper.text()).toContain('城市交通压力（2个城市）')
+    expect(wrapper.text()).toContain('重点路线交通压力（1条路线）')
+    expect(wrapper.text()).not.toContain('Top5')
+    expect(wrapper.text()).toContain('676 辆/日')
+    expect(wrapper.text()).toContain('5.60%')
+    expect(wrapper.text()).toContain('28.13 km/h')
+  })
+
+  it('keeps Top5 wording only when more than five cities are in scope', () => {
+    const selectedRegions = Array.from({ length: 6 }, (_, index) => ({
+      regionCode: `350${index + 1}00`, regionName: `测试市${index + 1}`,
+    }))
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'CITY_PRESSURE', title: '福建省城市交通压力',
+      routeSummaries: [], segments: [], selectedRegions,
+      regionPressureRows: selectedRegions.slice(0, 5).map((region, index) => ({
+        ...region, activeHubCount: 10 - index, totalDailyFlow: 5000 - index * 100,
+        hubShareRatio: 0.1, interpretation: `${region.regionName}当前交通压力值得持续关注。`,
+      })),
+      totalSegmentCount: 6, displayedSegmentCount: 5, truncated: true,
+    }
+
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('城市交通压力 Top5')
+  })
+
+  it('renders vehicle overview tables and all three chart templates', async () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'VEHICLE_PATTERN_OVERVIEW', title: '福州市交通运输特征分析', analysisCity: '福州市',
+      routeSummaries: [], segments: [],
+      vehicleStructureRows: [{ vehicleType: 'CAR', vehicleTypeName: '小型客车', weeklyVolume: 900, shareRatio: 0.75 }],
+      vehicleTimeFeatureRows: [{ vehicleType: 'CAR', vehicleTypeName: '小型客车', peakHour: '10:00–10:59', peakVolume: 165, morningPeakRatio: 0.2, eveningPeakRatio: 0.1, characteristic: '全天分布相对分散' }],
+      vehicleDayTypeRows: [{ vehicleType: 'CAR', vehicleTypeName: '小型客车', weekdayVolume: 750, weekendVolume: 150 }],
+      hourlyVehicleSeries: Array.from({ length: 24 }, (_, hour) => ({ hour: `${String(hour).padStart(2, '0')}:00`, car: hour, bus: 0, truck: 0 })),
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.text()).toContain('车型结构占比')
+    expect(wrapper.text()).toContain('出行时间特征')
+    expect(wrapper.text()).toContain('工作日5天合计')
+    expect(wrapper.find('.vehicle-pie-chart').exists()).toBe(true)
+    expect(wrapper.find('.vehicle-line-chart').exists()).toBe(true)
+    expect(wrapper.find('.vehicle-bar-chart').exists()).toBe(true)
+    expect(wrapper.findAll('.vehicle-chart-wide')).toHaveLength(3)
+  })
+
+  it('renders only the requested vehicle structure view', () => {
+    const result: TrafficQueryResult = {
+      ...base,
+      queryType: 'VEHICLE_STRUCTURE', title: '厦门市车型结构分析', analysisCity: '厦门市',
+      routeSummaries: [], segments: [],
+      vehicleStructureRows: [{ vehicleType: 'TRUCK', vehicleTypeName: '大型货车', weeklyVolume: 100, shareRatio: 0.125 }],
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+    expect(wrapper.find('.vehicle-pie-chart').exists()).toBe(true)
+    expect(wrapper.find('.vehicle-line-chart').exists()).toBe(false)
+    expect(wrapper.find('.vehicle-bar-chart').exists()).toBe(false)
+    expect(wrapper.text()).toContain('12.50%')
   })
 })

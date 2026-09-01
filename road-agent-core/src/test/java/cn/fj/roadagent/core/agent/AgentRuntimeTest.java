@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -29,24 +30,25 @@ class AgentRuntimeTest {
     @Test
     void shouldReuseConversationHistoryForFollowUp() {
         RecordingModel model = new RecordingModel(new AgentDecision(
-                "TRAFFIC_QUERY", "ROAD", "福州", null, "五四路", null,
-                null, null, null, null, List.of(), null
+                "TRAFFIC_QUERY", "ROUTE_DETAIL", null, null, "G104", null,
+                null, null, null, null, null, null, null, null, List.of(), null
         ));
         TestMemory memory = new TestMemory();
         AgentRuntime runtime = runtime(model, memory, new SuccessfulTrafficSkill());
 
-        runtime.handle(command("五四路堵吗"), event -> { });
-        runtime.handle(command("北向南呢"), event -> { });
+        runtime.handle(command("G104通行情况如何"), event -> { });
+        runtime.handle(command("那拥堵路段呢"), event -> { });
 
-        assertEquals(List.of(0, 2), model.historySizes);
+        // 首轮G104常见问法由Java直接识别；第二轮模糊追问交给模型并携带完整上下文。
+        assertEquals(List.of(2), model.historySizes);
         assertEquals(4, memory.load("conversation-1").size());
     }
 
     @Test
-    void shouldAskForMissingCityWithoutCallingSkill() {
+    void shouldAskForMissingRouteWithoutCallingSkill() {
         RecordingModel model = new RecordingModel(new AgentDecision(
-                "TRAFFIC_QUERY", "ROAD", null, null, "五四路", null,
-                null, null, null, null, List.of(), "请问要查询哪个城市？"
+                "TRAFFIC_QUERY", "ROUTE_DETAIL", null, null, null, null,
+                null, null, null, null, null, null, null, null, List.of(), "请提供G/S路线编号或名称。"
         ));
         AtomicInteger calls = new AtomicInteger();
         AgentSkill skill = new SuccessfulTrafficSkill() {
@@ -58,11 +60,40 @@ class AgentRuntimeTest {
         };
         List<AgentEvent> events = new ArrayList<>();
 
-        runtime(model, new TestMemory(), skill).handle(command("五四路堵吗"), events::add);
+        runtime(model, new TestMemory(), skill).handle(command("查一下这条路"), events::add);
 
         assertEquals(0, calls.get());
         assertTrue(events.stream().anyMatch(event -> "answer.delta".equals(event.name())));
         assertTrue(events.stream().anyMatch(event -> "run.completed".equals(event.name())));
+    }
+
+    @Test
+    void vehicleFeatureQuestionCannotFallThroughToUnsupportedAnswer() {
+        RecordingModel model = new RecordingModel(new AgentDecision(
+                "UNSUPPORTED", null, null, null, null, null,
+                null, null, null, null, List.of(), null
+        ));
+        AtomicReference<AgentDecision> executed = new AtomicReference<>();
+        AgentSkill skill = new SuccessfulTrafficSkill() {
+            @Override
+            public AgentSkillResult execute(
+                    AgentExecutionContext context,
+                    cn.fj.roadagent.application.agent.AgentEventSink sink
+            ) {
+                executed.set(context.decision());
+                return super.execute(context, sink);
+            }
+        };
+        List<AgentEvent> events = new ArrayList<>();
+
+        runtime(model, new TestMemory(), skill)
+                .handle(command("福州市的交通运输特征如何？"), events::add);
+
+        assertEquals("VEHICLE_PATTERN_OVERVIEW", executed.get().trafficScope());
+        assertEquals("福州", executed.get().analysisCity());
+        assertTrue(model.historySizes.isEmpty());
+        assertTrue(events.stream().anyMatch(event -> "skill.selected".equals(event.name())));
+        assertTrue(events.stream().noneMatch(event -> "run.failed".equals(event.name())));
     }
 
     private AgentRuntime runtime(ChatModelPort model, ConversationMemoryPort memory, AgentSkill skill) {

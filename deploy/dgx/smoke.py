@@ -86,11 +86,15 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
                 "content": (
                     "你是福建公路应急交通Agent的意图规划器。只能选择"
                     "TRAFFIC_QUERY、EMERGENCY_DISPATCH、UNSUPPORTED之一。明确指定一条"
-                    "道路时trafficScope必须为ROAD。必须输出json对象，字段包含intent、"
-                    "trafficScope、city、roadName和clarification；不适用字段使用null。"
+                    "业务范围时trafficScope必须使用给定枚举。用户询问福建省普通国省道"
+                    "整体交通态势时，trafficScope必须为PROVINCE_OVERVIEW。必须输出json对象，字段包含"
+                    "intent、trafficScope、originCity、destinationCity、routeCode、routeName、"
+                    "selectedCities、analysisCity、city、areaName、roadName、direction、eventType、"
+                    "location、severity、eventDescription、resourceTypes、clarification；数组字段"
+                    "使用数组，其他不适用字段使用null。"
                 ),
             },
-            {"role": "user", "content": "查询福州五四路现在的路况。"},
+            {"role": "user", "content": "福建省普通国省道目前整体交通态势如何？"},
         ],
         "temperature": 0.2,
         "stream": False,
@@ -103,17 +107,45 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
             {
                 "role": "system",
                 "content": (
-                    "你是福建公路应急调度工单生成器。必须输出严格JSON对象，仅包含"
-                    "suggestedResources和rescuePlan。suggestedResources是数组，每项包含"
-                    "resourceType、resourceName、quantity、unit、purpose；quantity必须是"
-                    "大于0的整数。rescuePlan覆盖现场安全、交通组织、救援处置和信息报送。"
+                    "你是福建公路应急调度需求分析器。必须输出严格JSON对象，仅包含"
+                    "resourceRequirements和rescuePlan。resourceRequirements是数组，每项"
+                    "仅包含resourceTypeCode、quantity、purpose；resourceTypeCode只能取"
+                    "ROAD_RESCUE_TEAM或TRAFFIC_CONTROL_EQUIPMENT，quantity必须是大于0的"
+                    "整数。rescuePlan必须是中文字符串，覆盖现场安全、交通组织、救援处置"
+                    "和信息报送。"
                 ),
             },
             {
                 "role": "user",
                 "content": (
                     "事件类型：崩塌（DT01）\n事件描述：莆田市乡道路涵结构坍塌，"
-                    "双向车辆无法正常通过。"
+                    "双向车辆无法正常通过。\n可选资源类型：ROAD_RESCUE_TEAM、"
+                    "TRAFFIC_CONTROL_EQUIPMENT。"
+                ),
+            },
+        ],
+        "temperature": 0.1,
+        "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
+        "response_format": {"type": "json_object"},
+    }
+    traffic_summary_payload = {
+        "model": "qwen3.6-35b-a3b-nvfp4",
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "你是福建普通国省干线交通态势研判助手。只能依据用户提供的事实。"
+                    "必须输出严格JSON对象且只能包含summary、trend、trendForecast。"
+                    "summary写3句、50至300字中文；trend只能为基本稳定；trendForecast"
+                    "必须恰好1句并包含未来1至2小时、预计和基本稳定。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    "queryType=PROVINCE_OVERVIEW\n路线G104均速52km/h，状态10畅通；"
+                    "路线G324均速38km/h，状态20轻度拥堵。"
                 ),
             },
         ],
@@ -125,12 +157,28 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
     for _ in range(business_iterations):
         agent_like = request_json(f"{qwen_base}/chat/completions", agent_like_payload)
         intent = json.loads(agent_like["choices"][0]["message"]["content"])
-        if intent.get("intent") != "TRAFFIC_QUERY" or intent.get("trafficScope") != "ROAD":
+        if (
+            intent.get("intent") != "TRAFFIC_QUERY"
+            or intent.get("trafficScope") != "PROVINCE_OVERVIEW"
+        ):
             raise RuntimeError(f"invalid traffic intent response: {intent}")
+        traffic_summary = request_json(
+            f"{qwen_base}/chat/completions", traffic_summary_payload
+        )
+        summary = json.loads(traffic_summary["choices"][0]["message"]["content"])
+        if not summary.get("summary") or summary.get("trend") != "基本稳定":
+            raise RuntimeError(f"invalid traffic summary response: {summary}")
         dispatch = request_json(f"{qwen_base}/chat/completions", dispatch_payload)
         proposal = json.loads(dispatch["choices"][0]["message"]["content"])
-        if not proposal.get("suggestedResources") or not proposal.get("rescuePlan"):
+        requirements = proposal.get("resourceRequirements")
+        if not requirements or not isinstance(proposal.get("rescuePlan"), str):
             raise RuntimeError(f"invalid dispatch proposal response: {proposal}")
+        for requirement in requirements:
+            if requirement.get("resourceTypeCode") not in {
+                "ROAD_RESCUE_TEAM",
+                "TRAFFIC_CONTROL_EQUIPMENT",
+            } or int(requirement.get("quantity", 0)) <= 0:
+                raise RuntimeError(f"invalid resource requirement: {requirement}")
 
     for _ in range(iterations):
         result = request_json(f"{qwen_base}/chat/completions", qwen_payload(structured=True))
@@ -162,7 +210,10 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
     return {
         "model": "qwen3.6-35b-a3b-nvfp4",
         "ordinary_characters": len(ordinary_content),
-        "business_structured_iterations": business_iterations,
+        "traffic_intent_iterations": business_iterations,
+        "traffic_summary_iterations": business_iterations,
+        "resource_requirement_iterations": business_iterations,
+        "dispatch_plan_iterations": business_iterations,
         "structured_iterations": iterations,
         "seconds": round(time.monotonic() - started, 2),
         "stream_characters": len("".join(streamed)),
@@ -175,6 +226,7 @@ def check_road_agent(
     audio: Path | None,
     tts_output: Path | None,
     with_traffic: bool,
+    with_workflow: bool,
     with_agent: bool,
     tts_concurrency: int,
     test_speech_limits: bool,
@@ -206,8 +258,15 @@ def check_road_agent(
             "seconds": round(time.monotonic() - started, 2),
         }
     if test_speech_limits:
+        limit_request = urllib.request.Request(
+            f"{app_base}/api/v1/speech/syntheses",
+            data=json.dumps({"text": "路" * 501}, ensure_ascii=False).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Accept": "*/*"},
+            method="POST",
+        )
         try:
-            synthesize_speech(app_base, "路" * 501)
+            with urllib.request.urlopen(limit_request, timeout=60):
+                pass
         except urllib.error.HTTPError as exception:
             if exception.code not in (400, 413):
                 raise RuntimeError(
@@ -239,25 +298,65 @@ def check_road_agent(
             transcription = json.load(response)
         result["asr"] = transcription.get("data")
     if with_traffic:
-        traffic = request_json(
-            f"{app_base}/api/v1/traffic/queries",
-            {"areaCode": "350100", "roadName": "五四路"},
+        traffic_cases = [
+            ("PROVINCE_OVERVIEW", {}, ("routeSummaries", "segments")),
+            ("CAPACITY_OVERVIEW", {}, ("capacityRows",)),
+            ("REGIONAL_TRAFFIC_OVERVIEW", {}, ("hubRows", "regionPressureRows", "routePressureRows")),
+            ("VEHICLE_PATTERN_OVERVIEW", {"analysisCity": "福州市"}, ("vehicleStructureRows", "vehicleTimeFeatureRows", "vehicleDayTypeRows")),
+        ]
+        traffic_report: list[dict[str, object]] = []
+        for query_type, fields, expected_lists in traffic_cases:
+            traffic = request_json(
+                f"{app_base}/api/v1/traffic/queries",
+                {"queryType": query_type, **fields},
+            )
+            traffic_data = traffic.get("data") or {}
+            if (
+                traffic_data.get("source") != "MYSQL"
+                or traffic_data.get("queryType") != query_type
+                or not traffic_data.get("summary")
+                or not any(isinstance(traffic_data.get(name), list) for name in expected_lists)
+            ):
+                raise RuntimeError(f"invalid MySQL traffic response: {traffic}")
+            traffic_report.append(
+                {
+                    "queryType": query_type,
+                    "source": traffic_data.get("source"),
+                    "rows": {name: len(traffic_data.get(name) or []) for name in expected_lists},
+                    "summaryCharacters": len(traffic_data.get("summary", "")),
+                }
+            )
+        result["traffic"] = traffic_report
+    if with_workflow:
+        workflow_report: dict[str, object] = {}
+        for stage in ("LEVEL_1", "LEVEL_2", "LEVEL_3"):
+            inbox = request_json(
+                f"{app_base}/api/v1/emergency-workflows/inbox?stage={stage}"
+            )
+            inbox_data = inbox.get("data") or {}
+            if not isinstance(inbox_data.get("counts"), dict):
+                raise RuntimeError(f"invalid {stage} workflow inbox: {inbox}")
+            workflow_report[stage] = {
+                "hasItem": inbox_data.get("item") is not None,
+                "counts": inbox_data.get("counts"),
+            }
+        history = request_json(
+            f"{app_base}/api/v1/emergency-workflows/history?page=0&size=20"
         )
-        traffic_data = traffic.get("data") or {}
-        if traffic_data.get("source") != "AMAP" or not traffic_data.get("segments"):
-            raise RuntimeError(f"invalid Amap traffic response: {traffic}")
-        result["traffic"] = {
-            "roadName": traffic_data.get("roadName"),
-            "source": traffic_data.get("source"),
-            "segmentCount": len(traffic_data.get("segments", [])),
-            "summary": traffic_data.get("summary"),
+        history_data = history.get("data") or {}
+        if not isinstance(history_data.get("items"), list):
+            raise RuntimeError(f"invalid workflow history: {history}")
+        workflow_report["history"] = {
+            "items": len(history_data.get("items", [])),
+            "total": history_data.get("total"),
         }
+        result["workflow"] = workflow_report
     if with_agent:
         conversation_id = f"dgx-smoke-{uuid.uuid4()}"
         request = urllib.request.Request(
             f"{app_base}/api/v1/conversations/{conversation_id}/messages/stream",
             data=json.dumps(
-                {"message": "查询福州五四路现在的路况。"},
+                {"message": "福建省普通国省道目前整体交通态势如何？"},
                 ensure_ascii=False,
             ).encode("utf-8"),
             headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
@@ -298,6 +397,7 @@ def main() -> None:
     parser.add_argument("--tts-output", type=Path)
     parser.add_argument("--audio", type=Path)
     parser.add_argument("--with-traffic", action="store_true")
+    parser.add_argument("--with-workflow", action="store_true")
     parser.add_argument("--with-agent", action="store_true")
     parser.add_argument("--tts-concurrency", type=int, default=0)
     parser.add_argument("--test-speech-limits", action="store_true")
@@ -314,6 +414,7 @@ def main() -> None:
             args.audio,
             args.tts_output,
             args.with_traffic,
+            args.with_workflow,
             args.with_agent,
             args.tts_concurrency,
             args.test_speech_limits,

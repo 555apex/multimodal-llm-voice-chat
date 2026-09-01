@@ -3,8 +3,8 @@
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
 ```text
-交通问答：自然语言 → OpenAI-compatible 模型识别道路/区域范围 → 交通 Skill → 高德 Tool → Java确定性回答
-应急调度：MySQL 异常事件 → 顶部告警卡 → 模型生成版本化工单 → 人工审批或返工 → 数据库留痕
+交通问答：自然语言 → 识别路况、通行能力、区域交通压力或车型出行特征 → MySQL只读事实 → Java确定性统计 → 模型摘要与可视化结果
+应急调度：MySQL 异常事件 → AI提出受限资源需求 → Java按库存和九市距离分配 → 三级上报通告 → 归还资源 → 全程留痕
 语音交互：浏览器录音 → Java语音接口 → Docker内faster-whisper识别；回答摘要 → 本地Qwen3-TTS分段合成 → 浏览器播放
 ```
 
@@ -54,12 +54,13 @@ git pull --ff-only origin version/roadagent-v1
 
 ## 3. 准备 API 和共享数据库配置
 
-运行项目需要两类外部 API 和一个共享云数据库。API Key 由每位协作者使用自己的账号申请，数据库连接信息由项目负责人通过安全渠道提供。
+运行项目需要一个兼容 OpenAI 协议的模型 API 和一个共享 MySQL 数据库。交通数据不再请求地图 API，启动不需要地图 Key。
 
 | 配置 | 由谁准备 | 要求 |
 |---|---|---|
-| `AMAP_API_KEY` | 协作者 | 在[高德开放平台](https://lbs.amap.com/api/webservice/create-project-and-key)创建应用并申请“Web 服务”类型的 Key；确认账号具有项目所用交通态势和行政区接口的调用额度 |
-| `ROADAGENT_MODEL_API_KEY` | 协作者 | 在[DeepSeek 开放平台](https://platform.deepseek.com/api_keys)创建 API Key，并确认账号有可用余额和调用额度 |
+| `ROADAGENT_MODEL_ENDPOINT` | 协作者或部署负责人 | 兼容 OpenAI Chat Completions 的完整地址；DGX 固定为内部 Qwen 地址 |
+| `ROADAGENT_MODEL_NAME` | 协作者或部署负责人 | 服务发布的模型名；DGX 固定为 `qwen3.6-35b-a3b-nvfp4` |
+| `ROADAGENT_MODEL_API_KEY` | 协作者 | 仅模型服务启用鉴权时填写；DGX 本地 Qwen 无需填写 |
 | `ROADAGENT_DB_URL` | 项目负责人 | 完整 JDBC URL，包含数据库 IP/域名、端口、schema 和连接参数 |
 | `ROADAGENT_DB_USERNAME` | 项目负责人 | 共享数据库账号 |
 | `ROADAGENT_DB_PASSWORD` | 项目负责人 | 共享数据库密码 |
@@ -74,7 +75,7 @@ git pull --ff-only origin version/roadagent-v1
 cp config/api-test.env.example config/api-test.env
 ```
 
-然后把自己申请的两个 API Key 和负责人提供的数据库信息填入本地 `config/api-test.env`，每次新开终端后执行：
+然后把模型连接信息和负责人提供的数据库信息填入本地 `config/api-test.env`，每次新开终端后执行：
 
 ```bash
 source config/api-test.env
@@ -90,7 +91,7 @@ source config/api-test.env
 Copy-Item config/api-test.ps1.example config/api-test.ps1
 ```
 
-填写自己申请的 API Key 和负责人提供的数据库信息后，每次新开 PowerShell 执行：
+填写模型连接信息和负责人提供的数据库信息后，每次新开 PowerShell 执行：
 
 ```powershell
 . .\config\api-test.ps1
@@ -110,6 +111,8 @@ export ROADAGENT_MODEL_NAME=服务器模型名
 export ROADAGENT_MODEL_AUTH_ENABLED=false
 ```
 
+DGX 部署不使用本机配置文件中的模型参数。`deploy/dgx/compose.yaml` 固定通过私有网络访问 `http://qwen:8000/v1/chat/completions`，关闭鉴权和 thinking；上传脚本默认保留 DGX 现有 `.env`，不会把本机模型配置覆盖到 DGX。
+
 Java 默认通过 `http://localhost:8091` 访问语音容器。如需显式配置或临时关闭语音入口，可设置：
 
 ```bash
@@ -123,7 +126,7 @@ Java 配置和 Docker 配置是两套独立配置，不能互相替代：
 
 | 本地文件 | 谁读取 | 主要内容 |
 |---|---|---|
-| `config/api-test.env` / `config/api-test.ps1` | 当前终端中的 Java 后端 | MySQL、高德、OpenAI-compatible 模型，以及 `ROADAGENT_SPEECH_*` |
+| `config/api-test.env` / `config/api-test.ps1` | 当前终端中的 Java 后端 | MySQL、OpenAI-compatible 模型，以及 `ROADAGENT_SPEECH_*` |
 | 根目录 `.env` | `docker compose` | 本地 ASR/TTS 模型路径、计算设备和音色等 `SPEECH_*` |
 
 Docker 语音服务已有可直接运行的默认值。需要查看或修改时，在项目根目录执行：
@@ -144,31 +147,53 @@ Copy-Item .env.example .env
 
 ## 4. 共享数据库要求
 
-本版本不会在应用启动时自动建表或修改表结构。“建表脚本”是由数据库负责人执行一次的 SQL，用于创建工单表，并给事件表补充本工作流需要的字段、约束和索引。项目负责人应先确保共享数据库已经执行过：
+本版本不会在应用启动时自动建表或修改表结构。“建表/迁移脚本”是由数据库负责人对目标 schema 执行一次的 SQL。项目负责人应确保共享数据库依次执行过：
 
 ```text
 docs/sql/20260728_emergency_dispatch.sql
+docs/sql/20260819_three_level_emergency_workflow.sql
+docs/sql/20260820_emergency_resource_dispatch.sql
+docs/sql/20260820_seed_demo_emergency_resources.sql
+docs/sql/20260820_level3_provincial_decision_metadata.sql
 ```
+
+前两个脚本创建基础工单与三级工作流；第三个增加事件城市、资源需求/缺口快照，并创建资源库存与占用流水表；第四个仅插入不存在的 `resource_id`，生成 108 条福建九市虚构 Demo 资源，不覆盖已人工修改的库存；第五个只把既有三级表的数据库注释统一为“省级决策”，不修改状态编码或业务数据。可用 `docs/sql/20260820_verify_emergency_resources.sql` 只读核验数量与一致性。在 IDEA 右侧数据库工具中执行时，必须先选中 `ROADAGENT_DB_URL` 指向的同一个 schema，执行后再同步表列表。
 
 协作者连接共享数据库时不需要重复执行此脚本，也不需要 `CREATE`、`ALTER` 或 `DROP` 权限。正常运行至少需要：
 
 - 连接共享数据库的权限；
+- 对 `w_road_network_status`、`w_congestion_detection_result`、`w_highway_network` 和 `w_road_capacity` 的 `SELECT` 权限；
+- 对 `w_transport_hubs`、`w_region_code` 和 `w_vehicletravelpatternanalyzer` 的 `SELECT` 权限；
 - 对 `w_abnormal_event` 的 `SELECT`、`UPDATE` 权限；
-- 对 `w_emergency_dispatch_order` 的 `SELECT`、`INSERT`、`UPDATE` 权限。
+- 对 `w_emergency_dispatch_order` 的 `SELECT`、`INSERT`、`UPDATE` 权限；
+- 对 `w_emergency_dispatch_workflow`、`w_emergency_professional_review`、`w_emergency_command_decision` 的 `SELECT`、`INSERT`、`UPDATE` 权限；
+- 对 `w_emergency_resource` 的 `SELECT`、`UPDATE` 权限；
+- 对 `w_emergency_resource_allocation` 的 `SELECT`、`INSERT`、`UPDATE` 权限；
+- 对只增不改的 `w_emergency_dispatch_action_log` 只授予 `SELECT`、`INSERT` 权限。
 
 如果协作者完全没有数据库连接或上述读写权限，后端将无法查询告警或保存工单，项目的数据库应急调度功能不能运行。当前工作流使用：
 
 - `w_abnormal_event`：保存异常事件；
-- `w_emergency_dispatch_order`：按版本保存模型生成的应急调度工单。
+- `w_emergency_dispatch_order`：按版本保存模型生成的应急调度方案和当时事件快照；
+- `w_emergency_dispatch_workflow`：每个事件一条稳定的三级流程主记录；
+- `w_emergency_professional_review`：二级市交通应急办的结构化专业会商记录；
+- `w_emergency_command_decision`：三级省级决策及最终不可修改通告快照；
+- `w_emergency_dispatch_action_log`：只增不改的操作流水和幂等留痕；
+- `w_emergency_resource`：福建九市城市级聚合库存，是正式调度的唯一资源事实来源；
+- `w_emergency_resource_allocation`：按方案版本保存软占用、已调度和已释放流水及来源城市快照。
+
+路况业务读取 `w_road_network_status`、`w_congestion_detection_result` 和 `w_highway_network`，通行能力业务读取 `w_road_capacity`；区域交通压力业务读取 `w_transport_hubs` 并使用 `w_region_code` 映射城市，车型出行特征业务读取 `w_vehicletravelpatternanalyzer`。本期明确不使用 `w_checkpoint_info`，运行时也不使用 `w_transport_hubs.temp_1`。
 
 关键状态约定：
 
-- `event_status=0`：待处理；
-- `event_status=1`：调度工单已审批通过；
+- `event_status=0`：三级流程尚未办结，一级、二级、三级流转期间始终保持 `0`；
+- `event_status=1`：三级最终批准并生成通告；
 - `event_status=2`：已确认无需调度；
 - `del_flag=N`、`0` 或 `NULL`：有效数据；`del_flag=Y` 或 `1`：逻辑删除。
 
-`w_abnormal_event.id` 是 `BIGINT`，后端会以字符串形式返回给前端，避免 JavaScript 精度丢失。若需要在 IDEA 中查看共享数据库，应单独创建 MySQL 数据源并选择连接参数中的 schema；刷新表列表只会刷新 IDEA 缓存，不会改变后端连接。
+`w_abnormal_event.id` 是 `BIGINT`，后端会以字符串形式返回给前端，避免 JavaScript 精度丢失。正式生成工单前，事件必须有 `event_city_code/event_city_name`；福清、闽侯和平潭在本期统一归入福州调度范围。若需要在 IDEA 中查看共享数据库，应单独创建 MySQL 数据源并选择连接参数中的 schema；刷新表列表只会刷新 IDEA 缓存，不会改变后端连接。
+
+`docs/sql/20260819_reset_demo_events.sql` 只用于当前 Demo 数据的永久重置，不依赖固定事件条数。脚本会锁定执行时 `w_abnormal_event` 中实际存在的事件，删除关联资源占用、工单和三级历史，将资源库存恢复为初始可用状态，并恢复 `event_status=0`、清空无需调度原因；事件原始创建信息保持不变。脚本不创建备份，普通协作者不需要执行；未经数据库负责人明确确认，不得在共享验收或生产数据上执行。
 
 ## 5. 启动项目
 
@@ -238,6 +263,7 @@ java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
 
 ```bash
 curl http://localhost:8080/api/v1/emergency-events/pending/next
+curl 'http://localhost:8080/api/v1/emergency-workflows/inbox?stage=LEVEL_1'
 curl http://localhost:8080/api/v1/speech/capabilities
 ```
 
@@ -255,7 +281,7 @@ npm run dev
 
 浏览器访问 `http://localhost:5173`。开发服务器会把 `/api` 请求代理到 `http://localhost:8080`，因此必须先保证后端已启动。
 
-页面可见时每 5 秒查询一次待处理事件。待处理事件会显示在聊天区顶部红色告警卡中，但不会阻塞用户继续进行交通问答。
+页面可见时每 5 秒查询一次三级待办。“应急处置”页签可切换一级、二级和三级 Demo 视角，并显示各级数量；这只是功能演示，不代表已实现登录、真实身份或防越权。应急流程不会强制打断交通问答。
 
 首次点击麦克风时，浏览器会请求录音权限，请选择允许。本机使用 `http://localhost:5173` 即可；通过其他域名或 IP 访问时必须配置 HTTPS，否则浏览器通常不会开放麦克风。
 
@@ -265,47 +291,72 @@ npm run dev
 
 1. `GET http://localhost:8091/health/ready` 返回 ASR、TTS 均可用；
 2. `GET http://localhost:8080/api/v1/speech/capabilities` 返回同样的能力状态，证明 Java 已连通容器；
-3. 点击麦克风，说“福州五四路现在拥堵吗”，再次点击停止；识别结果应插入输入框当前光标处，但不会自动发送；
+3. 点击麦克风，说“福建省目前整体交通态势如何”，再点击“停止并识别”；识别结果应插入输入框当前光标处，但不会自动发送；“取消”会丢弃本次录音；
 4. 手动发送问题，等待回答完成；点击单条回答的“朗读”，检查播放、暂停、继续和重播；
 5. 打开“语音回答”后再提一个问题，只应自动朗读之后完成的新回答；
 6. 停止语音容器并刷新页面，语音按钮应显示不可用，但文字问答和应急调度仍能继续。
 
-## 6. 当前能力与边界
+## 6. 当前能力
 
 ### 6.1 交通问答
 
-- 同一个交通 Skill 支持三种范围：`ROAD` 具体道路、`AREA_ALL` 行政区整体、`AREA_MAJOR` 行政区主要道路；
-- 道路查询缺少城市或道路时继续追问；区域查询不再强制追问某一条路；
-- 行政区名称由高德行政区服务解析，Java 校验 adcode 必须属于福建，不采信模型生成的编码；
-- “交通要道”使用高德道路等级 4 查询，不让模型凭自身知识列举道路；
-- 区域边界以约 6 公里矩形分片，最多 500 片、并发 4 个；部分失败时由Java自动收紧回答范围，不对外输出切片覆盖率；
-- Java只依据高德返回的道路、方向、状态和速度生成确定性回答：先总结整体和重点道路，再逐条列出本次返回的全部路段；同一道路名称和方向只保留拥堵程度最高、同等级速度最低的一条；不允许模型补充路段或改写交通事实；
+- 同一个交通 Skill 支持四类路况、三类通行能力、四类区域交通压力和四类车型出行特征查询；模型只负责意图选择与摘要，所有统计均由 Java 完成；
+- 全省总览使用 `w_road_network_status` 的路线整体均速和五级状态，不对路段速度二次平均；
+- 异常榜单仅使用 `w_congestion_detection_result` 中 `status>=20` 的路段，按状态、`severity`、均速排序展示前 10 条；
+- 城市间查询用 `w_highway_network.start_place/end_place` 双向精确匹配福建九市；单路线编号精确匹配优先，名称统一连接符和空格后精确匹配；
+- 五级状态保留数据库定义：10 畅通、20 轻度拥堵、30 中度拥堵、40 重度拥堵、50 堵塞；
+- 四类路况查询都会在当前态势摘要后给出未来 1–2 小时的定性趋势，趋势限定为“基本稳定、持续拥堵、可能加剧、逐渐缓解、局部分化”；该结果只依据当前 `status`、`uniform_speed`、`severity` 与交通常识作启发式研判，不是精确交通预测模型；
+- 趋势研判以数据库 `status` 为权威状态，均速和 `severity` 仅作辅助；不输出未来具体速度、流量、概率或解除时间，也不推测事故、施工、天气等拥堵原因；
+- 通行能力总览直接采用 `w_road_capacity.avg_previous_hour` 作为项目定义的实际通行能力（辆/小时）、`design_flow` 作为设计通行能力、`utilization_perc` 作为实际/设计利用率，Java 和模型均不重新计算这些数值；
+- 通行能力采用三级项目口径：利用率 `>=0.80` 为正常，`0.30<利用率<0.80` 为瓶颈，`<=0.30` 为严重瓶颈；数据库中的 0 是有效值并判定为严重瓶颈；
+- 瓶颈路线按利用率、实际通行能力升序稳定排序，默认展示前 10 条；当前容量表是一条路线一条记录，因此只称“瓶颈路线”，不虚构路段位置；
+- 交通表每 5 秒检查一次；每次通过 MySQL 只读一致性事务获得一个原子视图，不再要求读取前后数据库停止写入。后端冷启动会立即发布首份合法数据；运行期发现变化时继续使用上一已发布快照，候选内容连续稳定 30 秒后再原子切换；
+- 路况与通行能力业务表允许只覆盖当前批次有数据的部分活动路线，有多少条展示多少条；仍会拒绝重复路线、非活动路线、跨表名称冲突和非法数值。`w_road_capacity` 使用独立内存快照，其更新异常不会影响已有路况查询；
+- Java 先完成状态映射、统计、排序、截断和当前预警事实；路况模型据此生成当前态势摘要和 1 句未来 1–2 小时定性趋势，容量模型生成专业研判。模型首次只出现JSON、句数、标点或趋势时间写法偏差时会静默修复一次；摘要不再依赖“表格”等固定词或固定句式。模型引用结构化事实之外的数字时改用Java事实摘要，真正的模型服务失败仍不发布文字、表格或语音半成品；
+- 路况研判内容覆盖总体结论、状态分布、重点路线或路段、可执行的通行建议和短时定性趋势；趋势只进入已有摘要与语音，不增加表格预测列；
 - 会话最多保留 20 条消息，闲置 60 分钟后失效；
-- 高德适配器当前验证福州、厦门、泉州，其他福建城市提示数据源覆盖不足；
-- 高德或意图识别模型失败时，本次请求失败；已取得的交通事实不交给模型自由改写；
-- 保留 `POST /api/v1/traffic/queries`，用于结构化交通查询兼容。
+- 保留 `POST /api/v1/traffic/queries`，使用与 Agent 相同的 MySQL 查询和模型摘要流程。
 
-### 6.2 数据库应急调度
+### 6.2 区域交通压力与车型出行特征
 
-- 页面可见时每 5 秒查询 `w_abnormal_event`，按发生时间最早优先展示待处理事件；
-- 聊天区顶部红色告警卡独立于聊天运行状态，用户可暂时继续其他交通查询；
-- 用户确认后由模型根据事件事实和通用应急知识生成资源建议清单及救援方案；
-- 每次生成和返工都保存到 `w_emergency_dispatch_order`，刷新页面或重启服务后可恢复；
-- 方案停在 `WAITING_APPROVAL`，批准后事件状态改为 `1`；
-- 驳回必须填写意见，旧版本保留为 `REJECTED`，模型生成下一版本；
+- 产品内置标准问法会先经过Java确定性识别，再进入对应交通服务，不依赖模型首次猜测。覆盖全省路况、拥堵异常、两市路况、G/S路线、通行能力总览、瓶颈排行、区域卡口/城市/路线压力以及福州或厦门车型分析；例如“福建省各国省道通行能力利用率怎么样”“宁德到福州交通情况”“G104当前通行情况”“福州市的交通运输特征如何”等。模糊追问和依赖上下文的问题仍由模型规划；
+- 区域交通压力按 `w_transport_hubs.region_code` 筛选范围：不指定城市统计全省，指定一个城市统计该市，指定两个城市统计两市卡口并集；该口径不计算城市OD流量，也不将卡口流量描述成某一方向的车辆数；
+- 综合查询依次展示日均流量 Top20 卡口、日总流量 Top5 城市和 Top10 路线；明确询问卡口、城市或路线时只返回相应表格。活跃卡口固定为 `daily_avg_flow>100`，交通枢纽占比为城市活跃卡口数除以当前查询范围全部卡口数；
+- 区域和路线日总流量均为范围内对应卡口 `daily_avg_flow` 之和，路线均速为对应卡口 `average_speed` 算术平均值，不构造额外压力指数；
+- 城市表解读仍优先使用模型内容；模型遗漏某个城市、返回重复代码或解读格式不合格时，Java按已统计的活跃卡口事实补齐安全解读，不再因此中断整次回答；
+- 车型出行特征目前按单城市分析福州或厦门，每次执行 `create_time DESC, id DESC` 选取该城市最新有效记录；`result1` 为一周三车型总量，`result2` 为24小时数据，`result3` 为周末两天总量；
+- `car/bus/truck` 分别展示为小型客车、中型客车和大型货车。24小时缺失时间点补0，工作日5天合计为 `result1-result3`，周末2天合计直接使用 `result3`；
+- 前端使用固定 ECharts 模板绘制车型占比饼图、24小时折线图和工作日/周末柱状图；模型不生成图表配置，语音只朗读3–5句总结，不朗读表格和图表。
+
+### 6.3 数据库应急调度
+
+- 页面可见时每 5 秒查询三级待办，每级都按事件发生时间最早优先；
+- “应急处置”页签独立于聊天运行状态，用户可在问答与工单流程之间自主切换；
+- 模型只能从数据库资源类型白名单中提出需求数量和用途，不能编造资源 ID、来源城市、距离或库存；
+- 模型契约要求 `rescuePlan` 返回单个文本字符串；若兼容模型返回由纯文本章节组成的JSON对象，Core会确定性合并为方案正文，数组、嵌套对象等异常结构仍会拒绝；
+- Java 先使用事件同城库存，不足时按九市中心直线估算距离从近到远补足，跨市调度保留来源城市最低库存；
+- 全省仍不足时工单明确显示缺口，不把缺口伪装成已调度资源；带缺口方案可继续上报，但二、三级必须补充协调依据和批示；
+- 一级现场席位可要求AI返工、确认上报二级，或在尚未生成工单时二次确认“无需调度”；
+- 工单生成时库存由 `available` 转为 `reserved`；任一级退回时释放旧版占用并按新库存重新匹配；三级批准后转为 `dispatched`；
+- 二级市交通应急办填写事件等级、资源可行性、影响研判、协同要求和专业意见；带缺口时必须选择“有缺口但可执行”并填协调要求；
+- 三级省级决策席位可退回一级重新生成，或批准并生成确定性、不可修改的正式通告快照；
+- 三级批准前 `event_status` 始终为 `0`；只有最终通告与事件、方案、决策和流水在同一事务内办结后才改为 `1`；
+- 任一级退回都必须填写意见，旧版本保留为 `REJECTED`，模型生成下一版本并重新走完三级；
+- 工作流、市级专业复核、省级决策和每次动作都持久化，“流程记录”可查看已通告/无需调度事件的时间线；
+- 已通告记录支持输入原因、二次确认后整单归还已调度资源；最终通告快照和事件状态不因归还而改变；
 - 选择“不生成”必须填写原因并二次确认，事件状态改为 `2`；
 - 模型失败会保存 `FAILED` 记录，事件保持待处理并允许重试；
-- 当前资源清单是模型基于通用知识生成的建议，不代表实际库存、距离、联系人或到达时间；
-- 聊天识别到应急调度意图时只引导用户使用顶部告警卡，不创建无数据库来源的正式工单。
+- 当前 108 条资源是虚构 Demo 数据，不代表真实保障能力；城市距离仅用于资源排序，不代表道路里程、到达时间或路线；
+- 聊天识别到应急调度意图时只引导用户使用“应急处置”页签，不创建无数据库来源的正式工单。
 
-### 6.3 语音输入与回答朗读
+### 6.4 语音输入与回答朗读
 
 - 输入框麦克风按钮支持开始、停止和取消录音；最长 60 秒、最大 10 MB，识别文字插入当前光标位置，不会自动发送；
 - 浏览器优先使用 WebM/Opus，按能力回退到 MP4/AAC 或 Ogg/Opus；非 `localhost` 部署需要 HTTPS 才能稳定获取麦克风权限；
 - “语音回答”每次打开页面默认关闭；打开后只自动朗读之后完成的助手回答，关闭会立即停止并清空播放队列；
 - 每条已完成的助手消息均有独立的播放、暂停、继续和重播按钮，同一时刻只播放一条；
 - 中文按自然标点分段，播放当前段时预合成下一段，以降低首段等待和段间停顿；
-- 交通查询朗读 Java 根据结构化事实生成的简短结论、最多 3 条重点道路和出行建议，不逐行朗读表格或坐标；省略明细时会提示查看页面；
+- 交通查询只朗读通过格式校验的 3–5 句模型研判摘要，不朗读表格数据；
 - 应急告警卡和正式调度工单不会自动朗读；Qwen3-TTS 在 DGX 本地离线合成，不会把待朗读文本发送到外部服务；
 - 语音容器不可用、ASR/TTS 失败或被用户取消时，只影响语音功能，不影响已有文字和其他业务流程。
 
@@ -313,13 +364,13 @@ npm run dev
 
 | 模块 | 作用 | 主要内容 |
 |---|---|---|
-| `road-agent-domain` | 纯业务对象和规则 | 福建城市、行政区边界、区域交通指标、事件和版本化调度方案 |
+| `road-agent-domain` | 纯业务对象和规则 | 交通领域、事件、资源库存/分配/缺口、版本化方案、三级流程和通告快照 |
 | `road-agent-application` | 模块间稳定契约 | UseCase、Port、命令、结果、Agent 事件 |
-| `road-agent-core` | Agent 和业务工作流 | 意图规划、Skill 注册、交通 Skill、调度生成与审批编排 |
-| `road-agent-adapters` | 外部能力实现 | 高德、OpenAI-compatible 模型、MySQL 事件与工单仓储、事务适配器、内存会话 |
+| `road-agent-core` | Agent 和业务工作流 | 意图规划、Skill 注册、交通 Skill、三级状态机、返工和最终通告事务编排 |
+| `road-agent-adapters` | 外部能力实现 | MySQL 交通快照/事件/方案/应急资源/三级流程、九市距离、OpenAI-compatible 模型、事务适配器 |
 | `road-agent-interface` | HTTP 边界 | REST、SSE、请求响应 DTO 和错误转换 |
 | `road-agent-boot` | 统一装配 | Spring Boot 启动、配置和具体实现选择 |
-| `frontend` | 对话界面 | 数字人、流式消息、交通卡片、独立应急告警状态和审批交互 |
+| `frontend` | 对话界面 | 数字人、流式消息、交通卡片、三级待办、会商表、通告和时间线 |
 | `speech-service` | Docker语音服务 | FastAPI、faster-whisper、Qwen3-TTS、MP3转码、健康检查和离线替身测试 |
 
 依赖方向：
@@ -340,8 +391,14 @@ POST /api/v1/emergency-events/{eventId}/dispatches
 POST /api/v1/emergency-events/{eventId}/no-dispatch
 GET  /api/v1/dispatches/{planId}
 POST /api/v1/dispatches/{planId}/approvals
+GET  /api/v1/emergency-workflows/inbox?stage=LEVEL_1|LEVEL_2|LEVEL_3
+POST /api/v1/emergency-workflows/{workflowId}/level-1-decisions
+POST /api/v1/emergency-workflows/{workflowId}/professional-reviews
+POST /api/v1/emergency-workflows/{workflowId}/command-decisions
+POST /api/v1/emergency-workflows/{workflowId}/resource-releases
+GET  /api/v1/emergency-workflows/{workflowId}
+GET  /api/v1/emergency-workflows/history
 POST /api/v1/traffic/queries
-POST /api/v1/traffic/area-queries
 GET  /api/v1/speech/capabilities
 POST /api/v1/speech/transcriptions
 POST /api/v1/speech/syntheses
@@ -354,24 +411,25 @@ POST /api/v1/speech/syntheses
 1. `AgentController`：自然语言请求如何进入后端；
 2. `AgentRuntime`：规划、选择 Skill、执行和记忆如何串联；
 3. `IntentPlanner` 与 `SkillRegistry`：模型选择和 Java 白名单的边界；
-4. `RealtimeTrafficSkill`：交通三种范围如何执行；
-5. `EmergencyEventController` 与 `DispatchApplicationService`：数据库事件、生成、审批、返工和无需调度流程；
-6. `QueryRealtimeTrafficTool`、`QueryAreaTrafficTool` 与各类 Port：Tool 和外部接口如何隔离；
-7. `AbnormalEventRepository`、`MysqlDispatchRepository` 与 `SpringUnitOfWork`：MySQL 持久化和事务边界；
-8. `OpenAiCompatibleChatModelAdapter`：结构化输出和流式输出如何实现；
-9. `SpeechController`、`SpeechApplicationService` 与 `PythonSpeechServiceAdapter`：Java 如何隔离语音容器故障；
-10. `speech-service/app` 与前端 `speech` Store：识别、自然分段、预合成和播放取消；
-11. [语音录音停止与识别问题修复日志](docs/VOICE_INPUT_RECORDING_BUGFIX_20260812.md)：录音按钮状态回路、排查证据、修复方案与回归验证；
-12. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
+4. `HighwayTrafficSkill` 与 `HighwayTrafficService`：四种交通查询如何执行；
+5. `EmergencyWorkflowController` 与 `DispatchApplicationService`：三级状态机、版本返工、幂等和最终通告事务；
+6. `MysqlHighwayTrafficSnapshotSource`、`InMemoryHighwayTrafficSnapshotCache` 与 Port：一致性读取、完整性校验和原子发布；
+7. `EmergencyResourceAllocator`、`MysqlEmergencyResourceRepository`、`MysqlResourceAllocationRepository` 与 `FujianCityDistanceAdapter`：受限资源需求如何转成库存占用、跨市调度和缺口；
+8. `AbnormalEventRepository`、`MysqlDispatchRepository`、`MysqlEmergencyWorkflowRepository` 与 `SpringUnitOfWork`：MySQL 持久化和事务边界；
+9. `OpenAiCompatibleChatModelAdapter`：结构化输出和流式输出如何实现；
+10. `SpeechController`、`SpeechApplicationService` 与 `PythonSpeechServiceAdapter`：Java 如何隔离语音容器故障；
+11. `speech-service/app` 与前端 `speech` Store：识别、自然分段、预合成和播放取消；
+12. [语音录音停止与识别问题修复日志](docs/VOICE_INPUT_RECORDING_BUGFIX_20260812.md)：历史故障、当前抽屉结构下的修复和回归验证；
+13. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
 
 ## 10. 验证命令
 
-自动测试不会请求真实高德或外部模型。设置共享数据库环境变量后，后端集成测试会验证真实 MySQL 仓储：
+自动测试不会请求外部模型。设置共享数据库环境变量后，后端集成测试会验证真实 MySQL 仓储：
 
 ```bash
 ./mvnw test
-cd frontend && npm test -- --run
-cd frontend && npm run build
+(cd frontend && npm test -- --run)
+(cd frontend && npm run build)
 docker compose -f compose.speech.yml --profile test run --rm speech-tests
 ```
 
@@ -388,7 +446,7 @@ Python 测试使用替身 ASR/TTS，不下载模型，也不会访问外网。Do
 依次确认：
 
 1. 后端已在 `8080` 端口启动；
-2. `GET /api/v1/emergency-events/pending/next` 能返回事件；
+2. `GET /api/v1/emergency-workflows/inbox?stage=LEVEL_1` 能返回事件和三级数量；
 3. 事件满足 `event_status=0 AND (del_flag IS NULL OR del_flag IN ('N', '0'))`；
 4. 前端已在 `5173` 端口启动，浏览器页面处于可见状态；
 5. 前后端终端中没有数据库连接或代理错误。
@@ -409,4 +467,4 @@ Python 测试使用替身 ASR/TTS，不下载模型，也不会访问外网。Do
 
 ### 当前尚未实现的部分
 
-统一救援资源数据库、知识库、地图可视化和外部工单平台尚未接入。MySQL 应急调度、Docker ASR、分段 TTS 及前端语音交互已经实现。
+当前已实现 MySQL Demo 资源库存、占用、跨市分配和归还，但尚未接入甲方真实资源接口。真实登录鉴权与角色防越权、外部工单/通知平台、知识库以及基于实时地理数据的交互地图也尚未实现；首页福建地图目前是静态指挥大屏背景，不代表实时 GIS 图层。

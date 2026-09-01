@@ -1,17 +1,13 @@
 package cn.fj.roadagent.interfaces.rest.traffic;
 
-import cn.fj.roadagent.application.traffic.Freshness;
-import cn.fj.roadagent.application.traffic.QueryRealtimeTrafficUseCase;
-import cn.fj.roadagent.application.traffic.SummarySource;
-import cn.fj.roadagent.application.traffic.TrafficQueryResult;
-import cn.fj.roadagent.domain.traffic.CongestionLevel;
-import cn.fj.roadagent.domain.traffic.RoadSegmentStatus;
-import cn.fj.roadagent.domain.traffic.TrafficQuery;
+import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
+import cn.fj.roadagent.application.traffic.QueryHighwayTrafficUseCase;
+import cn.fj.roadagent.application.traffic.RouteTrafficResultItem;
+import cn.fj.roadagent.application.traffic.RoadCapacityResultItem;
+import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 import cn.fj.roadagent.interfaces.rest.common.GlobalExceptionHandler;
 import cn.fj.roadagent.interfaces.rest.common.TraceIdFilter;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -19,56 +15,72 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class TrafficControllerTest {
 
-    private MockMvc mockMvc;
-
-    @BeforeEach
-    void setUp() {
-        QueryRealtimeTrafficUseCase useCase = command -> new TrafficQueryResult(
-                new TrafficQuery(command.areaCode(), command.roadName(), command.direction()),
-                "五四路当前缓行。",
-                SummarySource.MODEL,
-                List.of(new RoadSegmentStatus("五四路", "南向北", CongestionLevel.SLOW, 25.0, null)),
-                "AMAP",
-                Instant.parse("2026-07-17T08:00:00Z"),
-                Freshness.FRESH,
-                false,
-                List.of(),
-                command.traceId()
+    @Test
+    void acceptsTrafficContractAndReturnsUnifiedMysqlResult() throws Exception {
+        QueryHighwayTrafficUseCase useCase = query -> new HighwayTrafficResult(
+                TrafficQueryType.PROVINCE_OVERVIEW, "福建省国省道整体交通态势",
+                "当前国省道整体运行平稳。请按实时状态合理安排出行。",
+                List.of(new RouteTrafficResultItem("G104", "北京-平潭", 89.34, 10, "畅通")),
+                List.of(), List.of(), 0, 0, false, "MYSQL", Instant.parse("2026-08-13T01:00:00Z"),
+                List.of(), query.traceId()
         );
-        mockMvc = MockMvcBuilders.standaloneSetup(new TrafficController(useCase))
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TrafficController(useCase))
                 .setControllerAdvice(new GlobalExceptionHandler())
-                .addFilters(new TraceIdFilter())
+                .addFilter(new TraceIdFilter())
                 .build();
-    }
 
-    @Test
-    void shouldReturnTrafficResult() throws Exception {
         mockMvc.perform(post("/api/v1/traffic/queries")
-                        .header("X-Trace-Id", "trace-controller-test")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"areaCode":"350100","roadName":"五四路","direction":"南向北"}
-                                """))
+                        .contentType("application/json")
+                        .content("{\"queryType\":\"PROVINCE_OVERVIEW\"}"))
                 .andExpect(status().isOk())
-                .andExpect(header().string("X-Trace-Id", "trace-controller-test"))
-                .andExpect(jsonPath("$.code").value("OK"))
-                .andExpect(jsonPath("$.data.summary").value("五四路当前缓行。"))
-                .andExpect(jsonPath("$.data.segments[0].congestionLevel").value("SLOW"));
+                .andExpect(jsonPath("$.data.source").value("MYSQL"))
+                .andExpect(jsonPath("$.data.queryType").value("PROVINCE_OVERVIEW"))
+                .andExpect(jsonPath("$.data.routeSummaries[0].status").value(10))
+                .andExpect(jsonPath("$.data.routeSummaries[0].statusName").value("畅通"));
     }
 
     @Test
-    void shouldRejectInvalidRequest() throws Exception {
+    void acceptsCapacityQueryAndReturnsCapacityRows() throws Exception {
+        QueryHighwayTrafficUseCase useCase = query -> new HighwayTrafficResult(
+                query.queryType(), "G104 北京-平潭通行能力",
+                "当前路线通行能力评估结果已完成汇总，实际与设计通行能力均按最新数据展示。"
+                        + "该路线利用率对应的三级评估结果已明确，可结合页面详细数值进行研判。"
+                        + "建议运行监测人员持续关注该路线，并根据评估等级安排后续巡查工作。",
+                List.of(), List.of(), List.of(new RoadCapacityResultItem(
+                "G104", "北京-平潭", 0, 1920, 0,
+                "SEVERE_BOTTLENECK", "严重瓶颈"
+        )), 1, 1, false, "MYSQL", Instant.parse("2026-08-13T01:00:00Z"),
+                List.of(), query.traceId()
+        );
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TrafficController(useCase))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .addFilter(new TraceIdFilter())
+                .build();
+
         mockMvc.perform(post("/api/v1/traffic/queries")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"areaCode":"福州","roadName":""}
-                                """))
+                        .contentType("application/json")
+                        .content("{\"queryType\":\"CAPACITY_ROUTE_DETAIL\",\"routeCode\":\"G104\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.capacityRows[0].actualCapacityVph").value(0))
+                .andExpect(jsonPath("$.data.capacityRows[0].utilizationRatio").value(0))
+                .andExpect(jsonPath("$.data.capacityRows[0].capacityLevelName").value("严重瓶颈"));
+    }
+
+    @Test
+    void rejectsMissingQueryType() throws Exception {
+        QueryHighwayTrafficUseCase unused = query -> { throw new AssertionError("must not call"); };
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new TrafficController(unused))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .addFilter(new TraceIdFilter())
+                .build();
+
+        mockMvc.perform(post("/api/v1/traffic/queries")
+                        .contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }

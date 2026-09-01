@@ -1,52 +1,55 @@
 package cn.fj.roadagent.application.agent;
 
-import cn.fj.roadagent.application.traffic.Freshness;
-import cn.fj.roadagent.application.traffic.AreaTrafficQueryResult;
-import cn.fj.roadagent.application.traffic.SummarySource;
-import cn.fj.roadagent.application.traffic.TrafficQueryResult;
-import cn.fj.roadagent.domain.traffic.RoadSegmentStatus;
-import cn.fj.roadagent.domain.traffic.TrafficCoverage;
-import cn.fj.roadagent.domain.traffic.TrafficEvaluation;
-import cn.fj.roadagent.domain.traffic.TrafficQueryScope;
+import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
+import cn.fj.roadagent.application.traffic.HighwayTrafficSegmentResultItem;
+import cn.fj.roadagent.application.traffic.RouteTrafficResultItem;
+import cn.fj.roadagent.application.traffic.RoadCapacityResultItem;
+import cn.fj.roadagent.application.traffic.SelectedRegionResultItem;
+import cn.fj.roadagent.application.traffic.TransportHubResultItem;
+import cn.fj.roadagent.application.traffic.RegionPressureResultItem;
+import cn.fj.roadagent.application.traffic.RoutePressureResultItem;
+import cn.fj.roadagent.application.traffic.VehicleStructureResultItem;
+import cn.fj.roadagent.application.traffic.VehicleTimeFeatureResultItem;
+import cn.fj.roadagent.application.traffic.VehicleDayTypeResultItem;
+import cn.fj.roadagent.application.traffic.HourlyVehicleFlowResultItem;
+import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 
 import java.time.Instant;
 import java.util.List;
 
 /** 对话事件使用的扁平交通结果，避免前端了解内部TrafficQuery对象。 */
 public record TrafficAgentResult(
-        TrafficQueryScope queryScope,
-        String areaCode,
-        String areaName,
-        String roadName,
-        String direction,
+        TrafficQueryType queryType,
+        String title,
         String summary,
-        SummarySource summarySource,
-        List<RoadSegmentStatus> segments,
-        TrafficEvaluation evaluation,
-        TrafficCoverage coverage,
+        List<RouteTrafficResultItem> routeSummaries,
+        List<HighwayTrafficSegmentResultItem> segments,
+        List<RoadCapacityResultItem> capacityRows,
+        List<SelectedRegionResultItem> selectedRegions,
+        List<TransportHubResultItem> hubRows,
+        List<RegionPressureResultItem> regionPressureRows,
+        List<RoutePressureResultItem> routePressureRows,
+        String analysisCity,
+        List<VehicleStructureResultItem> vehicleStructureRows,
+        List<VehicleTimeFeatureResultItem> vehicleTimeFeatureRows,
+        List<VehicleDayTypeResultItem> vehicleDayTypeRows,
+        List<HourlyVehicleFlowResultItem> hourlyVehicleSeries,
+        int totalSegmentCount,
+        int displayedSegmentCount,
+        boolean truncated,
         String source,
         Instant acquiredAt,
-        Freshness freshness,
-        boolean mock,
         List<String> warnings,
         String traceId
 ) {
-    public static TrafficAgentResult from(TrafficQueryResult result) {
+    public static TrafficAgentResult from(HighwayTrafficResult result) {
         return new TrafficAgentResult(
-                TrafficQueryScope.ROAD, result.query().areaCode(), null,
-                result.query().roadName(), result.query().direction(),
-                result.summary(), result.summarySource(), result.segments(),
-                TrafficEvaluation.from(result.segments()), TrafficCoverage.of(1, 1, 0), result.source(),
-                result.acquiredAt(), result.freshness(), result.mock(), result.warnings(), result.traceId()
-        );
-    }
-
-    public static TrafficAgentResult from(AreaTrafficQueryResult result) {
-        return new TrafficAgentResult(
-                result.query().scope(), result.query().area().adcode(), result.query().area().name(),
-                null, null, result.summary(), result.summarySource(), result.segments(),
-                result.evaluation(), result.coverage(), result.source(), result.acquiredAt(),
-                result.freshness(), false, result.warnings(), result.traceId()
+                result.queryType(), result.title(), result.summary(), result.routeSummaries(),
+                result.segments(), result.capacityRows(), result.selectedRegions(), result.hubRows(),
+                result.regionPressureRows(), result.routePressureRows(), result.analysisCity(),
+                result.vehicleStructureRows(), result.vehicleTimeFeatureRows(), result.vehicleDayTypeRows(),
+                result.hourlyVehicleSeries(), result.totalSegmentCount(), result.displayedSegmentCount(),
+                result.truncated(), result.source(), result.acquiredAt(), result.warnings(), result.traceId()
         );
     }
 }

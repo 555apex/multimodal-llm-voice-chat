@@ -1,0 +1,39 @@
+package cn.fj.roadagent.interfaces.rest.workflow;
+
+import cn.fj.roadagent.application.dispatch.EmergencyWorkflowView;
+import cn.fj.roadagent.domain.dispatch.CommandDecision;
+import cn.fj.roadagent.domain.dispatch.ProfessionalReview;
+import cn.fj.roadagent.domain.dispatch.WorkflowAction;
+import cn.fj.roadagent.domain.dispatch.WorkflowStage;
+import cn.fj.roadagent.domain.dispatch.WorkflowStatus;
+import cn.fj.roadagent.interfaces.rest.dispatch.DispatchResponse;
+import cn.fj.roadagent.interfaces.rest.emergency.EmergencyEventResponse;
+
+import java.util.List;
+
+public record EmergencyWorkflowResponse(
+        String workflowId,
+        WorkflowStage currentStage,
+        WorkflowStatus workflowStatus,
+        long workflowVersion,
+        EmergencyEventResponse event,
+        DispatchResponse currentPlan,
+        ProfessionalReview professionalReview,
+        CommandDecision commandDecision,
+        List<WorkflowAction> timeline,
+        boolean resourcesReleased
+) {
+    public static EmergencyWorkflowResponse from(EmergencyWorkflowView view) {
+        return new EmergencyWorkflowResponse(
+                view.workflow() == null ? null : view.workflow().workflowId(),
+                view.workflow() == null ? WorkflowStage.LEVEL_1 : view.workflow().currentStage(),
+                view.workflow() == null
+                        ? WorkflowStatus.WAITING_GENERATION : view.workflow().status(),
+                view.workflow() == null ? 0 : view.workflow().lockVersion(),
+                EmergencyEventResponse.from(view.event()),
+                view.currentPlan() == null ? null : DispatchResponse.from(view.currentPlan()),
+                view.professionalReview(), view.commandDecision(), view.timeline(),
+                view.resourcesReleased()
+        );
+    }
+}

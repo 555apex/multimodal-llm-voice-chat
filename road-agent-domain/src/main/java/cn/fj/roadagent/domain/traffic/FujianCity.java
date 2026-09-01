@@ -42,7 +42,7 @@ public enum FujianCity {
         }
         String normalized = input.trim().replace("福建省", "").replace("市", "");
         return Arrays.stream(values())
-                .filter(city -> normalized.contains(city.displayName))
+                .filter(city -> normalized.equals(city.displayName))
                 .findFirst();
     }
 

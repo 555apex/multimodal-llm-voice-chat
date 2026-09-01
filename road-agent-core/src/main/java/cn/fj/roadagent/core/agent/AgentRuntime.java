@@ -49,7 +49,10 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             // （历史信息+用户信息）传递给大模型
             AgentDecision decision = intentPlanner.plan(command.message(), history);
             AgentIntent intent = decision.parsedIntent();   // 模型结果转化为AgentIntent包含的枚举
-            emit(sink, "intent.recognized", Map.of("intent", intent.name()));
+            var recognized = new java.util.LinkedHashMap<String, Object>();
+            recognized.put("intent", intent.name());
+            decision.parsedTrafficQueryType().ifPresent(type -> recognized.put("trafficScope", type.name()));
+            emit(sink, "intent.recognized", Map.copyOf(recognized));
 
             // 存储本轮对话进入上下文记忆
             memoryPort.append(command.conversationId(),
@@ -58,7 +61,7 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             // 无关问题，限制Agent不回答
             if (intent == AgentIntent.UNSUPPORTED) {
                 completeWithoutSkill(command, sink, runId,
-                        "目前我只支持福建道路实时路况查询和应急调度，请换一种相关问题。 ");
+                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析区域卡口、城市与路线交通压力，以及福州、厦门的车型出行特征，并提供应急调度辅助。 ");
                 return;
             }
 

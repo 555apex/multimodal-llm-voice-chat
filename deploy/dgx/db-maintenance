@@ -1,0 +1,274 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$ROOT/../.." && pwd)"
+DEFAULT_ENV_FILE="$ROOT/.env"
+ADMIN_ENV_FILE="$ROOT/.env.db-admin"
+DB_ENV_FILE="${ROADAGENT_DB_ENV_FILE:-$DEFAULT_ENV_FILE}"
+BACKUP_ROOT="${ROADAGENT_DB_BACKUP_ROOT:-/home/whtc/workspace/backups/road-agent-db}"
+SQL_ROOT="$PROJECT_ROOT/docs/sql"
+CLIENT_ENTRYPOINT="$ROOT/mysql-client-entrypoint"
+
+if [[ -z "${ROADAGENT_DB_ENV_FILE:-}" && -f "$ADMIN_ENV_FILE" ]]; then
+  DB_ENV_FILE="$ADMIN_ENV_FILE"
+fi
+
+AFFECTED_TABLES=(
+  w_abnormal_event
+  w_emergency_dispatch_order
+  w_emergency_dispatch_workflow
+  w_emergency_professional_review
+  w_emergency_command_decision
+  w_emergency_dispatch_action_log
+  w_emergency_resource
+  w_emergency_resource_allocation
+)
+
+MIGRATION_SCRIPTS=(
+  20260728_emergency_dispatch.sql
+  20260819_three_level_emergency_workflow.sql
+  20260820_emergency_resource_dispatch.sql
+  20260820_seed_demo_emergency_resources.sql
+  20260820_level3_provincial_decision_metadata.sql
+)
+
+VERIFY_SCRIPT=20260820_verify_emergency_resources.sql
+LAST_BACKUP_DIR=""
+
+die() {
+  echo "$*" >&2
+  exit 1
+}
+
+env_value() {
+  local key="$1"
+  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$DEFAULT_ENV_FILE"
+}
+
+require_environment() {
+  [[ -f "$DEFAULT_ENV_FILE" ]] || die "missing runtime environment: $DEFAULT_ENV_FILE"
+  [[ -f "$DB_ENV_FILE" ]] || die "missing database environment: $DB_ENV_FILE"
+  [[ -x "$CLIENT_ENTRYPOINT" ]] || die "database client entrypoint is not executable: $CLIENT_ENTRYPOINT"
+  for key in ROADAGENT_DB_URL ROADAGENT_DB_USERNAME ROADAGENT_DB_PASSWORD; do
+    grep -Eq "^${key}=.+" "$DB_ENV_FILE" || die "missing database value in $DB_ENV_FILE: $key"
+  done
+  local mode
+  mode="$(stat -c '%a' "$DB_ENV_FILE")"
+  [[ "$mode" == "600" ]] || die "database environment must have mode 600: $DB_ENV_FILE (current $mode)"
+  for script in "${MIGRATION_SCRIPTS[@]}" "$VERIFY_SCRIPT"; do
+    [[ -f "$SQL_ROOT/$script" ]] || die "missing SQL file: $SQL_ROOT/$script"
+  done
+}
+
+client_image() {
+  local configured
+  configured="$(env_value MYSQL_CLIENT_IMAGE)"
+  printf '%s\n' "${configured:-dockerproxy.net/library/mysql:8.4.11-oraclelinux9}"
+}
+
+ensure_client_image() {
+  local image
+  image="$(client_image)"
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    docker pull "$image"
+  fi
+}
+
+db_client() {
+  local image
+  image="$(client_image)"
+  docker run --rm --network host \
+    --env-file "$DB_ENV_FILE" \
+    --volume "$CLIENT_ENTRYPOINT:/db-tool:ro" \
+    --volume "$SQL_ROOT:/sql:ro" \
+    --entrypoint /db-tool \
+    "$image" "$@"
+}
+
+db_client_with_backup() {
+  local backup_dir="$1"
+  shift
+  local image
+  image="$(client_image)"
+  docker run --rm --network host \
+    --env-file "$DB_ENV_FILE" \
+    --volume "$CLIENT_ENTRYPOINT:/db-tool:ro" \
+    --volume "$SQL_ROOT:/sql:ro" \
+    --volume "$backup_dir:/backup:ro" \
+    --entrypoint /db-tool \
+    "$image" "$@"
+}
+
+table_list_sql() {
+  local quoted=()
+  local table
+  for table in "${AFFECTED_TABLES[@]}"; do
+    quoted+=("'$table'")
+  done
+  local joined
+  joined="$(IFS=,; echo "${quoted[*]}")"
+  printf "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN (%s) ORDER BY TABLE_NAME" "$joined"
+}
+
+assert_application_stopped() {
+  local running
+  running="$(docker ps --format '{{.Names}}' | grep -E '^road-agent-dgx-(backend|frontend|speech)$' || true)"
+  [[ -z "$running" ]] || die "Road Agent containers must be stopped before database migration or restore: $running"
+}
+
+preflight() {
+  require_environment
+  ensure_client_image
+  echo "Database client image: $(client_image)"
+  docker image inspect --format 'Image ID={{.Id}} Digests={{json .RepoDigests}}' "$(client_image)"
+  echo "Selected schema: $(db_client schema)"
+  db_client info
+  local tables
+  tables="$(db_client query "$(table_list_sql)" | tr -d '\r')"
+  [[ -n "$tables" ]] || die "none of the affected tables exist; refusing migration"
+  echo "Affected tables and exact row counts:"
+  local count_sql=""
+  local table
+  while IFS= read -r table; do
+    [[ "$table" =~ ^[A-Za-z0-9_]+$ ]] || die "unsafe table returned by database: $table"
+    if [[ -n "$count_sql" ]]; then count_sql+=" UNION ALL "; fi
+    count_sql+="SELECT '$table' AS table_name, COUNT(*) AS row_count FROM \`$table\`"
+  done <<< "$tables"
+  db_client query "$count_sql"
+  echo "Existing affected columns:"
+  db_client query "SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_KEY FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ($(printf "'%s'," "${AFFECTED_TABLES[@]}" | sed 's/,$//')) ORDER BY TABLE_NAME,ORDINAL_POSITION"
+  echo "Existing affected foreign keys:"
+  db_client query "SELECT TABLE_NAME,CONSTRAINT_NAME,COLUMN_NAME,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL AND (TABLE_NAME IN ($(printf "'%s'," "${AFFECTED_TABLES[@]}" | sed 's/,$//')) OR REFERENCED_TABLE_NAME IN ($(printf "'%s'," "${AFFECTED_TABLES[@]}" | sed 's/,$//'))) ORDER BY TABLE_NAME,CONSTRAINT_NAME,ORDINAL_POSITION"
+}
+
+create_backup() {
+  require_environment
+  ensure_client_image
+  local backup_id="${1:-$(date -u +%Y%m%dT%H%M%SZ)}"
+  [[ "$backup_id" =~ ^[A-Za-z0-9._-]+$ ]] || die "unsafe backup id: $backup_id"
+  local backup_dir="$BACKUP_ROOT/$backup_id"
+  [[ ! -e "$backup_dir" ]] || die "backup directory already exists: $backup_dir"
+  mkdir -p "$backup_dir"
+  chmod 700 "$BACKUP_ROOT" "$backup_dir"
+
+  mapfile -t existing_tables < <(db_client query "$(table_list_sql)" | tr -d '\r')
+  [[ ${#existing_tables[@]} -gt 0 ]] || die "none of the affected tables exist; refusing migration"
+  printf '%s\n' "${existing_tables[@]}" > "$backup_dir/existing-tables.txt"
+
+  local count_sql=""
+  local table
+  for table in "${existing_tables[@]}"; do
+    [[ "$table" =~ ^[A-Za-z0-9_]+$ ]] || die "unsafe table returned by database: $table"
+    if [[ -n "$count_sql" ]]; then count_sql+=" UNION ALL "; fi
+    count_sql+="SELECT '$table' AS table_name, COUNT(*) AS row_count FROM \`$table\`"
+  done
+  db_client query "$count_sql" > "$backup_dir/counts-before.tsv"
+  db_client query \
+    "SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT,COLUMN_KEY,EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ($(printf "'%s'," "${AFFECTED_TABLES[@]}" | sed 's/,$//')) ORDER BY TABLE_NAME,ORDINAL_POSITION" \
+    > "$backup_dir/columns-before.tsv"
+  db_client query \
+    "SELECT TABLE_NAME,CONSTRAINT_NAME,COLUMN_NAME,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_NAME IS NOT NULL AND (TABLE_NAME IN ($(printf "'%s'," "${AFFECTED_TABLES[@]}" | sed 's/,$//')) OR REFERENCED_TABLE_NAME IN ($(printf "'%s'," "${AFFECTED_TABLES[@]}" | sed 's/,$//'))) ORDER BY TABLE_NAME,CONSTRAINT_NAME,ORDINAL_POSITION" \
+    > "$backup_dir/foreign-keys-before.tsv"
+  db_client dump "${existing_tables[@]}" > "$backup_dir/pre-migration.sql"
+
+  {
+    echo "backup_id=$backup_id"
+    echo "created_utc=$(date -u --iso-8601=seconds)"
+    echo "schema=$(db_client schema)"
+    echo "source_commit=$(git -C "$PROJECT_ROOT" rev-parse HEAD 2>/dev/null || echo archive-no-git)"
+    echo "mysql_client_image=$(client_image)"
+    docker image inspect --format 'mysql_client_image_id={{.Id}}' "$(client_image)"
+    sha256sum "$SQL_ROOT"/20260728_emergency_dispatch.sql \
+      "$SQL_ROOT"/20260819_three_level_emergency_workflow.sql \
+      "$SQL_ROOT"/20260820_emergency_resource_dispatch.sql \
+      "$SQL_ROOT"/20260820_seed_demo_emergency_resources.sql \
+      "$SQL_ROOT"/20260820_level3_provincial_decision_metadata.sql \
+      "$SQL_ROOT"/20260820_verify_emergency_resources.sql
+  } > "$backup_dir/manifest.txt"
+  (cd "$backup_dir" && sha256sum pre-migration.sql existing-tables.txt counts-before.tsv columns-before.tsv foreign-keys-before.tsv manifest.txt > SHA256SUMS)
+  chmod 600 "$backup_dir"/*
+  LAST_BACKUP_DIR="$backup_dir"
+  echo "Database backup created: $backup_dir"
+}
+
+verify_database() {
+  require_environment
+  ensure_client_image
+  db_client file "/sql/$VERIFY_SCRIPT"
+  local values
+  values="$(db_client query "SELECT (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('w_emergency_dispatch_workflow','w_emergency_professional_review','w_emergency_command_decision','w_emergency_dispatch_action_log','w_emergency_resource','w_emergency_resource_allocation')), (SELECT COUNT(*) FROM w_emergency_resource), (SELECT COUNT(*) FROM w_emergency_resource WHERE total_quantity < 0 OR available_quantity < 0 OR reserved_quantity < 0 OR dispatched_quantity < 0 OR available_quantity + reserved_quantity + dispatched_quantity > total_quantity OR minimum_reserve_quantity > total_quantity), (SELECT COUNT(*) FROM w_abnormal_event WHERE event_status=0 AND (event_city_code IS NULL OR event_city_name IS NULL))" | tr -d '\r')"
+  local table_count resource_count invalid_count cityless_count
+  IFS=$'\t' read -r table_count resource_count invalid_count cityless_count <<< "$values"
+  [[ "$table_count" == "6" ]] || die "database verification failed: required table count=$table_count"
+  (( resource_count >= 108 )) || die "database verification failed: resource rows=$resource_count"
+  [[ "$invalid_count" == "0" ]] || die "database verification failed: invalid inventory rows=$invalid_count"
+  [[ "$cityless_count" == "0" ]] || die "database verification failed: pending events without city=$cityless_count"
+  echo "Database verification passed: tables=$table_count resources=$resource_count invalid_inventory=$invalid_count pending_without_city=$cityless_count"
+}
+
+migrate_database() {
+  assert_application_stopped
+  preflight
+  create_backup
+  local script
+  for script in "${MIGRATION_SCRIPTS[@]}"; do
+    echo "Applying $script"
+    db_client file "/sql/$script" | tee "$LAST_BACKUP_DIR/$script.log"
+  done
+  verify_database | tee "$LAST_BACKUP_DIR/verify.log"
+  echo "completed_utc=$(date -u --iso-8601=seconds)" >> "$LAST_BACKUP_DIR/manifest.txt"
+  echo "status=complete" >> "$LAST_BACKUP_DIR/manifest.txt"
+  (cd "$LAST_BACKUP_DIR" && sha256sum pre-migration.sql existing-tables.txt counts-before.tsv columns-before.tsv foreign-keys-before.tsv manifest.txt > SHA256SUMS)
+  chmod 600 "$LAST_BACKUP_DIR"/*
+  echo "Database migration complete; backup: $LAST_BACKUP_DIR"
+}
+
+restore_database() {
+  assert_application_stopped
+  require_environment
+  ensure_client_image
+  local backup_id="${1:-}"
+  local confirmation="${2:-}"
+  [[ "$backup_id" =~ ^[A-Za-z0-9._-]+$ ]] || die "usage: db-restore BACKUP_ID --confirm=BACKUP_ID"
+  [[ "$confirmation" == "--confirm=$backup_id" ]] || die "restore requires --confirm=$backup_id"
+  local backup_dir="$BACKUP_ROOT/$backup_id"
+  [[ -f "$backup_dir/pre-migration.sql" && -f "$backup_dir/existing-tables.txt" ]] || die "invalid backup: $backup_dir"
+  (cd "$backup_dir" && sha256sum --check SHA256SUMS)
+
+  local existing
+  existing="$(tr '\n' ' ' < "$backup_dir/existing-tables.txt")"
+  local drop_sql="SET FOREIGN_KEY_CHECKS=0;"
+  local table
+  for table in w_emergency_resource_allocation w_emergency_dispatch_action_log w_emergency_command_decision w_emergency_professional_review w_emergency_dispatch_workflow w_emergency_resource; do
+    if [[ " $existing " != *" $table "* ]]; then
+      drop_sql+=" DROP TABLE IF EXISTS \`$table\`;"
+    fi
+  done
+  drop_sql+=" SET FOREIGN_KEY_CHECKS=1;"
+  db_client query "$drop_sql"
+  db_client_with_backup "$backup_dir" restore /backup/pre-migration.sql
+  echo "Database restored from $backup_dir"
+}
+
+case "${1:-}" in
+  db-preflight)
+    preflight
+    ;;
+  db-backup)
+    create_backup "${2:-}"
+    ;;
+  db-migrate)
+    migrate_database
+    ;;
+  db-verify)
+    verify_database
+    ;;
+  db-restore)
+    restore_database "${2:-}" "${3:-}"
+    ;;
+  *)
+    echo "usage: $0 [db-preflight|db-backup [ID]|db-migrate|db-verify|db-restore ID --confirm=ID]" >&2
+    exit 2
+    ;;
+esac

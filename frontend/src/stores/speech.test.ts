@@ -85,4 +85,18 @@ describe('speech store', () => {
     expect(store.playbackStatus).toBe('idle')
     await playing
   })
+
+  it('stops playback and blocks hidden-surface speech', async () => {
+    const store = useSpeechStore()
+    await store.loadCapabilities()
+    const playing = store.speak('message-3', '正在播放的回答。')
+    await vi.waitFor(() => expect(store.playbackStatus).toBe('playing'))
+
+    store.setSurfaceActive(false)
+
+    expect(store.playbackStatus).toBe('idle')
+    await playing
+    await store.speak('message-4', '隐藏时不应播放。')
+    expect(FakeAudio.instances).toHaveLength(1)
+  })
 })

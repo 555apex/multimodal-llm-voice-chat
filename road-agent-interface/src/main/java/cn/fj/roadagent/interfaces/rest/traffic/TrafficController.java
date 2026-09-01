@@ -1,7 +1,7 @@
 package cn.fj.roadagent.interfaces.rest.traffic;
 
-import cn.fj.roadagent.application.traffic.QueryRealtimeTrafficUseCase;
-import cn.fj.roadagent.application.traffic.TrafficQueryCommand;
+import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
+import cn.fj.roadagent.application.traffic.QueryHighwayTrafficUseCase;
 import cn.fj.roadagent.interfaces.rest.common.ApiResponse;
 import cn.fj.roadagent.interfaces.rest.common.TraceIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,9 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/traffic")  // 定义基础路径，这个类里所有方法的URL都以/api/v1/traffic开头
 public final class TrafficController {  // 声明该类不可继承
 
-    private final QueryRealtimeTrafficUseCase useCase;  // 构造实时交通查询业务的用例
+    private final QueryHighwayTrafficUseCase useCase;
 
-    public TrafficController(QueryRealtimeTrafficUseCase useCase) {
+    public TrafficController(QueryHighwayTrafficUseCase useCase) {
         this.useCase = useCase;
     }   // 使用了Spring框架的构造器注入
 
@@ -31,14 +31,10 @@ public final class TrafficController {  // 声明该类不可继承
     )
     {
         String traceId = servletRequest.getAttribute(TraceIdFilter.ATTRIBUTE_NAME).toString();  // 取出traceId
-        var command = new TrafficQueryCommand(
-                request.areaCode(), request.roadName(), request.direction(), traceId
-        );// var是指类型判断，可以不用写死变量类型，会自动判断为TrafficQueryCommand
-        // request（即TrafficQueryRequest）是接口层的数据传输对象（DTO），表示HTTP层的表达
-        // TrafficQueryCommand是应用层的命令对象，表达业务
-        // DTO转化为Command的意义：实现接口层和应用层解耦
-        var result = useCase.query(command);    // 调用QueryRealtimeTrafficUseCase接口的query方法，拿到结果
-        // Controller（TrafficController）只负责接收请求-转换参数-调用业务-返回结果，体现分层思想
+        var result = useCase.query(new HighwayTrafficQuery(
+                request.queryType(), request.originCity(), request.destinationCity(),
+                request.routeCode(), request.routeName(), request.selectedCities(), request.analysisCity(), traceId
+        ));
         return ApiResponse.success(TrafficQueryResponse.from(result), result.traceId());  // 将结果result包装为ApiResponse，返回JSON到前端
     }
 }

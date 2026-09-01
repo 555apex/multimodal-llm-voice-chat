@@ -11,7 +11,7 @@ export class TrafficApiError extends Error {
   }
 }
 
-export async function queryRealtimeTraffic(
+export async function queryHighwayTraffic(
   payload: TrafficQueryPayload,
 ): Promise<ApiResponse<TrafficQueryResult>> {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -21,11 +21,7 @@ export async function queryRealtimeTraffic(
     response = await fetch(`${apiBaseUrl}/api/v1/traffic/queries`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        areaCode: payload.areaCode.trim(),
-        roadName: payload.roadName.trim(),
-        direction: payload.direction?.trim() || null,
-      }),
+      body: JSON.stringify(payload),
     })
   } catch {
     throw new TrafficApiError('无法连接后端服务，请确认Spring Boot已启动。')

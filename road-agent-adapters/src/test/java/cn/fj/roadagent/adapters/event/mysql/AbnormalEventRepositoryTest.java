@@ -7,6 +7,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.time.Instant;
 
+import cn.fj.roadagent.domain.dispatch.WorkflowStage;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -23,6 +25,7 @@ class AbnormalEventRepositoryTest {
                 ""
         );
         jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate.execute("DROP TABLE IF EXISTS w_emergency_dispatch_workflow");
         jdbcTemplate.execute("DROP TABLE IF EXISTS w_abnormal_event");
         jdbcTemplate.execute("""
                 CREATE TABLE w_abnormal_event (
@@ -31,11 +34,23 @@ class AbnormalEventRepositoryTest {
                     occurrence_time TIMESTAMP,
                     event_type VARCHAR(16),
                     description VARCHAR(255),
+                    event_city_code VARCHAR(12),
+                    event_city_name VARCHAR(32),
                     create_time TIMESTAMP,
                     event_status INT,
                     del_flag VARCHAR(1),
                     no_dispatch_reason VARCHAR(255),
                     update_time TIMESTAMP
+                )
+                """);
+        jdbcTemplate.execute("""
+                CREATE TABLE w_emergency_dispatch_workflow (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    workflow_id VARCHAR(40) NOT NULL,
+                    event_id BIGINT NOT NULL,
+                    current_stage TINYINT,
+                    workflow_status TINYINT NOT NULL,
+                    stage_entered_at TIMESTAMP
                 )
                 """);
         repository = new AbnormalEventRepository(jdbcTemplate);
@@ -96,6 +111,29 @@ class AbnormalEventRepositoryTest {
         assertFalse(repository.markNoDispatch("22", "ignore", Instant.EPOCH));
         assertEquals(0, statusOf(21));
         assertEquals(0, statusOf(22));
+    }
+
+    @Test
+    void shouldPutEachEventInExactlyOneWorkflowInbox() {
+        insert(31, 0, "N", "2026-08-01T01:00:00Z");
+        insert(32, 0, "N", "2026-08-01T02:00:00Z");
+        insert(33, 0, "N", "2026-08-01T03:00:00Z");
+        jdbcTemplate.update(
+                """
+                INSERT INTO w_emergency_dispatch_workflow (
+                    workflow_id, event_id, current_stage, workflow_status, stage_entered_at
+                ) VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)
+                """,
+                "WF-32", 32L, 2, 3, java.sql.Timestamp.from(Instant.parse("2026-08-02T00:00:00Z")),
+                "WF-33", 33L, 3, 4, java.sql.Timestamp.from(Instant.parse("2026-08-03T00:00:00Z"))
+        );
+
+        assertEquals(1, repository.countPendingForStage(WorkflowStage.LEVEL_1));
+        assertEquals(1, repository.countPendingForStage(WorkflowStage.LEVEL_2));
+        assertEquals(1, repository.countPendingForStage(WorkflowStage.LEVEL_3));
+        assertEquals("31", repository.findNextPendingForStage(WorkflowStage.LEVEL_1).orElseThrow().eventId());
+        assertEquals("32", repository.findNextPendingForStage(WorkflowStage.LEVEL_2).orElseThrow().eventId());
+        assertEquals("33", repository.findNextPendingForStage(WorkflowStage.LEVEL_3).orElseThrow().eventId());
     }
 
     private void insert(long id, int status, String delFlag, String occurrenceTime) {

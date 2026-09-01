@@ -3,7 +3,10 @@ package cn.fj.roadagent.adapters.dispatch.mysql;
 import cn.fj.roadagent.application.port.DispatchRepository;
 import cn.fj.roadagent.domain.dispatch.DispatchPlan;
 import cn.fj.roadagent.domain.dispatch.DispatchStatus;
+import cn.fj.roadagent.domain.dispatch.AllocatedResource;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.ResourceRequirement;
+import cn.fj.roadagent.domain.dispatch.ResourceShortage;
 import cn.fj.roadagent.domain.dispatch.SuggestedResource;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -27,12 +30,13 @@ public class MysqlDispatchRepository implements DispatchRepository {
     private static final int FAILED = 4;
 
     private static final String SELECT_JOINED = """
-            SELECT d.plan_id, d.version, d.resource_list, d.rescue_plan,
+            SELECT d.plan_id, d.version, d.event_snapshot, d.resource_requirements,
+                   d.resource_list, d.resource_shortages, d.rescue_plan,
                    d.order_status, d.rejection_reason, d.error_message,
                    d.create_time AS dispatch_create_time,
                    d.update_time AS dispatch_update_time,
                    e.id AS event_id, e.custom_id, e.occurrence_time,
-                   e.event_type, e.description
+                   e.event_type, e.description, e.event_city_code, e.event_city_name
             FROM w_emergency_dispatch_order d
             JOIN w_abnormal_event e ON e.id = d.event_id
             """;
@@ -52,15 +56,19 @@ public class MysqlDispatchRepository implements DispatchRepository {
             return jdbcTemplate.update(
                     """
                     INSERT INTO w_emergency_dispatch_order (
-                        plan_id, event_id, version, resource_list, rescue_plan,
+                        plan_id, event_id, version, event_snapshot, resource_requirements,
+                        resource_list, resource_shortages, rescue_plan,
                         order_status, rejection_reason, error_message,
                         create_time, update_time
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     plan.planId(),
                     parseEventId(plan.event().eventId()),
                     plan.version(),
-                    writeResources(plan.suggestedResources()),
+                    writeEvent(plan.event()),
+                    writeJson(plan.resourceRequirements(), "资源需求清单"),
+                    writeJson(plan.allocatedResources(), "实际资源清单"),
+                    writeJson(plan.resourceShortages(), "资源缺口清单"),
                     emptyToNull(plan.rescuePlan()),
                     toDatabaseStatus(plan.status()),
                     plan.rejectionReason(),
@@ -117,7 +125,8 @@ public class MysqlDispatchRepository implements DispatchRepository {
         return jdbcTemplate.update(
                 """
                 UPDATE w_emergency_dispatch_order
-                SET resource_list = JSON_ARRAY(), rescue_plan = NULL,
+                SET resource_requirements = JSON_ARRAY(), resource_list = JSON_ARRAY(),
+                    resource_shortages = JSON_ARRAY(), rescue_plan = NULL,
                     order_status = ?, error_message = NULL, update_time = ?
                 WHERE plan_id = ? AND version = ?
                   AND (
@@ -140,11 +149,14 @@ public class MysqlDispatchRepository implements DispatchRepository {
         return jdbcTemplate.update(
                 """
                 UPDATE w_emergency_dispatch_order
-                SET resource_list = ?, rescue_plan = ?, order_status = ?,
+                SET resource_requirements = ?, resource_list = ?, resource_shortages = ?,
+                    rescue_plan = ?, order_status = ?,
                     error_message = NULL, update_time = ?
                 WHERE plan_id = ? AND version = ? AND order_status = ?
                 """,
-                writeResources(plan.suggestedResources()),
+                writeJson(plan.resourceRequirements(), "资源需求清单"),
+                writeJson(plan.allocatedResources(), "实际资源清单"),
+                writeJson(plan.resourceShortages(), "资源缺口清单"),
                 plan.rescuePlan(),
                 WAITING_APPROVAL,
                 Timestamp.from(plan.updatedAt()),
@@ -208,17 +220,41 @@ public class MysqlDispatchRepository implements DispatchRepository {
 
     private DispatchPlan mapPlan(java.sql.ResultSet resultSet, int rowNumber)
             throws java.sql.SQLException {
-        EmergencyEvent event = new EmergencyEvent(
-                Long.toString(resultSet.getLong("event_id")),
-                resultSet.getString("custom_id"),
-                toInstant(resultSet.getTimestamp("occurrence_time")),
-                resultSet.getString("event_type"),
-                resultSet.getString("description")
-        );
+        EmergencyEvent event = readEvent(resultSet.getString("event_snapshot"));
+        if (event == null) {
+            event = new EmergencyEvent(
+                    Long.toString(resultSet.getLong("event_id")),
+                    resultSet.getString("custom_id"),
+                    toInstant(resultSet.getTimestamp("occurrence_time")),
+                    resultSet.getString("event_type"),
+                    resultSet.getString("description"),
+                    resultSet.getString("event_city_code"),
+                    resultSet.getString("event_city_name")
+            );
+        }
+        String resourcesJson = resultSet.getString("resource_list");
+        if (isLegacyResourceJson(resourcesJson)) {
+            return new DispatchPlan(
+                    resultSet.getString("plan_id"), event,
+                    readJson(resourcesJson, new TypeReference<List<SuggestedResource>>() { },
+                            "兼容建议资源清单"),
+                    resultSet.getString("rescue_plan"),
+                    fromDatabaseStatus(resultSet.getInt("order_status")),
+                    resultSet.getLong("version"),
+                    resultSet.getTimestamp("dispatch_create_time").toInstant(),
+                    resultSet.getTimestamp("dispatch_update_time").toInstant(),
+                    resultSet.getString("rejection_reason"), resultSet.getString("error_message")
+            );
+        }
         return new DispatchPlan(
                 resultSet.getString("plan_id"),
                 event,
-                readResources(resultSet.getString("resource_list")),
+                readJson(resultSet.getString("resource_requirements"),
+                        new TypeReference<List<ResourceRequirement>>() { }, "资源需求清单"),
+                readJson(resourcesJson,
+                        new TypeReference<List<AllocatedResource>>() { }, "实际资源清单"),
+                readJson(resultSet.getString("resource_shortages"),
+                        new TypeReference<List<ResourceShortage>>() { }, "资源缺口清单"),
                 resultSet.getString("rescue_plan"),
                 fromDatabaseStatus(resultSet.getInt("order_status")),
                 resultSet.getLong("version"),
@@ -229,24 +265,47 @@ public class MysqlDispatchRepository implements DispatchRepository {
         );
     }
 
-    private String writeResources(List<SuggestedResource> resources) {
+    private String writeJson(Object value, String label) {
         try {
-            return objectMapper.writeValueAsString(resources == null ? List.of() : resources);
+            return objectMapper.writeValueAsString(value == null ? List.of() : value);
         } catch (JsonProcessingException exception) {
-            throw new IllegalArgumentException("无法序列化建议资源清单", exception);
+            throw new IllegalArgumentException("无法序列化" + label, exception);
         }
     }
 
-    private List<SuggestedResource> readResources(String json) {
+    private String writeEvent(EmergencyEvent event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalArgumentException("无法序列化事件快照", exception);
+        }
+    }
+
+    private EmergencyEvent readEvent(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, EmergencyEvent.class);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("数据库中的事件快照不是有效JSON", exception);
+        }
+    }
+
+    private <T> List<T> readJson(String json, TypeReference<List<T>> type, String label) {
         if (json == null || json.isBlank()) {
             return List.of();
         }
         try {
-            return objectMapper.readValue(json, new TypeReference<>() {
-            });
+            return objectMapper.readValue(json, type);
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("数据库中的建议资源清单不是有效JSON", exception);
+            throw new IllegalStateException("数据库中的" + label + "不是有效JSON", exception);
         }
+    }
+
+    private boolean isLegacyResourceJson(String json) {
+        return json != null && !json.isBlank() && !"[]".equals(json.trim())
+                && !json.contains("\"resourceId\"");
     }
 
     private int toDatabaseStatus(DispatchStatus status) {

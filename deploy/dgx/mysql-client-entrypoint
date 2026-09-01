@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+for key in ROADAGENT_DB_URL ROADAGENT_DB_USERNAME ROADAGENT_DB_PASSWORD; do
+  [[ -n "${!key:-}" ]] || { echo "missing database environment value: $key" >&2; exit 2; }
+done
+
+jdbc="${ROADAGENT_DB_URL#jdbc:mysql://}"
+[[ "$jdbc" != "$ROADAGENT_DB_URL" && "$jdbc" == */* ]] || {
+  echo "ROADAGENT_DB_URL must use jdbc:mysql://host[:port]/schema format" >&2
+  exit 2
+}
+
+authority="${jdbc%%/*}"
+schema_and_query="${jdbc#*/}"
+schema="${schema_and_query%%\?*}"
+[[ "$schema" =~ ^[A-Za-z0-9_]+$ ]] || { echo "unsafe or empty database schema" >&2; exit 2; }
+
+if [[ "$authority" == *:* ]]; then
+  host="${authority%:*}"
+  port="${authority##*:}"
+else
+  host="$authority"
+  port="3306"
+fi
+[[ -n "$host" && "$port" =~ ^[0-9]+$ ]] || { echo "invalid database host or port" >&2; exit 2; }
+
+export MYSQL_PWD="$ROADAGENT_DB_PASSWORD"
+mysql_args=(--default-character-set=utf8mb4 --protocol=tcp --host="$host" --port="$port" --user="$ROADAGENT_DB_USERNAME" "$schema")
+
+case "${1:-}" in
+  schema)
+    printf '%s\n' "$schema"
+    ;;
+  info)
+    mysql "${mysql_args[@]}" --batch --raw --execute \
+      "SELECT VERSION() AS mysql_version, DATABASE() AS selected_schema, CURRENT_USER() AS authenticated_user; SHOW GRANTS FOR CURRENT_USER;"
+    ;;
+  query)
+    [[ $# -eq 2 ]] || { echo "query requires one SQL argument" >&2; exit 2; }
+    mysql "${mysql_args[@]}" --batch --raw --skip-column-names --execute "$2"
+    ;;
+  file)
+    [[ $# -eq 2 && -r "$2" ]] || { echo "SQL file is missing: ${2:-}" >&2; exit 2; }
+    mysql "${mysql_args[@]}" --show-warnings < "$2"
+    ;;
+  dump)
+    shift
+    [[ $# -gt 0 ]] || { echo "dump requires at least one table" >&2; exit 2; }
+    mysqldump --default-character-set=utf8mb4 --protocol=tcp --host="$host" --port="$port" \
+      --user="$ROADAGENT_DB_USERNAME" --single-transaction --skip-lock-tables \
+      --triggers --hex-blob --set-gtid-purged=OFF --no-tablespaces \
+      "$schema" "$@"
+    ;;
+  restore)
+    [[ $# -eq 2 && -r "$2" ]] || { echo "backup SQL file is missing: ${2:-}" >&2; exit 2; }
+    mysql "${mysql_args[@]}" --show-warnings < "$2"
+    ;;
+  *)
+    echo "usage: mysql-client-entrypoint [schema|info|query SQL|file PATH|dump TABLE...|restore PATH]" >&2
+    exit 2
+    ;;
+esac

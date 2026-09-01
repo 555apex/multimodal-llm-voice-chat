@@ -1,6 +1,6 @@
 package cn.fj.roadagent.domain.dispatch;
 
-/** 模型基于通用知识提出的资源建议，不代表真实库存或可用性。 */
+/** 旧接口兼容投影；新流程中内容由已完成库存匹配的资源快照生成。 */
 public record SuggestedResource(
         String resourceType,
         String resourceName,

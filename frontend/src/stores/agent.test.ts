@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAgentStore } from './agent'
 
-describe('agent store area progress', () => {
+describe('agent store', () => {
   beforeEach(() => {
     sessionStorage.clear()
     setActivePinia(createPinia())
@@ -36,24 +36,25 @@ describe('agent store area progress', () => {
     expect(store.messages.at(-1)?.speechText).toBe('精简朗读摘要。详细数据请查看页面。')
   })
 
-  it('does not persist traffic polylines to session storage', () => {
+  it('persists the MySQL highway traffic result', () => {
     const store = useAgentStore()
     store.messages.push({
       id: crypto.randomUUID(), role: 'assistant', content: '区域路况', status: 'completed',
       traffic: {
-        queryScope: 'AREA_ALL', areaCode: '350203', areaName: '思明区', summary: '正常',
-        summarySource: 'MODEL', source: 'AMAP', acquiredAt: '2026-07-21T08:00:00Z',
-        freshness: 'FRESH', mock: false, warnings: [], traceId: 'trace-1',
+        queryType: 'ROUTE_DETAIL', title: 'G104 交通情况', summary: '当前状态已汇总。请留意通行时间。',
+        routeSummaries: [], capacityRows: [], source: 'MYSQL', acquiredAt: '2026-08-13T08:00:00Z',
+        totalSegmentCount: 1, displayedSegmentCount: 1, truncated: false,
+        warnings: [], traceId: 'trace-1',
         segments: [{
-          roadName: '成功大道', direction: '北向南', congestionLevel: 'SLOW',
-          averageSpeedKmh: 20, polyline: '118.1,24.4;118.2,24.5',
+          routeCode: 'G104', routeName: '北京-平潭', routeSection: 'FJ001→FJ002',
+          distanceKm: 10, averageSpeedKmh: 20, status: 20, statusName: '轻度拥堵', severity: 0.3,
         }],
       },
     })
 
     store.persist()
 
-    expect(sessionStorage.getItem('roadagent-chat-session-v2')).not.toContain('118.1,24.4')
-    expect(store.messages.at(-1)?.traffic?.segments[0].polyline).toContain('118.1')
+    expect(sessionStorage.getItem('roadagent-chat-session-v5')).toContain('G104')
+    expect(store.messages.at(-1)?.traffic?.segments[0].routeSection).toBe('FJ001→FJ002')
   })
 })

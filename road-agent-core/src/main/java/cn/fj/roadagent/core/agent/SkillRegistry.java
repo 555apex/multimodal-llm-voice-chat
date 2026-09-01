@@ -17,7 +17,7 @@ public final class SkillRegistry {
 
     // 构造函数
     /*
-    Spring启动时，会把所有实现了 AgentSkill 接口的Bean（RealtimeTrafficSkill、EmergencyDispatchSkill）注入这个列表
+    Spring启动时，会把所有实现了 AgentSkill 接口的Bean（HighwayTrafficSkill、EmergencyDispatchSkill）注入这个列表
     skills.put() 的返回值检查：put 返回旧的Skill → 非null → 抛异常，防止一个意图被两个Skill同时注册。
      */
     public SkillRegistry(List<AgentSkill> registeredSkills) {
