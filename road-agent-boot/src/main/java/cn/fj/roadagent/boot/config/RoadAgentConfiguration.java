@@ -9,6 +9,9 @@ import cn.fj.roadagent.adapters.traffic.mysql.InMemoryRoadCapacitySnapshotCache;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlHighwayTrafficSnapshotSource;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlRoadCapacitySnapshotSource;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlRegionalTrafficRepository;
+import cn.fj.roadagent.adapters.traffic.mysql.MysqlOdTrafficRepository;
+import cn.fj.roadagent.application.port.OdTrafficDataPort;
+import cn.fj.roadagent.core.traffic.OdTrafficService;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlVehicleTravelPatternRepository;
 import cn.fj.roadagent.application.agent.ConverseWithAgentUseCase;
 import cn.fj.roadagent.application.port.AbnormalEventPort;
@@ -199,6 +202,17 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
+    OdTrafficDataPort odTrafficDataPort(JdbcTemplate jdbcTemplate, PlatformTransactionManager transactionManager,
+                                      ObjectMapper objectMapper, Clock clock) {
+        return new MysqlOdTrafficRepository(jdbcTemplate, new TransactionTemplate(transactionManager), objectMapper, clock);
+    }
+
+    @Bean
+    OdTrafficService odTrafficService(OdTrafficDataPort dataPort, ChatModelPort chatModelPort) {
+        return new OdTrafficService(dataPort, chatModelPort);
+    }
+
+    @Bean
     VehiclePatternService vehiclePatternService(
             VehicleTravelPatternPort dataPort,
             ChatModelPort chatModelPort
@@ -211,10 +225,11 @@ public class RoadAgentConfiguration {
             HighwayTrafficService trafficService,
             RoadCapacityService capacityService,
             RegionalTrafficService regionalTrafficService,
-            VehiclePatternService vehiclePatternService
+            VehiclePatternService vehiclePatternService,
+            OdTrafficService odTrafficService
     ) {
         return new UnifiedTrafficQueryService(
-                trafficService, capacityService, regionalTrafficService, vehiclePatternService
+                trafficService, capacityService, regionalTrafficService, vehiclePatternService, odTrafficService
         );
     }
 
@@ -223,10 +238,11 @@ public class RoadAgentConfiguration {
             HighwayTrafficService trafficService,
             RoadCapacityService capacityService,
             RegionalTrafficService regionalTrafficService,
-            VehiclePatternService vehiclePatternService
+            VehiclePatternService vehiclePatternService,
+            OdTrafficService odTrafficService
     ) {
         return new HighwayTrafficSkill(
-                trafficService, capacityService, regionalTrafficService, vehiclePatternService
+                trafficService, capacityService, regionalTrafficService, vehiclePatternService, odTrafficService
         );
     }
 

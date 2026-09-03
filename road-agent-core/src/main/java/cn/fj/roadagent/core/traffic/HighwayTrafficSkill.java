@@ -19,6 +19,7 @@ public final class HighwayTrafficSkill implements AgentSkill {
     private final RoadCapacityService capacityService;
     private final RegionalTrafficService regionalTrafficService;
     private final VehiclePatternService vehiclePatternService;
+    private final OdTrafficService odTrafficService;
 
     public HighwayTrafficSkill(HighwayTrafficService trafficService) {
         this(trafficService, null, null, null);
@@ -37,10 +38,17 @@ public final class HighwayTrafficSkill implements AgentSkill {
             RegionalTrafficService regionalTrafficService,
             VehiclePatternService vehiclePatternService
     ) {
+        this(trafficService, capacityService, regionalTrafficService, vehiclePatternService, null);
+    }
+
+    public HighwayTrafficSkill(HighwayTrafficService trafficService, RoadCapacityService capacityService,
+            RegionalTrafficService regionalTrafficService, VehiclePatternService vehiclePatternService,
+            OdTrafficService odTrafficService) {
         this.trafficService = trafficService;
         this.capacityService = capacityService;
         this.regionalTrafficService = regionalTrafficService;
         this.vehiclePatternService = vehiclePatternService;
+        this.odTrafficService = odTrafficService;
     }
 
     @Override
@@ -55,11 +63,12 @@ public final class HighwayTrafficSkill implements AgentSkill {
         boolean capacityQuery = queryType.capacityQuery();
         boolean regionalQuery = queryType.regionalTrafficQuery();
         boolean vehicleQuery = queryType.vehiclePatternQuery();
-        String tool = capacityQuery ? "query_mysql_road_capacity"
+        boolean odQuery = queryType.odQuery();
+        String tool = odQuery ? "query_mysql_city_od_statistics" : capacityQuery ? "query_mysql_road_capacity"
                 : regionalQuery ? "query_mysql_transport_hubs"
                 : vehicleQuery ? "query_mysql_vehicle_pattern"
                 : "query_mysql_highway_traffic";
-        String label = capacityQuery ? "正在读取国省干线通行能力数据"
+        String label = odQuery ? "正在汇总城市七日流量与关键OD通道" : capacityQuery ? "正在读取国省干线通行能力数据"
                 : regionalQuery ? "正在统计区域卡口交通压力"
                 : vehicleQuery ? "正在分析最新车型出行特征"
                 : "正在读取国省干线交通数据";
@@ -79,7 +88,7 @@ public final class HighwayTrafficSkill implements AgentSkill {
                 effectiveAnalysisCity(context),
                 context.command().traceId()
         );
-        HighwayTrafficResult result = capacityQuery ? requireCapacityService().query(query)
+        HighwayTrafficResult result = odQuery ? odTrafficService.query(query) : capacityQuery ? requireCapacityService().query(query)
                 : regionalQuery ? requireRegionalService().query(query)
                 : vehicleQuery ? requireVehicleService().query(query)
                 : trafficService.query(query);
@@ -92,6 +101,8 @@ public final class HighwayTrafficSkill implements AgentSkill {
                 "segmentCount", result.segments().size(),
                 "capacityRowCount", result.capacityRows().size(),
                 "hubRowCount", result.hubRows().size(),
+                "odCityRowCount", result.odCityFlowRows().size(),
+                "odChannelRowCount", result.odChannelRows().size(),
                 "vehicleRowCount", result.vehicleStructureRows().size()
         )));
         sink.emit(new AgentEvent("stage.changed", Map.of(

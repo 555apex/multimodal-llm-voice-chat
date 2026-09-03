@@ -31,14 +31,16 @@ public final class IntentPlanner {
 
     // 方法：用户信息发送给大模型理解
     public AgentDecision plan(String currentMessage, List<ConversationMessage> history) {
-        var deterministic = KnownTrafficQuestionClassifier.classify(currentMessage);
+        boolean followUp = !history.isEmpty() && currentMessage.matches("(?s).*(再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|改为|改成|换成|那就|可以|好的|同意).*");
+        var deterministic = followUp ? java.util.Optional.<AgentDecision>empty()
+                : KnownTrafficQuestionClassifier.classify(currentMessage);
         if (deterministic.isPresent()) {
             return deterministic.get();
         }
         String systemPrompt = """
                 你是福建公路应急交通Agent的意图规划器。
                 只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、UNSUPPORTED之一。
-                TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、区域卡口交通压力，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
+                TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、区域卡口交通压力、城市OD七日统计，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
                 EMERGENCY_DISPATCH用于道路塌方、事故、水毁等事件的资源调度。
                 仅提取用户明确提供或会话中已有的信息，不得编造城市、道路、位置和资源。
                 必须输出json对象，字段如下：
@@ -46,7 +48,13 @@ public final class IntentPlanner {
                 city, areaName, roadName, direction, eventType, location, severity,
                 eventDescription, resourceTypes, clarification。
                 selectedCities和resourceTypes使用字符串数组，其他不适用字段使用null。
-                trafficScope只能为PROVINCE_OVERVIEW、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、CHECKPOINT_PRESSURE、CITY_PRESSURE、ROUTE_PRESSURE、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON：
+                trafficScope只能为PROVINCE_OVERVIEW、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、CHECKPOINT_PRESSURE、CITY_PRESSURE、ROUTE_PRESSURE、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON、OD_OVERVIEW、OD_CITY_FLOW、OD_KEY_CHANNELS：
+                - 明确询问OD分析使用OD_OVERVIEW，输出城市流量和关键通道两张表；只问城市区域流量不平衡、城市7天总流量对比使用OD_CITY_FLOW；只问关键OD通道或OD通道各车型流量使用OD_KEY_CHANNELS。
+                - OD_*把用户选择的1至9个福建地级市写入selectedCities，取这些城市卡口并集；未限定城市默认全省。它不查询路线起终点，不要求共同路线，不产生车辆流向或真实城市对OD量。
+                - 不得把OD语境中的货车、客车和车型流量识别成VEHICLE_*，也不得把OD识别成CITY_PAIR或UNSUPPORTED；否定OD而明确询问交通压力则保留REGIONAL_*业务。
+                - OD_*支持最新数据库7天统计，不支持历史月份、指定日期或方向性真实OD查询；这类请求仍选择OD_*，在clarification中简短追问是否改查最新7天卡口统计，不猜测历史或方向结果。
+                - OD上下文的“再加上泉州”“去掉厦门”“只看第二张表”等追问继承此前城市范围，再增减城市或切换OD_CITY_FLOW/OD_KEY_CHANNELS；新增城市不是替换全部已有城市。用户明确切换其他业务时不得继续套用OD。
+                - “这两个城市”且上下文没有城市时必须clarification追问，不得当成全省。用户提到省外城市、区县或平潭时保留原始名称在selectedCities，不能静默丢弃，也不能映射到别的城市。
                 - 询问福建省整体、全省国省道交通态势时使用PROVINCE_OVERVIEW；
                 - 询问福建省哪些路段拥堵、异常或最拥堵时使用PROVINCE_ABNORMAL；
                 - 询问两个福建地级市之间交通情况时使用CITY_PAIR，并分别提取originCity、destinationCity；
@@ -100,6 +108,12 @@ public final class IntentPlanner {
                     && isBlank(decision.routeName())
                     && isBlank(decision.roadName())) {
                 missing.add("routeCodeOrName");
+            } else if (scope.get().odQuery()) {
+                List<String> cities = effectiveSelectedCities(decision);
+                if (!isBlank(decision.clarification())) missing.add("odClarification");
+                if (cities.size() > 9 || cities.stream().anyMatch(value -> FujianCity.fromName(value).isEmpty())) {
+                    missing.add("selectedCities");
+                }
             } else if (scope.get().regionalTrafficQuery()) {
                 List<String> cities = effectiveSelectedCities(decision);
                 if (cities.size() > 2 || cities.stream().anyMatch(value -> FujianCity.fromName(value).isEmpty())) {

@@ -56,6 +56,8 @@ public final class HighwayTrafficService {
             case PROVINCE_ABNORMAL -> abnormal(snapshot);
             case CITY_PAIR -> cityPair(snapshot, query.originCity(), query.destinationCity());
             case ROUTE_DETAIL -> routeDetail(snapshot, query.routeCode(), query.routeName());
+            case OD_OVERVIEW, OD_CITY_FLOW, OD_KEY_CHANNELS ->
+                    throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于城市OD七日统计分析");
             case CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL ->
                     throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于道路通行能力评估");
             case REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE ->

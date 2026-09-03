@@ -28,7 +28,11 @@ public record HighwayTrafficResult(
         String source,
         Instant acquiredAt,
         List<String> warnings,
-        String traceId
+        String traceId,
+        List<OdCityFlowResultItem> odCityFlowRows,
+        List<OdChannelResultItem> odChannelRows,
+        Integer periodDays,
+        List<SelectedRegionResultItem> missingRegions
 ) {
     public HighwayTrafficResult {
         routeSummaries = routeSummaries == null ? List.of() : List.copyOf(routeSummaries);
@@ -43,6 +47,32 @@ public record HighwayTrafficResult(
         vehicleDayTypeRows = vehicleDayTypeRows == null ? List.of() : List.copyOf(vehicleDayTypeRows);
         hourlyVehicleSeries = hourlyVehicleSeries == null ? List.of() : List.copyOf(hourlyVehicleSeries);
         warnings = warnings == null ? List.of() : List.copyOf(warnings);
+        odCityFlowRows = odCityFlowRows == null ? List.of() : List.copyOf(odCityFlowRows);
+        odChannelRows = odChannelRows == null ? List.of() : List.copyOf(odChannelRows);
+        missingRegions = missingRegions == null ? List.of() : List.copyOf(missingRegions);
+    }
+
+    /** 保留既有全部业务的构造契约。 */
+    public HighwayTrafficResult(TrafficQueryType queryType, String title, String summary,
+            List<RouteTrafficResultItem> routeSummaries, List<HighwayTrafficSegmentResultItem> segments,
+            List<RoadCapacityResultItem> capacityRows, List<SelectedRegionResultItem> selectedRegions,
+            List<TransportHubResultItem> hubRows, List<RegionPressureResultItem> regionPressureRows,
+            List<RoutePressureResultItem> routePressureRows, String analysisCity,
+            List<VehicleStructureResultItem> vehicleStructureRows, List<VehicleTimeFeatureResultItem> vehicleTimeFeatureRows,
+            List<VehicleDayTypeResultItem> vehicleDayTypeRows, List<HourlyVehicleFlowResultItem> hourlyVehicleSeries,
+            int totalSegmentCount, int displayedSegmentCount, boolean truncated,
+            String source, Instant acquiredAt, List<String> warnings, String traceId) {
+        this(queryType, title, summary, routeSummaries, segments, capacityRows, selectedRegions, hubRows,
+                regionPressureRows, routePressureRows, analysisCity, vehicleStructureRows, vehicleTimeFeatureRows,
+                vehicleDayTypeRows, hourlyVehicleSeries, totalSegmentCount, displayedSegmentCount, truncated,
+                source, acquiredAt, warnings, traceId, List.of(), List.of(), null, List.of());
+    }
+
+    public static HighwayTrafficResult fromOdFacts(OdTrafficFacts facts, String summary, String traceId) {
+        return new HighwayTrafficResult(facts.queryType(), facts.title(), summary,
+                List.of(), List.of(), List.of(), facts.selectedRegions(), List.of(), List.of(), List.of(), null,
+                List.of(), List.of(), List.of(), List.of(), 0, 0, false, "MYSQL", facts.acquiredAt(),
+                facts.warnings(), traceId, facts.cityRows(), facts.channelRows(), 7, facts.missingRegions());
     }
 
     /** 兼容既有路况、容量测试和调用方。 */

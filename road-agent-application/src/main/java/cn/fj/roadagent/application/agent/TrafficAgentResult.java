@@ -1,6 +1,8 @@
 package cn.fj.roadagent.application.agent;
 
 import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
+import cn.fj.roadagent.application.traffic.OdCityFlowResultItem;
+import cn.fj.roadagent.application.traffic.OdChannelResultItem;
 import cn.fj.roadagent.application.traffic.HighwayTrafficSegmentResultItem;
 import cn.fj.roadagent.application.traffic.RouteTrafficResultItem;
 import cn.fj.roadagent.application.traffic.RoadCapacityResultItem;
@@ -40,7 +42,11 @@ public record TrafficAgentResult(
         String source,
         Instant acquiredAt,
         List<String> warnings,
-        String traceId
+        String traceId,
+        List<OdCityFlowResultItem> odCityFlowRows,
+        List<OdChannelResultItem> odChannelRows,
+        Integer periodDays,
+        List<SelectedRegionResultItem> missingRegions
 ) {
     public static TrafficAgentResult from(HighwayTrafficResult result) {
         return new TrafficAgentResult(
@@ -49,7 +55,8 @@ public record TrafficAgentResult(
                 result.regionPressureRows(), result.routePressureRows(), result.analysisCity(),
                 result.vehicleStructureRows(), result.vehicleTimeFeatureRows(), result.vehicleDayTypeRows(),
                 result.hourlyVehicleSeries(), result.totalSegmentCount(), result.displayedSegmentCount(),
-                result.truncated(), result.source(), result.acquiredAt(), result.warnings(), result.traceId()
+                result.truncated(), result.source(), result.acquiredAt(), result.warnings(), result.traceId(),
+                result.odCityFlowRows(), result.odChannelRows(), result.periodDays(), result.missingRegions()
         );
     }
 }

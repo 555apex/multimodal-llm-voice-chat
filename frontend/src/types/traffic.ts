@@ -14,6 +14,9 @@ export type TrafficQueryType =
   | 'VEHICLE_STRUCTURE'
   | 'VEHICLE_HOURLY_PATTERN'
   | 'VEHICLE_DAY_TYPE_COMPARISON'
+  | 'OD_OVERVIEW'
+  | 'OD_CITY_FLOW'
+  | 'OD_KEY_CHANNELS'
 
 export type TrafficStatus = 10 | 20 | 30 | 40 | 50
 export type CapacityLevel = 'NORMAL' | 'BOTTLENECK' | 'SEVERE_BOTTLENECK'
@@ -136,6 +139,10 @@ export interface TrafficQueryResult {
   vehicleTimeFeatureRows?: VehicleTimeFeatureRow[]
   vehicleDayTypeRows?: VehicleDayTypeRow[]
   hourlyVehicleSeries?: HourlyVehicleFlow[]
+  odCityFlowRows?: OdCityFlowRow[]
+  odChannelRows?: OdChannelRow[]
+  periodDays?: number
+  missingRegions?: SelectedRegion[]
   totalSegmentCount: number
   displayedSegmentCount: number
   truncated: boolean
@@ -143,6 +150,24 @@ export interface TrafficQueryResult {
   acquiredAt: string
   warnings: string[]
   traceId: string
+}
+
+export interface OdCityFlowRow {
+  regionCode: string
+  regionName: string
+  checkpointCount: number
+  weeklyTotalFlow: number
+  dailyAverageFlow: number
+  averageSpeedKmh: number
+}
+
+export interface OdChannelRow {
+  routeCode: string
+  routeName: string
+  weeklyTotalFlow: number
+  carWeeklyFlow: number
+  busWeeklyFlow: number
+  truckWeeklyFlow: number
 }
 
 export interface ApiResponse<T> {

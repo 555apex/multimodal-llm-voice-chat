@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: 福建应急交通Agent API
-  version: 0.9.0
+  version: 0.10.0
   description: 对话式道路交通查询、福建九市库存资源调度、三级上报与通告、Docker语音服务接口
 servers:
   - url: http://localhost:8080
@@ -524,7 +524,7 @@ components:
       properties:
         queryType:
           type: string
-          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON]
+          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON, OD_OVERVIEW, OD_CITY_FLOW, OD_KEY_CHANNELS]
         originCity:
           type: [string, 'null']
           maxLength: 20
@@ -539,9 +539,9 @@ components:
           maxLength: 100
         selectedCities:
           type: array
-          maxItems: 2
+          maxItems: 9
           items: { type: string, maxLength: 20 }
-          description: 区域交通压力筛选城市；为空时统计全省，一至两个城市时统计所选城市卡口并集
+          description: OD_*允许1至9个福建地级市，取卡口并集；为空默认全省。原区域交通压力仍只允许1至2个城市，车型特征仍为福州或厦门单城市。缺失城市不补零、不补入其他城市
         analysisCity:
           type: [string, 'null']
           maxLength: 20
@@ -681,13 +681,35 @@ components:
         bus: { type: integer, minimum: 0 }
         truck: { type: integer, minimum: 0 }
 
+    OdCityFlowRow:
+      type: object
+      required: [regionCode, regionName, checkpointCount, weeklyTotalFlow, dailyAverageFlow, averageSpeedKmh]
+      properties:
+        regionCode: { type: string }
+        regionName: { type: string }
+        checkpointCount: { type: integer, minimum: 0, description: 所有有效卡口数量，不使用活跃阈值 }
+        weeklyTotalFlow: { type: integer, format: int64, minimum: 0, description: 卡口temp_2之和，单位辆 }
+        dailyAverageFlow: { type: integer, format: int64, minimum: 0, description: 卡口daily_avg_flow之和，单位辆/日，不由7日总量推算 }
+        averageSpeedKmh: { type: number, minimum: 0, description: 卡口average_speed算术平均，包含有效0值，保留两位小数 }
+
+    OdChannelRow:
+      type: object
+      required: [routeCode, routeName, weeklyTotalFlow, carWeeklyFlow, busWeeklyFlow, truckWeeklyFlow]
+      properties:
+        routeCode: { type: string }
+        routeName: { type: string }
+        weeklyTotalFlow: { type: integer, format: int64, minimum: 0, description: 所选城市范围内该路线temp_2之和 }
+        carWeeklyFlow: { type: integer, format: int64, minimum: 0, description: temp_3.car之和，小型客车7日流量 }
+        busWeeklyFlow: { type: integer, format: int64, minimum: 0, description: temp_3.bus之和，中型客车7日流量 }
+        truckWeeklyFlow: { type: integer, format: int64, minimum: 0, description: temp_3.truck之和，大型货车7日流量 }
+
     TrafficQueryResult:
       type: object
       required: [queryType, title, summary, routeSummaries, segments, capacityRows, selectedRegions, hubRows, regionPressureRows, routePressureRows, vehicleStructureRows, vehicleTimeFeatureRows, vehicleDayTypeRows, hourlyVehicleSeries, totalSegmentCount, displayedSegmentCount, truncated, source, acquiredAt, warnings, traceId]
       properties:
         queryType:
           type: string
-          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON]
+          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON, OD_OVERVIEW, OD_CITY_FLOW, OD_KEY_CHANNELS]
         title: { type: string }
         summary:
           type: string
@@ -730,6 +752,22 @@ components:
           type: array
           maxItems: 24
           items: { $ref: '#/components/schemas/HourlyVehicleFlow' }
+        odCityFlowRows:
+          type: array
+          description: 城市区域流量不平衡表；按7日总量降序、城市代码升序，展示所有有数据城市
+          items: { $ref: '#/components/schemas/OdCityFlowRow' }
+        odChannelRows:
+          type: array
+          description: 城市交通关键OD通道表；按所选城市卡口并集及路线聚合，不要求共同路线，不代表方向性或真实城市对OD。后端返回全量，前端可折叠显示10条
+          items: { $ref: '#/components/schemas/OdChannelRow' }
+        periodDays:
+          type: [integer, 'null']
+          enum: [7, null]
+          description: OD查询采用数据库7天统计标签；不由更新时间推断具体起止日期，不校验7日量必须等于日均量乘7
+        missingRegions:
+          type: array
+          items: { $ref: '#/components/schemas/SelectedRegion' }
+          description: 所选范围无卡口数据的城市，不作为零流量城市参与排名
         totalSegmentCount:
           type: integer
           minimum: 0

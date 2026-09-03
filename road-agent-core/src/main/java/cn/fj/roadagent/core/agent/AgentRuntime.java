@@ -61,7 +61,7 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             // 无关问题，限制Agent不回答
             if (intent == AgentIntent.UNSUPPORTED) {
                 completeWithoutSkill(command, sink, runId,
-                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析区域卡口、城市与路线交通压力，以及福州、厦门的车型出行特征，并提供应急调度辅助。 ");
+                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析区域卡口、城市与路线交通压力，以及福州、厦门的车型出行特征、多城市OD七日统计、区域流量差异和关键通道分车型流量，并提供应急调度辅助。 ");
                 return;
             }
 
@@ -70,7 +70,9 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             if (!missing.isEmpty()) {
                 String clarification = decision.clarification();
                 if (clarification == null || clarification.isBlank()) {
-                    clarification = "请补充城市、道路或事件位置等必要信息。";
+                    clarification = decision.parsedTrafficQueryType().map(type -> type.odQuery()).orElse(false)
+                            ? "请选择福建九个地级市范围内的城市，可一次分析一个或多个城市。"
+                            : "请补充城市、道路或事件位置等必要信息。";
                 }
                 completeWithoutSkill(command, sink, runId, clarification);
                 return;

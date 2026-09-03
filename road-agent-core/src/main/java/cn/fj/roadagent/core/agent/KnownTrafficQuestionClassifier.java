@@ -29,6 +29,32 @@ final class KnownTrafficQuestionClassifier {
             return Optional.empty();
         }
 
+        // 否定或纠正表达交由理解完整句义的规划器，不能仅凭关键词抢占业务。
+        if (containsAny(normalized, "不要", "不是", "不看", "不需要", "而是", "别分析", "别看", "不做od", "无需od")) return Optional.empty();
+        Optional<TrafficQueryType> odType = odType(normalized);
+        if (odType.isPresent()) {
+            List<String> cities = mentionedCities(normalized);
+            String clarification = null;
+            if (containsAny(normalized, "上个月", "上月", "去年", "上周", "指定日期", "昨天", "前天", "未来", "预测")
+                    || normalized.matches(".*20\\d{2}[-年/]\\d{1,2}.*")
+                    || normalized.matches(".*\\d{1,2}月\\d{1,2}日.*")) {
+                clarification = "目前可查询数据库最新7天统计，是否改为该统计范围？";
+            } else if (containsAny(normalized, "真实od", "实际od", "净流入", "净流出", "驶往", "车辆来源", "车辆去向", "实际流向")) {
+                clarification = "本项分析按所选城市卡口汇总，不区分车辆方向，是否查看城市七日流量与关键通道统计？";
+            } else if (containsAny(normalized, "通行能力", "利用率", "拥堵", "瓶颈")) {
+                clarification = "OD流量统计与路况、通行能力是不同分析，请问本轮先查看哪一项？";
+            } else if (cities.isEmpty() && containsAny(normalized, "两市", "两个城市", "这几个城市", "两地", "这两个")) {
+                clarification = "请说明需要分析的城市名称，可选择福建九市中的一个或多个城市。";
+            }
+            // 不能把“福州和南京”缩减成“福州”；无法识别的地点需要用户澄清。
+            if (hasUnknownOdCity(normalized)) {
+                clarification = "请选择福建九个地级市范围内的城市，不能将省外城市、区县或平潭合并到本次统计。";
+            }
+            return Optional.of(new AgentDecision("TRAFFIC_QUERY", odType.get().name(), null, null,
+                    routeCode(normalized), null, cities, null, null, null, null, null,
+                    null, null, null, null, List.of(), clarification));
+        }
+
         Optional<TrafficQueryType> vehicleType = vehicleType(normalized);
         if (vehicleType.isPresent()) {
             List<String> cities = mentionedCities(normalized);
@@ -66,6 +92,38 @@ final class KnownTrafficQuestionClassifier {
             return Optional.of(TrafficQueryType.CAPACITY_BOTTLENECKS);
         }
         return Optional.of(TrafficQueryType.CAPACITY_OVERVIEW);
+    }
+
+    private static Optional<TrafficQueryType> odType(String text) {
+        boolean explicit = Pattern.compile("(?<![a-z])od(?![a-z])").matcher(text).find()
+                || containsAny(text, "区域流量不平衡", "城市流量不平衡");
+        boolean week = containsAny(text, "7天", "七天", "7日", "七日", "近一周");
+        boolean cityFlow = containsAny(text, "城市", "各市", "九市", "全省")
+                || !mentionedCities(text).isEmpty();
+        if (!explicit && !(week && cityFlow && text.contains("流量")
+                && !containsAny(text, "车型占比", "车型结构", "出行规律", "工作日", "周末"))) return Optional.empty();
+        boolean channel = containsAny(text, "通道", "路线", "国省道", "车型", "货车", "客车")
+                || routeCode(text) != null;
+        boolean city = containsAny(text, "不平衡", "均衡", "城市流量", "各市流量", "城市区域流量", "流量分布");
+        if (containsAny(text, "综合", "全面") || (channel && city)) return Optional.of(TrafficQueryType.OD_OVERVIEW);
+        if (channel) return Optional.of(TrafficQueryType.OD_KEY_CHANNELS);
+        if (city || !explicit) return Optional.of(TrafficQueryType.OD_CITY_FLOW);
+        return Optional.of(TrafficQueryType.OD_OVERVIEW);
+    }
+
+    private static boolean hasUnknownOdCity(String text) {
+        String scope = text.replaceFirst("^(?:(?:请|帮我|你|帮忙|分析|查询|查看|对比|比较|看看|一下|统计|做|进行))+", "");
+        Matcher matcher = Pattern.compile("(?:^|[和与、及至到，,])([一-龥]{2,8}?)(?:市)?(?=[和与、及至到，,]|之间|的(?:城市|关键)?od|od)").matcher(scope);
+        while (matcher.find()) {
+            String value = matcher.group(1).replaceFirst("(?:的|有哪些|有什么|当前|目前|关键|进行).*$", "");
+            boolean endsInKnownCity = Arrays.stream(FujianCity.values()).anyMatch(c ->
+                    value.endsWith(c.displayName()) || value.endsWith(c.displayName() + "市"));
+            if (!endsInKnownCity && FujianCity.fromName(value).isEmpty()
+                    && !containsAny(value, "福建", "全省", "城市", "两市", "多市", "通道", "流量", "车型", "客车", "货车", "车速")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static Optional<TrafficQueryType> vehicleType(String text) {

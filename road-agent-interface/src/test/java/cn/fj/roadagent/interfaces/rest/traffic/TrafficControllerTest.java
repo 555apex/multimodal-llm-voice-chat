@@ -21,6 +21,27 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TrafficControllerTest {
 
     @Test
+    void acceptsThreeCityOdRequestAndSerializesBothNewTables() throws Exception {
+        QueryHighwayTrafficUseCase useCase = query -> {
+            org.junit.jupiter.api.Assertions.assertEquals(3, query.selectedCities().size());
+            var facts = new cn.fj.roadagent.application.traffic.OdTrafficFacts(
+                    query.queryType(), "城市OD综合分析", List.of(), List.of(),
+                    List.of(new cn.fj.roadagent.application.traffic.OdCityFlowResultItem("350100", "福州市", 2, 100, 20, 0)),
+                    List.of(new cn.fj.roadagent.application.traffic.OdChannelResultItem("G324", "福州—昆明", 100, 70, 10, 20)),
+                    2, 100, 20, Instant.parse("2026-09-03T04:00:00Z"), List.of());
+            return HighwayTrafficResult.fromOdFacts(facts, "已完成所选城市的卡口统计。", query.traceId());
+        };
+        var mvc = MockMvcBuilders.standaloneSetup(new TrafficController(useCase))
+                .setControllerAdvice(new GlobalExceptionHandler()).addFilter(new TraceIdFilter()).build();
+        mvc.perform(post("/api/v1/traffic/queries").contentType("application/json")
+                .content("{\"queryType\":\"OD_OVERVIEW\",\"selectedCities\":[\"福州\",\"厦门\",\"泉州\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.periodDays").value(7))
+                .andExpect(jsonPath("$.data.odCityFlowRows[0].weeklyTotalFlow").value(100))
+                .andExpect(jsonPath("$.data.odChannelRows[0].carWeeklyFlow").value(70))
+                .andExpect(jsonPath("$.data.segments").isEmpty());
+    }
+
+    @Test
     void acceptsTrafficContractAndReturnsUnifiedMysqlResult() throws Exception {
         QueryHighwayTrafficUseCase useCase = query -> new HighwayTrafficResult(
                 TrafficQueryType.PROVINCE_OVERVIEW, "福建省国省道整体交通态势",

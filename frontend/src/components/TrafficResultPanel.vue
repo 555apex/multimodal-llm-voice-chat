@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { CapacityLevel, TrafficQueryResult, TrafficStatus } from '../types/traffic'
 import VehiclePatternCharts from './VehiclePatternCharts.vue'
 
@@ -22,6 +22,13 @@ const regionalQuery = computed(() => [
   'REGIONAL_TRAFFIC_OVERVIEW', 'CHECKPOINT_PRESSURE', 'CITY_PRESSURE', 'ROUTE_PRESSURE',
 ].includes(props.result.queryType))
 const vehicleQuery = computed(() => props.result.queryType.startsWith('VEHICLE_'))
+const odQuery = computed(() => props.result.queryType.startsWith('OD_'))
+const odCityRows = computed(() => props.result.odCityFlowRows ?? [])
+const odChannelRows = computed(() => props.result.odChannelRows ?? [])
+const odExpanded = ref(false)
+watch(() => props.result, () => { odExpanded.value = false })
+const displayedOdChannels = computed(() => odExpanded.value ? odChannelRows.value : odChannelRows.value.slice(0, 10))
+const odScope = computed(() => props.result.selectedRegions?.map(row => row.regionName).join('、') || '福建省')
 
 const hubRows = computed(() => props.result.hubRows ?? [])
 const regionRows = computed(() => props.result.regionPressureRows ?? [])
@@ -39,9 +46,9 @@ const regionSectionTitle = computed(() => regionRows.value.length >= 5 && region
   ? '城市交通压力 Top5'
   : `城市交通压力（${regionRows.value.length}个城市）`)
 const routeSectionTitle = computed(() => rankedSectionTitle('重点路线交通压力', routePressureRows.value.length, 10, '条路线'))
-const eyebrow = computed(() => regionalQuery.value ? '福建区域交通压力'
+const eyebrow = computed(() => odQuery.value ? '城市OD七日统计' : regionalQuery.value ? '福建区域交通压力'
   : vehicleQuery.value ? `${props.result.analysisCity ?? ''}车型出行特征` : '福建普通国省干线')
-const hasDisplayData = computed(() => capacityQuery.value
+const hasDisplayData = computed(() => odQuery.value ? odCityRows.value.length + odChannelRows.value.length > 0 : capacityQuery.value
   ? props.result.capacityRows.length > 0
   : regionalQuery.value
     ? hubRows.value.length + regionRows.value.length + routePressureRows.value.length > 0
@@ -74,7 +81,49 @@ function rankedSectionTitle(label: string, displayedCount: number, limit: number
     </header>
     <p v-if="!compact && result.summary" class="traffic-summary">{{ result.summary }}</p>
 
-    <template v-if="regionalQuery">
+    <template v-if="odQuery">
+      <p class="scope-caption od-scope">统计范围：{{ odScope }} · 按卡口汇总 · 数据库最新7天统计</p>
+      <p v-for="warning in result.warnings" :key="warning" class="scope-caption od-warning">{{ warning }}</p>
+      <section v-if="odCityRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">城市区域流量不平衡</h3>
+        <p class="scope-caption">共{{ odCityRows.length }}个有数据城市；平均车速为卡口均速的算术平均值。</p>
+        <div class="traffic-table-wrap">
+          <table class="traffic-table od-city-table">
+            <thead><tr><th>城市</th><th>卡口数</th><th>总流量（7天）</th><th>日均流量</th><th>平均车速</th></tr></thead>
+            <tbody><tr v-for="row in odCityRows" :key="row.regionCode">
+              <td data-label="城市"><strong>{{ row.regionName }}</strong></td>
+              <td data-label="卡口数">{{ formatInteger(row.checkpointCount) }}</td>
+              <td data-label="总流量（7天）">{{ formatInteger(row.weeklyTotalFlow) }} 辆</td>
+              <td data-label="日均流量">{{ formatInteger(row.dailyAverageFlow) }} 辆/日</td>
+              <td data-label="平均车速">{{ formatNumber(row.averageSpeedKmh) }} km/h</td>
+            </tr></tbody>
+          </table>
+        </div>
+      </section>
+      <section v-if="odChannelRows.length" class="traffic-data-section">
+        <h3 class="traffic-section-heading">城市交通关键OD通道</h3>
+        <p class="scope-caption">共{{ odChannelRows.length }}条路线，当前显示{{ displayedOdChannels.length }}条；按所选城市范围内7天总流量排序。</p>
+        <div class="traffic-table-wrap">
+          <table class="traffic-table od-channel-table">
+            <thead><tr><th>路线编号</th><th>路线名称</th><th>总流量（7天）</th><th>小型客车总流量</th><th>中型客车总流量</th><th>大型货车总流量</th></tr></thead>
+            <tbody><tr v-for="row in displayedOdChannels" :key="row.routeCode">
+              <td data-label="路线编号"><strong>{{ row.routeCode }}</strong></td>
+              <td data-label="路线名称">{{ row.routeName }}</td>
+              <td data-label="总流量（7天）">{{ formatInteger(row.weeklyTotalFlow) }} 辆</td>
+              <td data-label="小型客车总流量">{{ formatInteger(row.carWeeklyFlow) }} 辆</td>
+              <td data-label="中型客车总流量">{{ formatInteger(row.busWeeklyFlow) }} 辆</td>
+              <td data-label="大型货车总流量">{{ formatInteger(row.truckWeeklyFlow) }} 辆</td>
+            </tr></tbody>
+          </table>
+        </div>
+        <button v-if="odChannelRows.length > 10" type="button" class="od-expand-button"
+          :aria-expanded="odExpanded" @click="odExpanded = !odExpanded">
+          {{ odExpanded ? '收起路线' : '展开全部路线' }}
+        </button>
+      </section>
+    </template>
+
+    <template v-else-if="regionalQuery">
       <section v-if="hubRows.length" class="traffic-data-section">
         <h3 class="traffic-section-heading">{{ hubSectionTitle }}</h3>
         <div class="traffic-table-wrap">
@@ -192,15 +241,31 @@ function rankedSectionTitle(label: string, displayedCount: number, limit: number
     </div>
 
     <div v-if="!hasDisplayData" class="empty-result">
-      {{ capacityQuery
+      {{ odQuery ? '所选范围暂无可展示的城市OD卡口统计数据。' : capacityQuery
         ? (result.queryType === 'CAPACITY_BOTTLENECKS' ? '当前没有通行能力利用率低于80%的瓶颈路线。' : '本次查询没有返回可展示的通行能力数据。')
         : regionalQuery ? '本次查询范围内没有可展示的卡口交通压力数据。'
           : vehicleQuery ? '该城市暂无可展示的车型出行特征数据。'
             : (abnormal ? '当前没有status≥20的拥堵异常路段。' : '本次查询没有返回可展示的交通数据。') }}
     </div>
-    <p v-if="result.truncated && !regionalQuery && !vehicleQuery" class="traffic-truncated">
+    <p v-if="result.truncated && !regionalQuery && !vehicleQuery && !odQuery" class="traffic-truncated">
       <template v-if="capacityQuery">共 {{ result.totalSegmentCount }} 条瓶颈路线，当前展示利用率最低的前 {{ result.displayedSegmentCount }} 条。</template>
       <template v-else>共 {{ result.totalSegmentCount }} 条路段，当前展示拥堵程度较高的前 {{ result.displayedSegmentCount }} 条。</template>
     </p>
   </section>
 </template>
+
+<style scoped>
+.od-expand-button { margin-top: 10px; padding: 7px 14px; border: 1px solid #376b8b; border-radius: 6px; background: #103d5c; color: #c0e1f2; cursor: pointer; }
+.od-expand-button:focus-visible { outline: 2px solid #64d4ff; outline-offset: 2px; }
+.od-warning { color: #d1ad72; }
+.od-city-table { min-width: 500px; }
+.od-channel-table { min-width: 690px; }
+@media (max-width: 800px) {
+  .od-city-table, .od-channel-table { display: table; }
+  .od-city-table thead, .od-channel-table thead { display: table-header-group; }
+  .od-city-table tbody, .od-channel-table tbody { display: table-row-group; }
+  .od-city-table tr, .od-channel-table tr { display: table-row; padding: 0; }
+  .od-city-table td, .od-channel-table td { display: table-cell; width: auto; padding: 8px; white-space: nowrap; }
+  .od-city-table td::before, .od-channel-table td::before { display: none; }
+}
+</style>

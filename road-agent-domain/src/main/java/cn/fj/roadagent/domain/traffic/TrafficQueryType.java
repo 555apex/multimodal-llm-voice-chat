@@ -16,7 +16,14 @@ public enum TrafficQueryType {
     VEHICLE_PATTERN_OVERVIEW,
     VEHICLE_STRUCTURE,
     VEHICLE_HOURLY_PATTERN,
-    VEHICLE_DAY_TYPE_COMPARISON;
+    VEHICLE_DAY_TYPE_COMPARISON,
+    OD_OVERVIEW,
+    OD_CITY_FLOW,
+    OD_KEY_CHANNELS;
+
+    public boolean odQuery() {
+        return this == OD_OVERVIEW || this == OD_CITY_FLOW || this == OD_KEY_CHANNELS;
+    }
 
     public boolean capacityQuery() {
         return this == CAPACITY_OVERVIEW

@@ -7,7 +7,7 @@ import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
 
 const SESSION_KEY = 'roadagent-chat-session-v5'
-const WELCOME_MESSAGE = '您好，我是路智通，专注于福建省路网运行监测与应急处置。\n\n我可以研判福建普通国省干线交通态势和短时趋势，查询拥堵路段、指定路线状态、通行能力与瓶颈路线；也可以分析高流量卡口、城市和路线交通压力，以及福州、厦门的车型结构、24小时出行规律和工作日周末特征，同时支持应急调度辅助与语音交互。'
+const WELCOME_MESSAGE = '您好，我是路智通，专注于福建省路网运行监测与应急处置。\n\n我可以研判福建普通国省干线交通态势和短时趋势，查询拥堵路段、指定路线状态、通行能力与瓶颈路线；也可以分析高流量卡口、城市和路线交通压力，以及福州、厦门的车型结构、24小时出行规律和工作日周末特征，还支持多城市OD七日统计、区域流量差异和关键通道分车型流量分析，同时提供应急调度辅助与语音交互。'
 
 interface StoredSession {
   conversationId: string
