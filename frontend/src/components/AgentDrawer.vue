@@ -9,6 +9,7 @@ import VoiceInputButton from './VoiceInputButton.vue'
 import { useAgentStore } from '../stores/agent'
 import { useEmergencyStore } from '../stores/emergency'
 import { useSpeechStore } from '../stores/speech'
+import { useDigitalHumanSignal } from '../composables/useDigitalHumanSignal'
 import type { WorkflowStage } from '../types/dispatch'
 
 type AgentTab = 'chat' | 'emergency'
@@ -60,12 +61,14 @@ const examples = [
   '厦门市24小时分车型出行规律如何？',
 ]
 
-const avatarState = computed(() => {
-  if (messages.value.at(-1)?.status === 'failed') return 'error'
-  if (recording.value) return 'listening'
-  if (playbackStatus.value === 'playing') return 'speaking'
-  if (!running.value) return 'idle'
-  return 'listening'
+const lastAssistantMessage = computed(() => [...messages.value].reverse()
+  .find((message) => message.role === 'assistant'))
+const digitalHumanSignal = useDigitalHumanSignal({
+  recording,
+  playbackStatus,
+  running,
+  lastAssistantMessage,
+  emergencyActionBusy,
 })
 
 const pendingCount = computed(() => totalPending.value)
@@ -161,7 +164,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
       <button type="button" class="drawer-close" aria-label="关闭路智通 AI 助手" @click="emit('close')">×</button>
     </header>
 
-    <DigitalHumanPanel :state="avatarState" />
+    <DigitalHumanPanel :signal="digitalHumanSignal" />
 
     <nav class="agent-mode-tabs" aria-label="Agent功能切换">
       <button

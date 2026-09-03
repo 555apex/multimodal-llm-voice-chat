@@ -1,0 +1,180 @@
+{
+  "canvas": {
+    "width": 1024,
+    "height": 1536
+  },
+  "preparation": {
+    "segmentationModel": "u2net_human_seg",
+    "targetTopY": 16,
+    "targetFootBaselineY": 1518
+  },
+  "sources": {
+    "idle": {
+      "file": "exec-cb9b657b-7b52-4f0a-a7c5-2559db251a53.png",
+      "sha256": "e5fbca420b513196d197940d48764f55dd02c9b363ed71c4a59ede1ed2af8e82"
+    },
+    "thinking": {
+      "file": "exec-80f72a8c-8afc-485e-ad9b-5f3a9949d6ac.png",
+      "sha256": "ca76aea87595362fec0cdd141dbaff98b4d680ae9cdda56906d0b70f36b74adc"
+    },
+    "explaining": {
+      "file": "digital-human-chibi-guardian-render.png",
+      "sha256": "6f8475820a77038f21466082eaf68e82d8675bf248d380d4b7867dd16026984b"
+    }
+  },
+  "assets": {
+    "guardian-idle-master.png": {
+      "sha256": "145aa3b5a72aaf75bd24af7d70f23e0c2d5a59ecb1ccd657ee70c75eb3d5fa13",
+      "bytes": 1612770,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 710445,
+      "partialAlphaPixels": 44985,
+      "boundsX": 30,
+      "boundsY": 16,
+      "boundsWidth": 963,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-idle.png": {
+      "sha256": "145aa3b5a72aaf75bd24af7d70f23e0c2d5a59ecb1ccd657ee70c75eb3d5fa13",
+      "bytes": 1612770,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 710445,
+      "partialAlphaPixels": 44985,
+      "boundsX": 30,
+      "boundsY": 16,
+      "boundsWidth": 963,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-idle.webp": {
+      "sha256": "faf720dce8a40a49f146a016a09ca85cc8eb8e568df6b0cdb3dc7e49b5c11dae",
+      "bytes": 1195754,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 710445,
+      "partialAlphaPixels": 44985,
+      "boundsX": 30,
+      "boundsY": 16,
+      "boundsWidth": 963,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-thinking-master.png": {
+      "sha256": "d1e05c6361365bf240860d8559d50c92a35555dfff0650d8695263269ce6b984",
+      "bytes": 1754378,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 656447,
+      "partialAlphaPixels": 47407,
+      "boundsX": 11,
+      "boundsY": 16,
+      "boundsWidth": 1001,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-thinking.png": {
+      "sha256": "d1e05c6361365bf240860d8559d50c92a35555dfff0650d8695263269ce6b984",
+      "bytes": 1754378,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 656447,
+      "partialAlphaPixels": 47407,
+      "boundsX": 11,
+      "boundsY": 16,
+      "boundsWidth": 1001,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-thinking.webp": {
+      "sha256": "19c8be716cd02eff19bff16a38a56b4c67306d9ca19db5ff64222d380481c3ae",
+      "bytes": 1280650,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 656447,
+      "partialAlphaPixels": 47407,
+      "boundsX": 11,
+      "boundsY": 16,
+      "boundsWidth": 1001,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-explaining-master.png": {
+      "sha256": "275a8d7ce4a8fac60f957a637e10432f570556216e0a0bfc010202855be36d38",
+      "bytes": 1857654,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 641593,
+      "partialAlphaPixels": 930647,
+      "boundsX": 10,
+      "boundsY": 16,
+      "boundsWidth": 1003,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-explaining.png": {
+      "sha256": "275a8d7ce4a8fac60f957a637e10432f570556216e0a0bfc010202855be36d38",
+      "bytes": 1857654,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 641593,
+      "partialAlphaPixels": 930647,
+      "boundsX": 10,
+      "boundsY": 16,
+      "boundsWidth": 1003,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    },
+    "guardian-explaining.webp": {
+      "sha256": "02f8fde63b55f46bca1f7bc7f86033bf0af48e3d0ea7a65edd1b80184ba90eb4",
+      "bytes": 1395530,
+      "mode": "RGBA",
+      "size": [
+        1024,
+        1536
+      ],
+      "hasAlpha": true,
+      "transparentPixels": 641593,
+      "partialAlphaPixels": 930647,
+      "boundsX": 10,
+      "boundsY": 16,
+      "boundsWidth": 1003,
+      "boundsHeight": 1503,
+      "footBaselineY": 1518
+    }
+  }
+}

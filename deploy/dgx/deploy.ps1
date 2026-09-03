@@ -65,7 +65,17 @@ if [ -d "`$remote" ]; then
   mv "`$remote" "`$previous"
 fi
 mv "`$stage" "`$remote"
-rm -rf "`$previous"
+if [ -d "`$previous" ]; then
+  if ! rm -rf "`$previous" 2>/dev/null; then
+    # A previous containerized build may have left root-owned target files.
+    # Restrict the root cleanup container to this one validated deployment directory.
+    test "`$(readlink -f -- "`$previous")" = "`$previous"
+    docker run --rm --user 0 --entrypoint /bin/sh \
+      -v "`$previous`:/cleanup" road-agent-dgx-frontend:local \
+      -c 'find /cleanup -mindepth 1 -delete'
+    rmdir "`$previous"
+  fi
+fi
 rm -f "`$archive"
 chmod +x "`$remote/deploy/dgx/dgx-stack" "`$remote/deploy/dgx/db-maintenance" "`$remote/deploy/dgx/mysql-client-entrypoint" "`$remote/deploy/dgx/download-speech-models" "`$remote/deploy/dgx/smoke.py"
 if [ -f "`$remote/deploy/dgx/.env" ]; then chmod 600 "`$remote/deploy/dgx/.env"; fi

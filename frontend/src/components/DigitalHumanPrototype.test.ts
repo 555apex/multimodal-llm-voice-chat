@@ -1,19 +1,22 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import DigitalHumanPrototype from './DigitalHumanPrototype.vue'
-import type { PrototypeDigitalHumanState } from '../types/digitalHumanPrototype'
+import type { DigitalHumanMode } from '../types/digitalHuman'
+
+let failingSources = new Set<string>()
 
 class FakeImage {
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
 
-  set src(_value: string) {
-    queueMicrotask(() => this.onload?.())
+  set src(value: string) {
+    queueMicrotask(() => failingSources.has(value) ? this.onerror?.() : this.onload?.())
   }
 }
 
 describe('DigitalHumanPrototype', () => {
   beforeEach(() => {
+    failingSources = new Set()
     vi.stubGlobal('Image', FakeImage)
   })
 
@@ -21,10 +24,12 @@ describe('DigitalHumanPrototype', () => {
     vi.unstubAllGlobals()
   })
 
-  const stateCases: Array<[PrototypeDigitalHumanState, string, string]> = [
+  const stateCases: Array<[DigitalHumanMode, string, string]> = [
     ['idle', 'idle', '在线待命'],
-    ['listening', 'thinking', '正在聆听 / 处理中'],
-    ['speaking', 'explaining', '正在讲解'],
+    ['listening', 'idle', '正在聆听'],
+    ['thinking', 'thinking', '正在研判'],
+    ['answering', 'explaining', '正在讲解'],
+    ['speaking', 'explaining', '正在语音汇报'],
     ['error', 'idle', '处理异常'],
   ]
 
@@ -33,20 +38,21 @@ describe('DigitalHumanPrototype', () => {
     await flushPromises()
 
     expect(wrapper.get('.prototype-human-panel').attributes('data-state')).toBe(state)
-    expect(wrapper.get('.prototype-portrait-layer.is-active').attributes('data-pose')).toBe(pose)
+    expect(wrapper.get('.digital-human-portrait-layer.is-active').attributes('data-pose')).toBe(pose)
     expect(wrapper.get('.prototype-state').text()).toContain(label)
     expect(wrapper.emitted('ready-change')?.at(-1)).toEqual([true])
   })
 
-  it('falls back to idle when the requested pose fails', async () => {
-    const wrapper = mount(DigitalHumanPrototype, { props: { state: 'listening' } })
+  it('falls back to idle when both formats for the requested pose fail', async () => {
+    failingSources = new Set([
+      '/digital-human/guardian/guardian-thinking.webp',
+      '/digital-human/guardian/guardian-thinking.png',
+    ])
+    const wrapper = mount(DigitalHumanPrototype, { props: { state: 'thinking' } })
     await flushPromises()
 
-    await wrapper.get(".prototype-portrait-layer[data-pose='thinking']").trigger('error')
-
-    expect(wrapper.get('.prototype-human-panel').attributes('data-fallback')).toBe('true')
-    expect(wrapper.get('.prototype-portrait-layer.is-active').attributes('data-pose')).toBe('idle')
-    expect(wrapper.get('.prototype-state').text()).toContain('已回退至待命图')
+    expect(wrapper.get('.digital-human-portrait-stage').attributes('data-fallback')).toBe('true')
+    expect(wrapper.get('.digital-human-portrait-layer.is-active').attributes('data-pose')).toBe('idle')
     expect(wrapper.emitted('asset-error')?.at(-1)).toEqual(['thinking'])
   })
 })

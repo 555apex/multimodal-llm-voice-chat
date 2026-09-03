@@ -34,10 +34,10 @@
 | 最新业务合入 | 通过 | 合入 `cf6bcd5` 的 MySQL 交通、三级工作流、新前端、文档和 OpenAPI |
 | 最新源仓库保护 | 通过 | Windows 源仓库仍为 `version/roadagent-v1@cf6bcd5`，仅保留迁移前已存在的 `mvnw.cmd` 本地修改，本任务未写入源仓库 |
 | DGX 能力保留 | 通过 | 本地 Qwen、thinking 关闭、HTTP/1.1、离线 ASR/TTS、ARM64 Compose 和运维脚本均保留 |
-| 数字人资产 | 通过 | 主大屏采用新版 `DigitalHumanPanel`；独立 `digital-human-demo.html`、测试和素材保留 |
+| 数字人资产 | 通过 | 主大屏与独立 `digital-human-demo.html` 均采用共享“路智通”三姿态渲染器；原女性资产保留用于回滚 |
 | Java 全量测试 | 通过 | 7 个 Maven reactor 模块 `BUILD SUCCESS`；150 项测试，0 失败，4 项需真实模型的兼容测试按设计跳过 |
 | 共享 MySQL 集成测试 | 通过 | 四类交通只读集成测试及数据库连接测试通过；三级工作流 2 项事务测试完成后自动回滚并校验前后数据库状态一致 |
-| 前端 Vitest | 通过 | 15 个测试文件、59 项测试全部通过 |
+| 前端 Vitest | 通过 | 17 个测试文件、71 项测试全部通过（原有 59 项保持通过） |
 | 前端生产构建 | 通过 | 同时生成主指挥大屏与独立数字人演示页 |
 | Speech 单元测试 | 通过 | 6 项测试全部通过，覆盖替身、模型路径、路由和 MP3 转码 |
 | 语音模型 manifest | 通过 | 在 `--network none` 容器内按 manifest 离线重算全部文件 SHA-256，ASR/TTS 的固定 repo 与 revision 均验证成功 |
@@ -106,13 +106,13 @@
 
 | 镜像 | Image ID | 大小 |
 |---|---|---:|
-| Backend | `sha256:e5caf70e5e9696d0d5697eb2a96559057c1133c53b68c977620c47eca14fed6d` | 284,306,831 bytes |
-| Frontend | `sha256:d7d4b8707f66d6eb922c3a0ad75fd4a733ee13f3479225abda6dfea8949aa0a7` | 61,013,243 bytes |
+| Backend | `sha256:91d9a1e68e58c1a758d37641b723610133fac0eac4aa7d48b862b724382fda0a` | 284,306,831 bytes |
+| Frontend | `sha256:594c779f1ed7aa8517a63d0e1dcc0fcde345ba1e3008c3c150442ff34b9b70e9` | 70,120,651 bytes |
 | Speech | `sha256:44839c8b35f080e560cb024d10dfb9189064878770c5583026bd543062cf7b24` | 22,821,207,612 bytes |
 
-- Qwen `StartedAt=2026-08-25T15:11:00.940479943Z`，重启次数 0，`OOMKilled=false`。
-- Open WebUI `StartedAt=2026-08-25T11:45:18.998769334Z`，重启次数 0，`OOMKilled=false`。
-- `dgx-stack up` 明确输出“Qwen is already running”，未切换、未重启模型服务。
+- Qwen `StartedAt=2026-09-02T09:29:26.953996084Z`，重启次数 0，`OOMKilled=false`；卡通数字人升级前后该时间戳保持不变。
+- Open WebUI `StartedAt=2026-09-02T07:16:50.90801936Z`，重启次数 0；卡通数字人升级未影响其运行。
+- `dgx-stack up` 明确输出“`model-serving-qwen is already running; keeping the current local model process`”，未切换、未重启模型服务。
 - 新应用唯一宿主机监听是 `127.0.0.1:18080`；Backend 和 Speech 只有容器内部端口。
 - Backend、Frontend、Speech 分别以 `roadagent`、`nginx`、`speech` 非 root 用户运行。
 - Qwen 原有 Tailscale 地址 `100.119.145.78:8001` 和 Open WebUI `100.119.145.78:12000` 保持不变。
@@ -132,3 +132,25 @@
 1. 后续需要正式关闭 30 分钟稳定性验收时，从 Speech 健康状态重新开始连续计时并补录终点状态。
 2. tailnet 管理员启用 Tailscale Serve 后执行 `deploy/dgx/dgx-stack serve`，再在 HTTPS 页面授权浏览器麦克风。
 3. 在现场页面录制一段福建道路真实语音，补充 ASR 场景验收；当前合成中文道路语音闭环已通过。
+
+## 9. 卡通数字人生产接入（2026-09-03）
+
+| 检查 | 结果 | 证据摘要 |
+|---|---|---|
+| 人物替换 | 通过 | 主 Agent 已停止使用 `/emergency-agent-avatar.png`，改用“路智通”卡通守护者三姿态资产 |
+| 透明资产 | 通过 | 三姿态均为 1024×1536 RGBA；PNG 与无损 WebP 已生成；脚底基线统一为 Y=1518；哈希见资产清单 |
+| 六状态映射 | 通过 | idle/listening→待命，thinking→思考，answering/speaking→讲解，error→待命异常色 |
+| 真实状态联动 | 通过 | 录音、TTS 实际播放、`answer.delta`、Agent/Tool 运行、TTS 加载、应急操作和 Agent 失败均按固定优先级驱动 |
+| 后台轮询隔离 | 通过 | 应急五秒轮询 `polling` 未接入数字人信号，仅用户触发的 `actionBusy` 驱动思考状态 |
+| 演示页 | 通过 | 六状态手动切换、开始/暂停/重新播放循环演示及本地 TTS 汇报已接入，共用生产渲染器 |
+| 降级与无障碍 | 通过 | WebP→PNG→待命图→文字占位逐级回退；状态使用可访问文本；减少动态偏好下停止循环动画 |
+| 前端测试 | 通过 | 17 个 Vitest 文件、71 项测试全部通过；原有 59 项测试保持通过 |
+| 双入口构建 | 通过 | TypeScript 检查及主页面、`digital-human-demo.html` 生产构建成功 |
+| 响应式视觉检查 | 通过 | 1440×900、1366×768、820×900、390×844 均无水平溢出，三姿态资产全部成功加载 |
+| DGX 镜像构建 | 通过 | Speech 6 项测试、Frontend 71 项测试及双入口构建、Java 全 reactor 测试和打包均在 ARM64 容器构建中通过 |
+| DGX 启动与页面 | 通过 | Backend、Frontend、Speech 均为 healthy；主页面与 `/digital-human-demo.html` 均返回 HTTP 200 |
+| 生产资产校验 | 通过 | DGX 返回的 `guardian-idle.webp` SHA-256 为 `faf720dce8a40a49f146a016a09ca85cc8eb8e568df6b0cdb3dc7e49b5c11dae`，与资产清单一致 |
+| DGX 冒烟 | 通过 | Qwen 普通、流式、3 次结构化响应通过；Speech 能力显示 ASR `small`、TTS `Serena` 均可用 |
+| 模型配置保持 | 通过 | Backend 仍使用 `http://qwen:8000/v1/chat/completions`、`qwen3.6-35b-a3b-nvfp4`、无鉴权、`enable_thinking=false` |
+
+本次只修改前端数字人渲染、状态接入、演示页和静态资产，并增强 Windows→DGX 同步脚本对历史 root 所有者临时目录的安全清理；后端 REST/SSE、Qwen、ASR、Qwen3-TTS、MySQL 及模型配置均未改变。代码已同步到 `/home/whtc/workspace/projects/road-agent-dgx`，新镜像已构建并完成启动与冒烟验收。
