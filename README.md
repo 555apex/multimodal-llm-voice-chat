@@ -3,18 +3,28 @@
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
 ```text
-交通问答：自然语言 → 识别路况、通行能力、区域交通压力或车型出行特征 → MySQL只读事实 → Java确定性统计 → 模型摘要与可视化结果
+交通问答：自然语言 → 识别路况、通行能力、区域交通压力、车型出行特征或城市OD七日统计 → MySQL只读事实 → Java确定性统计 → 模型摘要与可视化结果
 应急调度：MySQL 异常事件 → AI提出受限资源需求 → Java按库存和九市距离分配 → 三级上报通告 → 归还资源 → 全程留痕
 语音交互：浏览器录音 → Java语音接口 → Docker内faster-whisper识别；回答摘要 → Edge-TTS分段合成 → 浏览器播放
 ```
 
 DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答、Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单、修改业务状态或改写交通事实。
 
+本版新增城市 OD 七日卡口统计：可选择福建 1—9 个城市，查看城市流量对比及关键路线的分车型流量，路线表默认展示 10 条并支持展开。这里的 OD 是项目约定的城市卡口并集统计，不是车辆真实起终点或城市间净流入流出分析。
+
+首次协作按下面的顺序即可跑通，测试不是启动前置条件：
+
+1. 准备第 1 节环境，按第 2 节克隆指定分支。
+2. 按第 3 节申请自己的 DeepSeek Key，向负责人获取数据库配置，并复制本地配置文件。
+3. 请负责人确认第 4 节数据库结构、权限和 OD 字段数据；使用共享库的协作者不要自行批量执行 SQL。
+4. 按第 5 节启动 Java 后端和 Vue 前端；需要录音/朗读时再启动 Docker 语音服务。
+5. 在 AI 抽屉输入“福州和厦门的OD情况如何？”，查看摘要和两张统计表；数据不足时先请负责人确认对应城市数据。
+
 ## 1. 环境要求
 
 - Git；
 - JDK 17；
-- Node.js 20 或更高版本；
+- Node.js 20.19+（20.x）或 22.12+，以锁文件中 Vite 的要求 `^20.19.0 || >=22.12.0` 为准；旧版 Node 20 或 Node 21 不满足要求；
 - Docker Desktop，或 Docker Engine + Docker Compose v2，仅语音功能需要；
 - 能访问项目负责人共享的 MySQL 8 数据库；
 - 无需安装全局 Maven。仓库已包含 Maven Wrapper 3.3.4，并固定 Maven 3.9.16。
@@ -23,13 +33,12 @@ DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答
 
 当前只支持 `small + CPU + int8`。不要把 `SPEECH_ASR_DEVICE` 改成 `cuda`：当前镜像没有安装 CUDA、cuBLAS 或 cuDNN。faster-whisper 官方基准中，small/int8 的 ASR 进程约使用 1.5 GB 内存；为容器和依赖预留额外空间，建议 Docker 至少可使用 4 GB 内存。
 
-本版在 Apple Silicon/ARM64 上实测：运行镜像约 725 MB，`small` 模型卷约 467 MB，模型就绪后的容器空闲内存约 337 MiB；复用已有模型卷时约 0.5 秒完成模型加载。推理时占用会升高，不同 Docker 版本和 CPU 架构也会有差异。首次构建还需要保存基础镜像和构建缓存，建议至少预留 2 GB 可用磁盘空间。
+此前语音版在 Apple Silicon/ARM64 上的实测记录（本次 OD 更新未重测）：运行镜像约 725 MB，`small` 模型卷约 467 MB，模型就绪后的容器空闲内存约 337 MiB；复用已有模型卷时约 0.5 秒完成模型加载。推理时占用会升高，不同 Docker 版本和 CPU 架构也会有差异。首次构建还需要保存基础镜像和构建缓存，建议至少预留 2 GB 可用磁盘空间。
 
 ## 2. 拉取指定版本
 
 ```bash
-git clone --branch version/roadagent-v1 --single-branch \
-  https://github.com/555apex/multimodal-llm-voice-chat.git
+git clone --branch version/roadagent-v1 --single-branch https://github.com/555apex/multimodal-llm-voice-chat.git
 cd multimodal-llm-voice-chat
 ```
 
@@ -180,6 +189,26 @@ docs/sql/20260820_level3_provincial_decision_metadata.sql
 
 路况业务读取 `w_road_network_status`、`w_congestion_detection_result` 和 `w_highway_network`，通行能力业务读取 `w_road_capacity`；区域交通压力业务读取 `w_transport_hubs` 并使用 `w_region_code` 映射城市，车型出行特征业务读取 `w_vehicletravelpatternanalyzer`。本期明确不使用 `w_checkpoint_info`，运行时也不使用 `w_transport_hubs.temp_1`。
 
+城市 OD 七日统计同样只读取 `w_transport_hubs` 和 `w_region_code`，不需要新增业务表。请负责人确认以下现有字段及数据已准备好；仅有连接账号、但没有这些字段或有效数据，不能跑通 OD 查询：
+
+| 数据 | 要求 |
+|---|---|
+| `w_transport_hubs.checkpoint_no`、`region_code` | 所选范围内卡口编号唯一且非空；城市代码对应福建地级市，并在 `w_region_code.code/name` 中有有效映射 |
+| `daily_avg_flow`、`average_speed` | 日均流量为非负整数，均速为非负数；0 是有效数据，缺失值不能用 0 冒充 |
+| `temp_2` | 七日总流量，非负整数字符串，例如 `151` |
+| `temp_3` | 七日分车型 JSON，例如 `{"car":75,"bus":40,"truck":36}`；三个值都必须是非负整数，仅查询城市流量表时不读取此字段 |
+| `route_code`、`route_name` | 通道统计按路线编号分组，编号不能为空，同一路线名称不得冲突 |
+| `del_flag`、`update_time`、`create_time` | 有效记录的删除标记为 `N`、`0` 或 `NULL`；更新时间用于展示数据时间，不代表七日区间的起止日期 |
+
+不要求九市数据全部齐备。部分城市无数据时显示缺失提示，其余城市仍可展示；全部无数据返回 `OD_ANALYSIS_NOT_FOUND`。字段非法或重复卡口返回 `OD_ANALYSIS_DATA_INVALID`，连接/表结构问题可能返回 `OD_ANALYSIS_DATA_UNAVAILABLE`。请联系负责人核对数据和权限，不要用重置脚本排查。
+
+以下两个文件仅保留作历史方案参考，**不属于本版迁移，不要为启动项目执行**：
+
+- [20260902_city_od_connection_result.sql](docs/sql/20260902_city_od_connection_result.sql)
+- [20260902_route_city_mapping.sql](docs/sql/20260902_route_city_mapping.sql)
+
+它们包含建表和插入/覆盖数据操作；当前 OD 实现既不读取也不要求创建对应的表。不要对 `docs/sql/` 执行通配符批量导入。
+
 关键状态约定：
 
 - `event_status=0`：三级流程尚未办结，一级、二级、三级流转期间始终保持 `0`；
@@ -249,6 +278,7 @@ java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
 Windows PowerShell 使用：
 
 ```powershell
+. .\config\api-test.ps1
 .\mvnw.cmd package -DskipTests
 java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
 ```
@@ -267,7 +297,7 @@ curl http://localhost:8080/api/v1/speech/capabilities
 
 ### 5.3 前端
 
-另开一个终端：
+另开一个终端，先进入克隆后的项目根目录，再执行：
 
 ```bash
 cd frontend
@@ -296,7 +326,7 @@ npm run dev
 
 ### 6.1 交通问答
 
-- 同一个交通 Skill 支持四类路况、三类通行能力、四类区域交通压力和四类车型出行特征查询；模型只负责意图选择与摘要，所有统计均由 Java 完成；
+- 同一个交通 Skill 支持四类路况、三类通行能力、四类区域交通压力、四类车型出行特征和三类城市 OD 七日统计，共 18 种查询；模型只负责意图选择与摘要，所有统计均由 Java 完成；
 - 全省总览使用 `w_road_network_status` 的路线整体均速和五级状态，不对路段速度二次平均；
 - 异常榜单仅使用 `w_congestion_detection_result` 中 `status>=20` 的路段，按状态、`severity`、均速排序展示前 10 条；
 - 城市间查询用 `w_highway_network.start_place/end_place` 双向精确匹配福建九市；单路线编号精确匹配优先，名称统一连接符和空格后精确匹配；
@@ -306,7 +336,7 @@ npm run dev
 - 通行能力总览直接采用 `w_road_capacity.avg_previous_hour` 作为项目定义的实际通行能力（辆/小时）、`design_flow` 作为设计通行能力、`utilization_perc` 作为实际/设计利用率，Java 和模型均不重新计算这些数值；
 - 通行能力采用三级项目口径：利用率 `>=0.80` 为正常，`0.30<利用率<0.80` 为瓶颈，`<=0.30` 为严重瓶颈；数据库中的 0 是有效值并判定为严重瓶颈；
 - 瓶颈路线按利用率、实际通行能力升序稳定排序，默认展示前 10 条；当前容量表是一条路线一条记录，因此只称“瓶颈路线”，不虚构路段位置；
-- 交通表每 5 秒检查一次；每次通过 MySQL 只读一致性事务获得一个原子视图，不再要求读取前后数据库停止写入。后端冷启动会立即发布首份合法数据；运行期发现变化时继续使用上一已发布快照，候选内容连续稳定 30 秒后再原子切换；
+- 路况与通行能力快照每 5 秒检查一次；每次通过 MySQL 只读一致性事务获得一个原子视图，不再要求读取前后数据库停止写入。后端冷启动会立即发布首份合法数据；运行期发现变化时继续使用上一已发布快照，候选内容连续稳定 30 秒后再原子切换。区域压力、车型分析及 OD 采用按请求读取，不经过这段稳定等待；
 - 路况与通行能力业务表允许只覆盖当前批次有数据的部分活动路线，有多少条展示多少条；仍会拒绝重复路线、非活动路线、跨表名称冲突和非法数值。`w_road_capacity` 使用独立内存快照，其更新异常不会影响已有路况查询；
 - Java 先完成状态映射、统计、排序、截断和当前预警事实；路况模型据此生成当前态势摘要和 1 句未来 1–2 小时定性趋势，容量模型生成专业研判。模型首次只出现JSON、句数、标点或趋势时间写法偏差时会静默修复一次；摘要不再依赖“表格”等固定词或固定句式。模型引用结构化事实之外的数字时改用Java事实摘要，真正的模型服务失败仍不发布文字、表格或语音半成品；
 - 路况研判内容覆盖总体结论、状态分布、重点路线或路段、可执行的通行建议和短时定性趋势；趋势只进入已有摘要与语音，不增加表格预测列；
@@ -323,6 +353,22 @@ npm run dev
 - 车型出行特征目前按单城市分析福州或厦门，每次执行 `create_time DESC, id DESC` 选取该城市最新有效记录；`result1` 为一周三车型总量，`result2` 为24小时数据，`result3` 为周末两天总量；
 - `car/bus/truck` 分别展示为小型客车、中型客车和大型货车。24小时缺失时间点补0，工作日5天合计为 `result1-result3`，周末2天合计直接使用 `result3`；
 - 前端使用固定 ECharts 模板绘制车型占比饼图、24小时折线图和工作日/周末柱状图；模型不生成图表配置，语音只朗读3–5句总结，不朗读表格和图表。
+
+### 6.2.1 城市OD七日统计（需求1-7）
+
+本业务采用项目约定的“城市卡口并集统计”口径，与1-5使用同一数据表但采用不同字段、意图和展示；不表示车辆真实起讫点、方向、净流入净流出或去重出行量。
+
+- 唯一业务表为 `w_transport_hubs`，以 `region_code` 和 `w_region_code` 映射城市。独立只读一致性事务，不等待30秒，不校验九市/48条路线齐全，不使用 `w_highway_network`、`w_route_city_mapping`、`w_city_od_connection_result`。同一事务只保证读取视图一致，不保证协作者分次提交的业务批次绝对完整。
+- `OD_OVERVIEW`返回两张表；`OD_CITY_FLOW`仅返回“城市区域流量不平衡”；`OD_KEY_CHANNELS`仅返回“城市交通关键OD通道”。REST和SSE均增加 `odCityFlowRows、odChannelRows、periodDays、missingRegions`，旧字段保持兼容。
+- `selectedCities`允许1至9个福建地级市；为空默认全省；两市或多市按卡口并集，不求共同路线。部分城市无数据时返回其他城市及提示；全部无数据为 `OD_ANALYSIS_NOT_FOUND`，不能填0代替无数据。
+- 城市表：卡口数为全部有效卡口数量；7日总量为 `SUM(temp_2)`，日均流量为 `SUM(daily_avg_flow)`，均速为包含有效0值的卡口均速算术平均（两位小数）。不沿用1-5的活跃阈值或Top5。
+- 通道表：在所选城市范围内按 `route_code` 汇总 `temp_2` 和 `temp_3.car/bus/truck`；车型映射为小型客车、中型客车、大型货车，均为7天总量。两表按7日总量降序、代码升序排列；后端返回所有路线，前端默认显示10条，可展开全部。
+- `temp_2`为非负整数字符串，`temp_3`示例为 `{"car":75,"bus":40,"truck":36}`。必要值非法、重复卡口等返回 `OD_ANALYSIS_DATA_INVALID`；校验局限查询范围。仅查城市表不读取或校验车型JSON。车型合计与总量不一致仅提示，不修正源值。
+- 不强制7日总量等于日均流量乘7；`periodDays=7`来自数据库字段口径，`acquiredAt`是所选记录的最新更新时间，不作为历史统计起止日期。历史日期请求先追问是否改查最新7天数据。
+- 摘要由Java事实驱动模型生成，允许句数及措辞差异；新增数值、方向/真实OD或原因结论会改用事实摘要。模型超时、空响应或JSON解析失败时不发布文本、表格或语音半成品。语音仅朗读摘要；本业务不生成1–2小时拥堵趋势。
+- 问法：“福州和厦门的OD情况如何？”、“分析福州、厦门、泉州的OD情况。”、“福建各城市近7天流量分布是否均衡？”、“福州和厦门有哪些关键OD通道，各车型流量多少？”。
+- “交通压力/卡口排名/区域交通联系”继续进入1-5；“OD通道的车型流量”优先进入1-7，不能误入1-6；“福州到厦门拥堵吗”仍是路况查询。上下文中的增减城市、切换表格由规划器结合历史解析。
+- 旧的两份 `docs/sql/20260902_*.sql` 是此前方案草稿，本业务不会执行，也不要求创建对应表。共享数据库只读测试：配置数据库环境变量后执行 `./mvnw test -Dtest=OdTrafficReadOnlyIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false`，不启动应用或写入数据库。
 
 ### 6.3 数据库应急调度
 
@@ -352,7 +398,7 @@ npm run dev
 - “语音回答”每次打开页面默认关闭；打开后只自动朗读之后完成的助手回答，关闭会立即停止并清空播放队列；
 - 每条已完成的助手消息均有独立的播放、暂停、继续和重播按钮，同一时刻只播放一条；
 - 中文按自然标点分段，播放当前段时预合成下一段，以降低首段等待和段间停顿；
-- 交通查询只朗读通过格式校验的 3–5 句模型研判摘要，不朗读表格数据；
+- 交通查询只朗读通过校验的研判摘要，不朗读表格数据；一般摘要为 3–5 句，OD 摘要允许句数差异；
 - 应急告警卡和正式调度工单不会自动朗读；Edge-TTS 不需要 API Key，但必须联网，并会把待朗读文本发送到 Microsoft 在线语音服务；
 - 语音容器不可用、ASR/TTS 失败或被用户取消时，只影响语音功能，不影响已有文字和其他业务流程。
 
@@ -402,12 +448,20 @@ POST /api/v1/speech/syntheses
 
 流式入口返回 SSE 事件，包括运行阶段、意图、Skill、Tool、文字增量、独立朗读文本 `answer.speech`、业务结果、审批要求和失败信息。接口契约见 [contracts/openapi/traffic-api.yaml](contracts/openapi/traffic-api.yaml)。
 
+本版沿用 `POST /api/v1/traffic/queries`，没有新增独立 OD URL。新增类型为 `OD_OVERVIEW`、`OD_CITY_FLOW`、`OD_KEY_CHANNELS`；OD 的 `selectedCities` 支持 1—9 市或留空查全省，其他类型的城市范围限制不变。REST 和 SSE 交通结果增加 `odCityFlowRows`、`odChannelRows`、`periodDays`、`missingRegions`。例如请求体：
+
+```json
+{"queryType":"OD_OVERVIEW","selectedCities":["福州","厦门"]}
+```
+
+此接口也会调用模型生成摘要，需要有效的模型配置，并非仅验证数据库连接的健康接口。
+
 ## 9. 推荐阅读顺序
 
 1. `AgentController`：自然语言请求如何进入后端；
 2. `AgentRuntime`：规划、选择 Skill、执行和记忆如何串联；
 3. `IntentPlanner` 与 `SkillRegistry`：模型选择和 Java 白名单的边界；
-4. `HighwayTrafficSkill` 与 `HighwayTrafficService`：四种交通查询如何执行；
+4. `HighwayTrafficSkill`、`UnifiedTrafficQueryService` 与 `OdTrafficService`：18 种交通查询如何分流，新增 OD 如何按城市汇总；
 5. `EmergencyWorkflowController` 与 `DispatchApplicationService`：三级状态机、版本返工、幂等和最终通告事务；
 6. `MysqlHighwayTrafficSnapshotSource`、`InMemoryHighwayTrafficSnapshotCache` 与 Port：一致性读取、完整性校验和原子发布；
 7. `EmergencyResourceAllocator`、`MysqlEmergencyResourceRepository`、`MysqlResourceAllocationRepository` 与 `FujianCityDistanceAdapter`：受限资源需求如何转成库存占用、跨市调度和缺口；
@@ -418,9 +472,11 @@ POST /api/v1/speech/syntheses
 12. [语音录音停止与识别问题修复日志](docs/VOICE_INPUT_RECORDING_BUGFIX_20260812.md)：历史故障、当前抽屉结构下的修复和回归验证；
 13. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
 
-## 10. 验证命令
+## 10. 可选开发验证（不是启动步骤）
 
-自动测试不会请求真实 DeepSeek。设置共享数据库环境变量后，后端集成测试会验证真实 MySQL 仓储：
+以下命令供后续开发按改动范围选用，协作者首次启动无需全部执行，本次版本整理也未重跑这些测试或构建。不要把历史验收记录当作每次推送的测试结果。
+
+未配置外部环境开关时，测试使用本地替身；设置 `ROADAGENT_DB_URL` 后会启用真实 MySQL 集成测试，设置 `ROADAGENT_MODEL_LIVE_TEST=true` 后会启用真实模型测试并可能产生 API 费用。仅在明确需要时使用相应配置，数据库测试应使用负责人认可的测试环境：
 
 ```bash
 ./mvnw test
@@ -429,7 +485,7 @@ POST /api/v1/speech/syntheses
 docker compose -f compose.speech.yml --profile test run --rm speech-tests
 ```
 
-Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS。Docker 运行时人工验收还应检查 ARM64/amd64 构建、首次模型加载、普通 `down` 后模型卷复用、福建道路名称识别，以及交通表格不逐行朗读。
+Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS。若后续修改语音镜像或语音链路，再按需要检查 CPU 架构兼容、模型加载及复用、道路名称识别和只朗读摘要等行为；普通文档整理不需要重复执行。
 
 ## 11. 常见问题
 
@@ -449,7 +505,7 @@ Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS�
 
 ### 是否每次都要 Maven Reload 或运行测试
 
-不需要。首次拉取或 `pom.xml` 变化后执行 Maven Reload；提交代码前运行测试。平时启动只需加载环境变量后运行后端和前端。
+不需要。首次拉取或 `pom.xml` 变化后执行 Maven Reload；开发测试按改动范围选择，不是每次启动的前置条件。首次启动按第 5 节构建后端和安装前端依赖；后端源码有更新时重新打包，前端锁文件变化时重新执行 `npm ci`。
 
 ### 语音按钮不可用或容器一直未就绪
 

@@ -2,6 +2,7 @@
 # config/api-test.ps1 已被 Git 忽略，不要在本示例文件中填写真实密钥。
 
 # 交通数据只从MySQL读取，不需要地图API Key。
+# 下列快照参数仅用于路况/通行能力；区域压力、车型分析及OD按请求读取。
 # $env:ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS = '5'
 # $env:ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS = '30'
 
