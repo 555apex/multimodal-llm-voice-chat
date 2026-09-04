@@ -169,5 +169,12 @@
 | 响应式视觉检查 | 通过 | 1440×900、1280×650、390×844 下待命、思考、讲解、语音汇报均无透明底异常、脚底跳位或人物身份漂移 |
 | 前端测试 | 通过 | 18 个 Vitest 文件、80 项测试全部通过；覆盖振幅插值、播放生命周期、Web Audio 降级、20 次资源释放、姿态过渡和嘴型回退 |
 | 双入口构建 | 通过 | TypeScript 检查和 Vite 主页面、`digital-human-demo.html` 生产构建成功 |
+| DGX 候选镜像 | 通过 | `road-agent-dgx-frontend:candidate-bd891f0`，Image ID `sha256:d5b5d0266905a1963f029d02c23e64db073517d52050f685769592244cef1e28`；ARM64 镜像构建内再次通过 80 项测试和双入口构建 |
+| 隔离更新 | 通过 | 仅以 `--no-deps --force-recreate` 重建 `road-agent-dgx-public-frontend`；Public Backend、Speech、Qwen 的容器 ID、启动时间和重启次数前后完全一致，均为 healthy、重启 0 |
+| DGX 生产页面 | 通过 | 公网 Frontend `/healthz` 返回 200；主页面与 `digital-human-demo.html` 均存在；公网根路径保持 Basic Auth 保护并返回 401 |
+| DGX 生产资产 | 通过 | 容器内三张嘴型 WebP SHA-256 依次为 `8018ff4d…`、`3e0fda10…`、`116dc9cf…`，与资产清单一致 |
+| 本地模型保持 | 通过 | Backend 仍为 `qwen3.6-35b-a3b-nvfp4`、`http://qwen:8000/v1/chat/completions`、无鉴权、非思考模式；Qwen 容器仍为 `bb1fb4a0…`，`StartedAt=2026-09-02T09:29:26.953996084Z` |
+| 真实 TTS | 通过 | DGX 本地 Serena 返回 HTTP 200 `audio/mpeg`，36,333 bytes，MP3 头为 `ID3`；Speech 能力同时报告 ASR `small`、TTS `Serena` 可用 |
+| 备份与回滚 | 通过 | 旧镜像标记为 `road-agent-dgx-frontend:pre-mouth-bd891f0-20260904`；远端对应源文件和部署前后容器快照保存于 `/home/whtc/workspace/backups/road-agent-project/digital-human-bd891f0-20260904` |
 
-本节变更范围仅包括数字人资产、共享渲染组件、状态信号和浏览器端播放振幅观察。后端接口、Agent、Qwen、ASR、Qwen3-TTS、MySQL 和其他业务流程均未修改。DGX 公网前端隔离部署结果在候选镜像上线后补录，30 分钟稳定性终点仍按用户要求保持暂缓。
+本节变更范围仅包括数字人资产、共享渲染组件、状态信号和浏览器端播放振幅观察。后端接口、Agent、Qwen、ASR、Qwen3-TTS、MySQL 和其他业务流程均未修改。DGX 公网前端隔离部署已完成，30 分钟稳定性终点仍按用户要求保持暂缓。
