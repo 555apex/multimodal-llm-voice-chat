@@ -96,13 +96,28 @@ describe('DigitalHumanDemo', () => {
     expect(wrapper.get('.prototype-human-panel').attributes('data-state')).toBe('thinking')
 
     speech.playbackStatus = 'playing'
+    speech.playbackAmplitude = 0.8
     await nextTick()
     expect(wrapper.get('.prototype-human-panel').attributes('data-state')).toBe('speaking')
+    expect(wrapper.get('.digital-human-portrait-stage').attributes('data-preview-speech')).toBe('false')
+    expect(wrapper.get("[data-mouth='open']").attributes('style')).not.toContain('opacity: 0.0000')
 
     speech.playbackStatus = 'idle'
     finishSpeech?.()
     await flushPromises()
     expect(wrapper.get('.prototype-human-panel').attributes('data-state')).toBe('idle')
+  })
+
+  it('uses a clearly isolated preview mouth rhythm for manual speaking mode', async () => {
+    const { wrapper } = mountDemo()
+    await flushPromises()
+    const speaking = wrapper.findAll('.prototype-state-buttons button')
+      .find((button) => button.text().includes('speaking'))!
+
+    await speaking.trigger('click')
+
+    expect(wrapper.get('.digital-human-portrait-stage').attributes('data-preview-speech')).toBe('true')
+    expect(wrapper.get('.prototype-report-demo').text()).toContain('演示文案')
   })
 
   it('keeps the visual demo available when TTS playback fails', async () => {

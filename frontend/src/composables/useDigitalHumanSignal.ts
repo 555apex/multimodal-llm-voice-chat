@@ -15,6 +15,7 @@ export interface DigitalHumanSnapshot {
 export interface DigitalHumanSources {
   recording: Ref<boolean>
   playbackStatus: Ref<SpeechPlaybackStatus>
+  playbackAmplitude: Ref<number>
   running: Ref<boolean>
   lastAssistantMessage: Ref<AgentMessage | undefined>
   emergencyActionBusy: Ref<boolean>
@@ -72,6 +73,9 @@ export function useDigitalHumanSignal(sources: DigitalHumanSources) {
       emergencyActionBusy: sources.emergencyActionBusy.value,
       errorActive: errorActive.value,
     })
-    return { mode, statusLabel: digitalHumanStateMeta[mode].label }
+    const speechLevel = mode === 'speaking'
+      ? Math.min(1, Math.max(0, sources.playbackAmplitude.value))
+      : 0
+    return { mode, statusLabel: digitalHumanStateMeta[mode].label, speechLevel }
   })
 }

@@ -9,7 +9,11 @@ defineProps<{ signal: DigitalHumanSignal }>()
   <aside class="human-panel" :data-state="signal.mode">
     <div class="human-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="human-portrait-wrap">
-      <DigitalHumanPortrait class="human-digital-portrait" :mode="signal.mode" />
+      <DigitalHumanPortrait
+        class="human-digital-portrait"
+        :mode="signal.mode"
+        :speech-level="signal.speechLevel"
+      />
     </div>
     <div class="human-details">
       <div class="human-identity">

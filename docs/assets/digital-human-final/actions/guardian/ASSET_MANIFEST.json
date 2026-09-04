@@ -176,5 +176,151 @@
       "boundsHeight": 1503,
       "footBaselineY": 1518
     }
+  },
+  "mouthAnimation": {
+    "canonical": {
+      "file": "guardian-explaining.png",
+      "sha256": "275a8d7ce4a8fac60f957a637e10432f570556216e0a0bfc010202855be36d38"
+    },
+    "generatedSources": {
+      "closed": {
+        "file": "guardian-explaining-closed-generated.png",
+        "sha256": "26569ea9afedc514aeb0f33ad7a03c6f48db0a2e43bf55da255f38d137fcee9e"
+      },
+      "half": {
+        "file": "guardian-explaining-half-generated.png",
+        "sha256": "20d203543b11ab01db387c90d545bc0dc4ebd127465cb28e7bb79dcda2f4a028"
+      }
+    },
+    "roi": {
+      "left": 374,
+      "top": 638,
+      "right": 528,
+      "bottom": 760,
+      "featherPixels": 14
+    },
+    "invariants": {
+      "outsideRoiPixelIdentical": true,
+      "canonicalAlphaPreserved": true
+    },
+    "assets": {
+      "guardian-explaining-mouth-closed-v2-master.png": {
+        "shape": "closed",
+        "sha256": "2e839e361b51f3ffbd416063bcc17702b75e3b7d669f0e807a9fcbae7fbbf2cc",
+        "bytes": 1856725,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-closed-v2.png": {
+        "shape": "closed",
+        "sha256": "2e839e361b51f3ffbd416063bcc17702b75e3b7d669f0e807a9fcbae7fbbf2cc",
+        "bytes": 1856725,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-closed-v2.webp": {
+        "shape": "closed",
+        "sha256": "8018ff4d95c688ffe9d9e6858370361f68d9ab6d0e85b59ed5a55e901cc99e09",
+        "bytes": 1392560,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-half-v2-master.png": {
+        "shape": "half",
+        "sha256": "5a76371f40c04b157893cc212945b72f021b4bef86f50628bcfae8936f83b667",
+        "bytes": 1857151,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-half-v2.png": {
+        "shape": "half",
+        "sha256": "5a76371f40c04b157893cc212945b72f021b4bef86f50628bcfae8936f83b667",
+        "bytes": 1857151,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-half-v2.webp": {
+        "shape": "half",
+        "sha256": "3e0fda1085377bcf9fe8519d481fb2072412c57127a5f861917b935528539a22",
+        "bytes": 1395144,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-open-v2-master.png": {
+        "shape": "open",
+        "sha256": "3426c505e387cbf5b561962b4772c7a7896d190d545d1057c0be63d1b4fc58e6",
+        "bytes": 1859369,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-open-v2.png": {
+        "shape": "open",
+        "sha256": "3426c505e387cbf5b561962b4772c7a7896d190d545d1057c0be63d1b4fc58e6",
+        "bytes": 1859369,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      },
+      "guardian-explaining-mouth-open-v2.webp": {
+        "shape": "open",
+        "sha256": "116dc9cfa64b9673e38cc6dd75ed071d385773b8cc9ab210a86229bb95b0a986",
+        "bytes": 1395716,
+        "mode": "RGBA",
+        "size": [
+          1024,
+          1536
+        ],
+        "hasAlpha": true,
+        "transparentPixels": 641593,
+        "partialAlphaPixels": 930647
+      }
+    }
   }
 }

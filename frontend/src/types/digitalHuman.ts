@@ -8,9 +8,12 @@ export type DigitalHumanMode =
 
 export type DigitalHumanPose = 'idle' | 'thinking' | 'explaining'
 
+export type DigitalHumanMouthShape = 'closed' | 'half' | 'open'
+
 export interface DigitalHumanSignal {
   mode: DigitalHumanMode
   statusLabel: string
+  speechLevel: number
 }
 
 export interface DigitalHumanStateMeta {
@@ -23,6 +26,12 @@ export interface DigitalHumanStateMeta {
 export interface DigitalHumanPoseAsset {
   webp: string
   png: string
+}
+
+export interface DigitalHumanMouthWeights {
+  closed: number
+  half: number
+  open: number
 }
 
 export const digitalHumanStateMeta: Record<DigitalHumanMode, DigitalHumanStateMeta> = {
@@ -77,4 +86,29 @@ export const digitalHumanPoseAssets: Record<DigitalHumanPose, DigitalHumanPoseAs
     webp: '/digital-human/guardian/guardian-explaining.webp',
     png: '/digital-human/guardian/guardian-explaining.png',
   },
+}
+
+export const digitalHumanMouthAssets: Record<DigitalHumanMouthShape, DigitalHumanPoseAsset> = {
+  closed: {
+    webp: '/digital-human/guardian/guardian-explaining-mouth-closed-v2.webp',
+    png: '/digital-human/guardian/guardian-explaining-mouth-closed-v2.png',
+  },
+  half: {
+    webp: '/digital-human/guardian/guardian-explaining-mouth-half-v2.webp',
+    png: '/digital-human/guardian/guardian-explaining-mouth-half-v2.png',
+  },
+  open: {
+    webp: '/digital-human/guardian/guardian-explaining-mouth-open-v2.webp',
+    png: '/digital-human/guardian/guardian-explaining-mouth-open-v2.png',
+  },
+}
+
+export function resolveDigitalHumanMouthWeights(level: number): DigitalHumanMouthWeights {
+  const normalized = Math.min(1, Math.max(0, Number.isFinite(level) ? level : 0))
+  if (normalized <= 0.45) {
+    const half = normalized / 0.45
+    return { closed: 1 - half, half, open: 0 }
+  }
+  const open = (normalized - 0.45) / 0.55
+  return { closed: 0, half: 1 - open, open }
 }

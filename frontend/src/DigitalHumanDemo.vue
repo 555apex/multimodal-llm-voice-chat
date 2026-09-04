@@ -24,6 +24,7 @@ const {
   capabilitiesLoading,
   capabilityError,
   playbackStatus,
+  playbackAmplitude,
   playbackError,
 } = storeToRefs(speechStore)
 
@@ -152,6 +153,8 @@ onUnmounted(() => {
     <section class="prototype-demo-layout">
       <DigitalHumanPrototype
         :state="selectedState"
+        :speech-level="playbackStatus === 'playing' ? playbackAmplitude : 0"
+        :preview-speech="selectedState === 'speaking' && playbackStatus !== 'playing'"
         @ready-change="assetsReady = $event"
         @asset-error="handleAssetError"
       />
@@ -218,9 +221,10 @@ onUnmounted(() => {
         <div class="prototype-architecture-note">
           <strong>当前实现边界</strong>
           <ul>
-            <li>三姿态 200ms 交叉淡入，含呼吸、点头、扫描光效和声波</li>
+            <li>三姿态 600ms 可中断缓动过渡，含呼吸、扫描光效和声波</li>
+            <li>真实 TTS 振幅驱动闭嘴、半开、张开三档嘴型连续混合</li>
             <li>汇报演示调用与主页面相同的 DGX 本地 TTS 接口</li>
-            <li>本轮不包含眨眼、嘴型拆层或实时口型同步</li>
+            <li>不做汉字或音素级嘴型对应，分析器不可用时自动降级</li>
           </ul>
         </div>
 

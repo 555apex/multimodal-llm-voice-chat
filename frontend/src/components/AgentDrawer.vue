@@ -38,6 +38,7 @@ const {
   capabilityError: speechCapabilityError,
   autoReadEnabled,
   playbackStatus,
+  playbackAmplitude,
 } = storeToRefs(speechStore)
 
 const activeTab = ref<AgentTab>('chat')
@@ -66,6 +67,7 @@ const lastAssistantMessage = computed(() => [...messages.value].reverse()
 const digitalHumanSignal = useDigitalHumanSignal({
   recording,
   playbackStatus,
+  playbackAmplitude,
   running,
   lastAssistantMessage,
   emergencyActionBusy,

@@ -28,6 +28,7 @@ describe('DigitalHumanPortrait', () => {
     await flushPromises()
 
     expect(wrapper.findAll('.digital-human-portrait-layer')).toHaveLength(3)
+    expect(wrapper.findAll('.digital-human-mouth-frame')).toHaveLength(3)
     expect(wrapper.get('.digital-human-portrait-stage').attributes('aria-label')).toContain('正在讲解')
     expect(wrapper.emitted('ready-change')?.at(-1)).toEqual([true])
   })
@@ -37,9 +38,53 @@ describe('DigitalHumanPortrait', () => {
     const wrapper = mount(DigitalHumanPortrait, { props: { mode: 'thinking' } })
     await flushPromises()
 
-    expect(wrapper.get(".digital-human-portrait-layer[data-pose='thinking']").attributes('src'))
+    expect(wrapper.get(".digital-human-portrait-layer[data-pose='thinking'] .digital-human-portrait-image").attributes('src'))
       .toBe('/digital-human/guardian/guardian-thinking.png')
     expect(wrapper.emitted('asset-error')).toBeUndefined()
+  })
+
+  it('blends the three mouth frames from the real speech level', async () => {
+    const wrapper = mount(DigitalHumanPortrait, {
+      props: { mode: 'speaking', speechLevel: 0.725 },
+    })
+    await flushPromises()
+
+    expect((wrapper.get("[data-mouth='closed']").element as HTMLElement).style.opacity).toBe('0')
+    expect((wrapper.get("[data-mouth='half']").element as HTMLElement).style.opacity).toBe('0.5')
+    expect((wrapper.get("[data-mouth='open']").element as HTMLElement).style.opacity).toBe('0.5')
+
+    await wrapper.setProps({ mode: 'answering' })
+    expect((wrapper.get("[data-mouth='closed']").element as HTMLElement).style.opacity).toBe('1')
+    expect((wrapper.get("[data-mouth='open']").element as HTMLElement).style.opacity).toBe('0')
+  })
+
+  it('falls back to the original static explaining image when a mouth asset fails', async () => {
+    failingSources = new Set([
+      '/digital-human/guardian/guardian-explaining-mouth-half-v2.webp',
+      '/digital-human/guardian/guardian-explaining-mouth-half-v2.png',
+    ])
+    const wrapper = mount(DigitalHumanPortrait, { props: { mode: 'speaking' } })
+    await flushPromises()
+
+    expect(wrapper.get('.digital-human-portrait-stage').attributes('data-mouth-fallback')).toBe('true')
+    expect(wrapper.findAll('.digital-human-mouth-frame')).toHaveLength(0)
+    expect(wrapper.get(".digital-human-portrait-layer[data-pose='explaining'] .digital-human-portrait-image")
+      .attributes('src')).toBe('/digital-human/guardian/guardian-explaining.webp')
+    expect(wrapper.emitted('asset-error')?.at(-1)).toEqual(['explaining'])
+  })
+
+  it('keeps all poses mounted for interruption-safe 600ms transitions', async () => {
+    const wrapper = mount(DigitalHumanPortrait, { props: { mode: 'idle' } })
+    await flushPromises()
+
+    await wrapper.setProps({ mode: 'thinking' })
+    await wrapper.setProps({ mode: 'answering' })
+    expect(wrapper.findAll('.digital-human-portrait-layer')).toHaveLength(3)
+    expect(wrapper.get('.digital-human-portrait-layer.is-active').attributes('data-pose')).toBe('explaining')
+
+    const source = readFileSync(join(process.cwd(), 'src/components/DigitalHumanPortrait.vue'), 'utf8')
+    expect(source).toContain('opacity 600ms cubic-bezier(.22, 1, .36, 1)')
+    expect(source).not.toContain('visibility: hidden')
   })
 
   it('shows the placeholder when the idle WebP and PNG both fail', async () => {
@@ -58,5 +103,6 @@ describe('DigitalHumanPortrait', () => {
     const source = readFileSync(join(process.cwd(), 'src/components/DigitalHumanPortrait.vue'), 'utf8')
     expect(source).toContain('@media (prefers-reduced-motion: reduce)')
     expect(source).toContain('animation: none !important')
+    expect(source).toContain('transition: opacity 120ms ease !important')
   })
 })

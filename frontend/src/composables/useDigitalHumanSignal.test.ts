@@ -39,6 +39,7 @@ describe('useDigitalHumanSignal', () => {
     vi.useFakeTimers()
     const recording = ref(false)
     const playbackStatus = ref<SpeechPlaybackStatus>('idle')
+    const playbackAmplitude = ref(0.72)
     const running = ref(true)
     const emergencyActionBusy = ref(false)
     const lastAssistantMessage = ref<AgentMessage>({
@@ -48,26 +49,36 @@ describe('useDigitalHumanSignal', () => {
     const Harness = defineComponent({
       setup() {
         const signal = useDigitalHumanSignal({
-          recording, playbackStatus, running, lastAssistantMessage, emergencyActionBusy,
+          recording,
+          playbackStatus,
+          playbackAmplitude,
+          running,
+          lastAssistantMessage,
+          emergencyActionBusy,
         })
         return { signal }
       },
-      template: '<span data-testid="mode">{{ signal.mode }}</span>',
+      template: '<span data-testid="mode">{{ signal.mode }}:{{ signal.speechLevel }}</span>',
     })
     const wrapper = mount(Harness)
-    expect(wrapper.get('[data-testid="mode"]').text()).toBe('answering')
+    expect(wrapper.get('[data-testid="mode"]').text()).toBe('answering:0')
+
+    playbackStatus.value = 'playing'
+    await nextTick()
+    expect(wrapper.get('[data-testid="mode"]').text()).toBe('speaking:0.72')
+    playbackStatus.value = 'idle'
 
     running.value = false
     lastAssistantMessage.value = { ...lastAssistantMessage.value, status: 'failed', content: '' }
     await nextTick()
-    expect(wrapper.get('[data-testid="mode"]').text()).toBe('error')
+    expect(wrapper.get('[data-testid="mode"]').text()).toBe('error:0')
 
     vi.advanceTimersByTime(2999)
     await nextTick()
-    expect(wrapper.get('[data-testid="mode"]').text()).toBe('error')
+    expect(wrapper.get('[data-testid="mode"]').text()).toBe('error:0')
     vi.advanceTimersByTime(1)
     await nextTick()
-    expect(wrapper.get('[data-testid="mode"]').text()).toBe('idle')
+    expect(wrapper.get('[data-testid="mode"]').text()).toBe('idle:0')
 
     wrapper.unmount()
     expect(vi.getTimerCount()).toBe(0)

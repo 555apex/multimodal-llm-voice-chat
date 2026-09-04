@@ -7,7 +7,14 @@ import {
   type DigitalHumanPose,
 } from '../types/digitalHuman'
 
-const props = defineProps<{ state: DigitalHumanMode }>()
+const props = withDefaults(defineProps<{
+  state: DigitalHumanMode
+  speechLevel?: number
+  previewSpeech?: boolean
+}>(), {
+  speechLevel: 0,
+  previewSpeech: false,
+})
 const emit = defineEmits<{
   'ready-change': [ready: boolean]
   'asset-error': [pose: DigitalHumanPose]
@@ -23,6 +30,8 @@ const stateMeta = computed(() => digitalHumanStateMeta[props.state])
     <DigitalHumanPortrait
       class="prototype-portrait-stage"
       :mode="state"
+      :speech-level="speechLevel"
+      :preview-speech="previewSpeech"
       @ready-change="emit('ready-change', $event)"
       @asset-error="emit('asset-error', $event)"
     />

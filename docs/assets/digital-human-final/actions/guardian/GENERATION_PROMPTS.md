@@ -85,3 +85,31 @@ OUTPUT REQUIREMENTS:
 5. 检查透明通道、边界、胸牌“路智通”、手指、鞋面、发梢、花朵、翅膀和脚底基线。
 
 资产准备脚本为 `scripts/prepare-digital-human-assets.py`。它仅用于制作静态资产，不是 Road Agent 或 DGX 容器的运行依赖。
+
+## 6. 语音嘴型资产（2026-09-04）
+
+讲解姿态继续作为唯一人物基准。图像生成只提供闭嘴和半开嘴的局部候选，不直接作为生产整图；张开嘴沿用原讲解图中的自然开口。
+
+### 6.1 闭嘴候选提示词
+
+```text
+Edit the supplied “路智通” transparent chibi guardian image for a speech-animation mouth shape. Keep the entire character, face, eyes, eyebrows, nose, hair, orange flower, wings, uniform, badge text, hands, body, lighting, proportions, camera, transparent canvas and pixel alignment unchanged. Change only the mouth into a natural fully closed, relaxed speaking-rest shape with a small soft smile. Do not alter any pixels or facial features outside the immediate lip area. Preserve the same 1024×1536 transparent RGBA production asset, with no background, checkerboard, shadow, watermark, new text or crop.
+```
+
+### 6.2 半开嘴候选提示词
+
+```text
+Edit the supplied “路智通” transparent chibi guardian image for a speech-animation mouth shape. Keep the entire character, face, eyes, eyebrows, nose, hair, orange flower, wings, uniform, badge text, hands, body, lighting, proportions, camera, transparent canvas and pixel alignment unchanged. Change only the mouth into a natural gently half-open speaking shape, midway between closed and the existing open smile, with a small dark mouth opening and restrained expression. Do not alter any pixels or facial features outside the immediate mouth area. Preserve the same 1024×1536 transparent RGBA production asset, with no background, checkerboard, shadow, watermark, new text or crop.
+```
+
+### 6.3 固定区域合成与不变量
+
+内置图像生成工具输出的两个候选为 1024×1535，并带有预览棋盘背景，因此不直接进入运行目录。`scripts/prepare-digital-human-mouth-assets.py` 按以下规则生成生产资产：
+
+1. 仅在底部补一行全透明像素，恢复 1024×1536 画布，不做缩放。
+2. 固定提取 `x=374–528、y=638–760` 的嘴部区域，以 14 px 羽化边缘合成回讲解母版。
+3. 先根据候选嘴型范围修复母版旧嘴，再对候选进行局部肤色匹配，避免方框边缘和脸部色差。
+4. 区域外像素逐像素保持与 `guardian-explaining.png` 完全一致，整图透明通道保持不变。
+5. 输出 `closed / half / open` 三档同画布 PNG、无损 WebP 和归档 master PNG；生成源保存在 `mouth-sources/`，用于复现和审计。
+
+文件尺寸、透明像素统计、ROI、不变量和 SHA-256 见 `ASSET_MANIFEST.json`。
