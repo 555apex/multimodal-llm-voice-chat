@@ -6,10 +6,12 @@ import cn.fj.roadagent.application.agent.ConversationMessage;
 import cn.fj.roadagent.application.model.ModelMessage;
 import cn.fj.roadagent.application.model.ModelRequest;
 import cn.fj.roadagent.application.port.ChatModelPort;
+import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
 import cn.fj.roadagent.domain.traffic.FujianCity;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 /** 模型提出计划，Java负责检查意图白名单和必填参数。 */
@@ -24,36 +26,55 @@ import java.util.List;
 public final class IntentPlanner {
 
     private final ChatModelPort chatModelPort;  // 大模型端口
+    private final HighwayTrafficSnapshotPort trafficSnapshotPort;
 
     public IntentPlanner(ChatModelPort chatModelPort) {
+        this(chatModelPort, null);
+    }
+
+    public IntentPlanner(ChatModelPort chatModelPort, HighwayTrafficSnapshotPort trafficSnapshotPort) {
         this.chatModelPort = chatModelPort;
+        this.trafficSnapshotPort = trafficSnapshotPort;
     }
 
     // 方法：用户信息发送给大模型理解
     public AgentDecision plan(String currentMessage, List<ConversationMessage> history) {
-        boolean followUp = !history.isEmpty() && currentMessage.matches("(?s).*(再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|改为|改成|换成|那就|可以|好的|同意).*");
+        return plan(currentMessage, history, null);
+    }
+
+    public AgentDecision plan(
+            String currentMessage,
+            List<ConversationMessage> history,
+            AgentDecision latestSuccessfulTrafficDecision
+    ) {
+        boolean followUp = !history.isEmpty() && currentMessage.matches("(?s).*(它|其中|这些|上述|前面|反方向|再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|只展示|只保留|改为|改成|换成|那|可以|好的|同意).*");
+        var inherited = followUp
+                ? inheritTrafficContext(currentMessage, latestSuccessfulTrafficDecision)
+                : java.util.Optional.<AgentDecision>empty();
+        if (inherited.isPresent()) return inherited.get();
         var deterministic = followUp ? java.util.Optional.<AgentDecision>empty()
-                : KnownTrafficQuestionClassifier.classify(currentMessage);
+                : KnownTrafficQuestionClassifier.classify(currentMessage, currentRoutes());
         if (deterministic.isPresent()) {
             return deterministic.get();
         }
         String systemPrompt = """
                 你是福建公路应急交通Agent的意图规划器。
                 只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、UNSUPPORTED之一。
-                TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、区域卡口交通压力、城市OD七日统计，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
+                TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、三至九市跨区域交通联系、城市目的地联系倾向，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
                 EMERGENCY_DISPATCH用于道路塌方、事故、水毁等事件的资源调度。
                 仅提取用户明确提供或会话中已有的信息，不得编造城市、道路、位置和资源。
                 必须输出json对象，字段如下：
                 intent, trafficScope, originCity, destinationCity, routeCode, routeName, selectedCities, analysisCity,
                 city, areaName, roadName, direction, eventType, location, severity,
-                eventDescription, resourceTypes, clarification。
-                selectedCities和resourceTypes使用字符串数组，其他不适用字段使用null。
-                trafficScope只能为PROVINCE_OVERVIEW、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、CHECKPOINT_PRESSURE、CITY_PRESSURE、ROUTE_PRESSURE、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON、OD_OVERVIEW、OD_CITY_FLOW、OD_KEY_CHANNELS：
-                - 明确询问OD分析使用OD_OVERVIEW，输出城市流量和关键通道两张表；只问城市区域流量不平衡、城市7天总流量对比使用OD_CITY_FLOW；只问关键OD通道或OD通道各车型流量使用OD_KEY_CHANNELS。
-                - OD_*把用户选择的1至9个福建地级市写入selectedCities，取这些城市卡口并集；未限定城市默认全省。它不查询路线起终点，不要求共同路线，不产生车辆流向或真实城市对OD量。
-                - 不得把OD语境中的货车、客车和车型流量识别成VEHICLE_*，也不得把OD识别成CITY_PAIR或UNSUPPORTED；否定OD而明确询问交通压力则保留REGIONAL_*业务。
-                - OD_*支持最新数据库7天统计，不支持历史月份、指定日期或方向性真实OD查询；这类请求仍选择OD_*，在clarification中简短追问是否改查最新7天卡口统计，不猜测历史或方向结果。
-                - OD上下文的“再加上泉州”“去掉厦门”“只看第二张表”等追问继承此前城市范围，再增减城市或切换OD_CITY_FLOW/OD_KEY_CHANNELS；新增城市不是替换全部已有城市。用户明确切换其他业务时不得继续套用OD。
+                eventDescription, resourceTypes, clarification, includeTrend。
+                selectedCities和resourceTypes使用字符串数组，includeTrend使用布尔值，其他不适用字段使用null。
+                trafficScope只能为PROVINCE_OVERVIEW、ROUTE_CATALOG、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、REGIONAL_PAIR_PRESSURE、REGIONAL_KEY_CHANNELS、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON、OD_DESTINATION_TENDENCY、OD_CONNECTION_MATRIX：
+                - 询问当前覆盖路线、当前有数据的国省道或路线与路段名称对应关系时使用ROUTE_CATALOG。
+                - 单独分析一个城市主要联系哪些目的地、目的地联系倾向或出行需求结构时使用OD_DESTINATION_TENDENCY，selectedCities必须恰好一个城市。
+                - 分析两个及以上城市或福建九市的OD结构、城市联系矩阵时使用OD_CONNECTION_MATRIX；未限定城市时selectedCities为空并默认九市。
+                - OD_*依据跨市路线代表流量形成联系倾向，不输出城市总流量不平衡、路线贡献、关键卡口或分车型OD结果，不得写成真实车辆去向、方向流量或净流入净流出。
+                - OD_*支持数据库最新7日联系倾向，不支持历史月份或指定日期；这类请求仍选择最接近的OD_*，并在clarification中追问是否改查当前统计。
+                - OD上下文的“再加上泉州”“去掉厦门”等追问继承此前城市范围；一个城市使用OD_DESTINATION_TENDENCY，两个及以上城市自动切换OD_CONNECTION_MATRIX。用户明确切换其他业务时不得继续套用OD。
                 - “这两个城市”且上下文没有城市时必须clarification追问，不得当成全省。用户提到省外城市、区县或平潭时保留原始名称在selectedCities，不能静默丢弃，也不能映射到别的城市。
                 - 询问福建省整体、全省国省道交通态势时使用PROVINCE_OVERVIEW；
                 - 询问福建省哪些路段拥堵、异常或最拥堵时使用PROVINCE_ABNORMAL；
@@ -62,19 +83,19 @@ public final class IntentPlanner {
                 - 询问全省各国省道实际通行能力、设计通行能力或利用率总览时使用CAPACITY_OVERVIEW；
                 - 询问全省哪些路线是瓶颈、严重瓶颈或通行能力利用率最低时使用CAPACITY_BOTTLENECKS；
                 - 询问指定G/S路线的实际通行能力、设计通行能力、利用率或瓶颈等级时使用CAPACITY_ROUTE_DETAIL，优先提取routeCode，否则提取routeName。
-                - 询问区域交通联系、区域交通压力综合情况或同时关注卡口/城市/路线压力时使用REGIONAL_TRAFFIC_OVERVIEW；用户明确提到的一至两个城市写入selectedCities，未指定城市时为空数组；两个城市表示合并两市卡口范围，不是OD查询。
-                - 询问哪些卡口、交调站或交通枢纽日均流量大、压力大时使用CHECKPOINT_PRESSURE；城市筛选仍写入selectedCities。
-                - 询问哪些城市承担较大交通流量或城市压力排行时使用CITY_PRESSURE；城市筛选仍写入selectedCities。
-                - 询问哪些路线、道路或通道日均流量大、压力大时使用ROUTE_PRESSURE；城市筛选仍写入selectedCities。
+                - 三至九市跨区域交通联系综合分析使用REGIONAL_TRAFFIC_OVERVIEW；只问哪些城市对压力较大使用REGIONAL_PAIR_PRESSURE；只问重要跨市路线、交通枢纽或关键卡口时使用REGIONAL_KEY_CHANNELS，并在路线层级回答，不输出卡口排名。
+                - REGIONAL_*把用户明确指定的三至九个福建地级市写入selectedCities；未指定城市为空数组并默认福建九市。只指定一个或两个城市时仍选择相应REGIONAL_*，并在clarification中追问至少再补充到三个城市。
+                - REGIONAL_*依据路线起终点形成无方向城市对，不表示真实OD、流向或途经城市；“再加南平”等追问必须保留此前城市后合并新增城市。
                 - 询问福州或厦门综合交通运输特征、车型与时间规律时使用VEHICLE_PATTERN_OVERVIEW，并把唯一城市写入analysisCity。
                 - 只询问车型构成、车型流量或车型占比时使用VEHICLE_STRUCTURE；把唯一城市写入analysisCity。
                 - 只询问24小时、早晚高峰或分时出行规律时使用VEHICLE_HOURLY_PATTERN；把唯一城市写入analysisCity。
                 - 只询问工作日和周末车型出行对比时使用VEHICLE_DAY_TYPE_COMPARISON；把唯一城市写入analysisCity。
-                车型查询中若用户没有指定城市，或同时指定福州和厦门，analysisCity必须为null，并在clarification中追问只选择一个城市；同时提到的城市仍写入selectedCities，供Java复核。
+                车型查询中若用户没有指定城市，analysisCity必须为null并追问城市；同时指定福州和厦门时analysisCity为null、selectedCities保留两市，由Java分别生成两份结果。
                 用户提到“通行能力”“能力利用率”“瓶颈路线”时，必须选择CAPACITY_开头的范围，不要选择普通路况范围。
-                用户提到“交通联系”同时关注卡口、城市、路线压力时，优先选择REGIONAL_TRAFFIC_OVERVIEW，不要选择CITY_PAIR。
+                用户提到跨区域或多城市“交通联系”时优先选择REGIONAL_*；CITY_PAIR只用于两个城市之间当前路况。
                 CITY_PAIR只用于询问两个城市之间当前国省道路况、拥堵状态和路段通行情况。
-                用户询问拥堵原因时仍选择最接近的交通查询类型，以便返回当前通行状态、重点路段和出行建议。
+                用户询问拥堵原因、节假日影响或重大活动影响时仍选择最接近的PROVINCE_OVERVIEW、PROVINCE_ABNORMAL、CITY_PAIR或ROUTE_DETAIL，由Java结合结构化事件事实生成原因提示。
+                需求指向拥堵、异常或未来趋势时includeTrend=true；普通当前路况、容量、压力和车型查询为false。依赖“它、其中、这些路段、反方向”的追问必须继承最近一轮成功交通查询的对象和范围，不得擅自切换为全省。
                 不得把五四路、成功大道等城市道路识别为可查询路线。
                 缺少必填信息时，clarification写一条简短中文追问。
                 """.strip();
@@ -86,6 +107,79 @@ public final class IntentPlanner {
         );
         // 返回结构化JSON，并映射到AgentDecision.class
         return chatModelPort.generateStructured(request, AgentDecision.class);
+    }
+
+    private java.util.Optional<AgentDecision> inheritTrafficContext(
+            String message,
+            AgentDecision previous
+    ) {
+        if (previous == null || previous.parsedIntent() != AgentIntent.TRAFFIC_QUERY
+                || previous.parsedTrafficQueryType().isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        String normalized = message == null ? "" : message.replaceAll("\\s+", "");
+        TrafficQueryType previousType = previous.parsedTrafficQueryType().orElse(null);
+        if (previousType != null && previousType.odQuery()) {
+            List<String> mentioned = mentionedCities(normalized);
+            boolean changesCities = List.of("再加", "加上", "补充", "加入", "去掉", "移除", "删掉")
+                    .stream().anyMatch(normalized::contains);
+            boolean changesView = normalized.contains("矩阵") || normalized.contains("目的地倾向")
+                    || normalized.contains("主要联系");
+            if (changesCities || changesView || normalized.matches("(?s).*(这些|上述|前面|这几个).*")) {
+                LinkedHashSet<String> cities = new LinkedHashSet<>(previous.selectedCities());
+                if (List.of("去掉", "移除", "删掉").stream().anyMatch(normalized::contains)) cities.removeAll(mentioned);
+                else cities.addAll(mentioned);
+                TrafficQueryType type = cities.size() == 1
+                        ? TrafficQueryType.OD_DESTINATION_TENDENCY : TrafficQueryType.OD_CONNECTION_MATRIX;
+                return java.util.Optional.of(new AgentDecision(previous.intent(), type.name(), null, null,
+                        null, null, List.copyOf(cities), null, previous.city(), previous.areaName(), previous.roadName(),
+                        previous.direction(), previous.eventType(), previous.location(), previous.severity(),
+                        previous.eventDescription(), previous.resourceTypes(), null, false));
+            }
+            return java.util.Optional.empty();
+        }
+        if (previousType != null && previousType.regionalTrafficQuery()) {
+            List<String> mentioned = mentionedCities(normalized);
+            boolean changesCities = List.of("再加", "加上", "补充", "加入", "去掉", "移除", "删掉")
+                    .stream().anyMatch(normalized::contains);
+            boolean changesDimension = List.of("城市对", "通道", "路线", "关键卡口", "交通枢纽")
+                    .stream().anyMatch(normalized::contains);
+            if (changesCities || changesDimension || normalized.matches("(?s).*(这些|上述|前面|这几个).*")) {
+                LinkedHashSet<String> cities = new LinkedHashSet<>(previous.selectedCities());
+                if (List.of("去掉", "移除", "删掉").stream().anyMatch(normalized::contains)) cities.removeAll(mentioned);
+                else cities.addAll(mentioned);
+                TrafficQueryType type = previousType;
+                if (normalized.contains("关键卡口") || normalized.contains("交通枢纽")) type = TrafficQueryType.REGIONAL_KEY_CHANNELS;
+                else if (normalized.contains("城市对")) type = TrafficQueryType.REGIONAL_PAIR_PRESSURE;
+                else if (normalized.contains("通道") || normalized.contains("路线")) type = TrafficQueryType.REGIONAL_KEY_CHANNELS;
+                String clarification = !cities.isEmpty() && cities.size() < 3
+                        ? "区域交通联系分析至少需要三个城市，请再补充一个或多个福建地级市。" : null;
+                return java.util.Optional.of(new AgentDecision(previous.intent(), type.name(), null, null,
+                        null, null, List.copyOf(cities), null, previous.city(), previous.areaName(), previous.roadName(),
+                        previous.direction(), previous.eventType(), previous.location(), previous.severity(),
+                        previous.eventDescription(), previous.resourceTypes(), clarification, false));
+            }
+        }
+        if (!normalized.matches("(?s).*(它|其中|这些|上述|前面|反方向|那|为什么|原因|节假日影响|活动影响).*")) {
+            return java.util.Optional.empty();
+        }
+        String origin = previous.originCity();
+        String destination = previous.destinationCity();
+        if (normalized.contains("反方向")) {
+            String swap = origin;
+            origin = destination;
+            destination = swap;
+        }
+        boolean includeTrend = Boolean.TRUE.equals(previous.includeTrend())
+                || List.of("拥堵", "异常", "趋势", "未来", "缓解", "加剧", "持续")
+                .stream().anyMatch(normalized::contains);
+        return java.util.Optional.of(new AgentDecision(
+                previous.intent(), previous.trafficScope(), origin, destination,
+                previous.routeCode(), previous.routeName(), previous.selectedCities(), previous.analysisCity(),
+                previous.city(), previous.areaName(), previous.roadName(), previous.direction(),
+                previous.eventType(), previous.location(), previous.severity(), previous.eventDescription(),
+                previous.resourceTypes(), null, includeTrend
+        ));
     }
 
     // 方法：Java二次校验，对模型返回结果逐项检查必填参数
@@ -111,12 +205,15 @@ public final class IntentPlanner {
             } else if (scope.get().odQuery()) {
                 List<String> cities = effectiveSelectedCities(decision);
                 if (!isBlank(decision.clarification())) missing.add("odClarification");
-                if (cities.size() > 9 || cities.stream().anyMatch(value -> FujianCity.fromName(value).isEmpty())) {
+                boolean wrongCount = scope.get() == TrafficQueryType.OD_DESTINATION_TENDENCY
+                        ? cities.size() != 1 : cities.size() == 1 || cities.size() > 9;
+                if (wrongCount || cities.stream().anyMatch(value -> FujianCity.fromName(value).isEmpty())) {
                     missing.add("selectedCities");
                 }
             } else if (scope.get().regionalTrafficQuery()) {
                 List<String> cities = effectiveSelectedCities(decision);
-                if (cities.size() > 2 || cities.stream().anyMatch(value -> FujianCity.fromName(value).isEmpty())) {
+                if ((!cities.isEmpty() && cities.size() < 3) || cities.size() > 9
+                        || cities.stream().anyMatch(value -> FujianCity.fromName(value).isEmpty())) {
                     missing.add("selectedCities");
                 }
             } else if (scope.get().vehiclePatternQuery()) {
@@ -129,8 +226,12 @@ public final class IntentPlanner {
                 boolean conflictsWithSelection = selectedCities.size() == 1 && parsed.isPresent()
                         && FujianCity.fromName(selectedCities.get(0))
                         .map(selected -> selected != parsed.get()).orElse(true);
-                if (selectedCities.size() > 1 || conflictsWithSelection || parsed.isEmpty()
-                        || (parsed.get() != FujianCity.FUZHOU && parsed.get() != FujianCity.XIAMEN)) {
+                boolean supportedTwoCityBatch = selectedCities.size() == 2
+                        && selectedCities.stream().allMatch(value -> FujianCity.fromName(value)
+                        .map(cityValue -> cityValue == FujianCity.FUZHOU || cityValue == FujianCity.XIAMEN)
+                        .orElse(false));
+                if (!supportedTwoCityBatch && (selectedCities.size() > 1 || conflictsWithSelection || parsed.isEmpty()
+                        || (parsed.get() != FujianCity.FUZHOU && parsed.get() != FujianCity.XIAMEN))) {
                     missing.add("analysisCity");
                 }
             }
@@ -157,5 +258,21 @@ public final class IntentPlanner {
         if (!isBlank(decision.originCity())) result.add(decision.originCity());
         if (!isBlank(decision.destinationCity())) result.add(decision.destinationCity());
         return result.stream().distinct().toList();
+    }
+
+    private List<String> mentionedCities(String text) {
+        return java.util.Arrays.stream(FujianCity.values())
+                .filter(city -> text.contains(city.displayName()))
+                .sorted(java.util.Comparator.comparingInt(city -> text.indexOf(city.displayName())))
+                .map(FujianCity::displayName).toList();
+    }
+
+    private List<cn.fj.roadagent.domain.traffic.HighwayRoute> currentRoutes() {
+        if (trafficSnapshotPort == null) return List.of();
+        try {
+            return trafficSnapshotPort.current().routes();
+        } catch (RuntimeException ignored) {
+            return List.of();
+        }
     }
 }

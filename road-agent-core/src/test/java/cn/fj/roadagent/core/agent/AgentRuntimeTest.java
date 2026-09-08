@@ -39,8 +39,8 @@ class AgentRuntimeTest {
         runtime.handle(command("G104通行情况如何"), event -> { });
         runtime.handle(command("那拥堵路段呢"), event -> { });
 
-        // 首轮G104常见问法由Java直接识别；第二轮模糊追问交给模型并携带完整上下文。
-        assertEquals(List.of(2), model.historySizes);
+        // 首轮与第二轮均由Java结构化边界处理，追问继承最近一次成功路线。
+        assertTrue(model.historySizes.isEmpty());
         assertEquals(4, memory.load("conversation-1").size());
     }
 
@@ -94,6 +94,58 @@ class AgentRuntimeTest {
         assertTrue(model.historySizes.isEmpty());
         assertTrue(events.stream().anyMatch(event -> "skill.selected".equals(event.name())));
         assertTrue(events.stream().noneMatch(event -> "run.failed".equals(event.name())));
+    }
+
+    @Test
+    void controlledDirectAnswerCompletesWithoutCallingAnySkill() {
+        AtomicInteger calls = new AtomicInteger();
+        AgentSkill skill = new SuccessfulTrafficSkill() {
+            @Override
+            public AgentSkillResult execute(
+                    AgentExecutionContext context,
+                    cn.fj.roadagent.application.agent.AgentEventSink sink
+            ) {
+                calls.incrementAndGet();
+                return super.execute(context, sink);
+            }
+        };
+        List<AgentEvent> events = new ArrayList<>();
+
+        runtime(new RecordingModel(new AgentDecision(
+                "UNSUPPORTED", null, null, null, null, null,
+                null, null, null, null, List.of(), null
+        )), new TestMemory(), skill).handle(
+                command("通行能力利用率等于80%时是什么等级？"), events::add);
+
+        assertEquals(0, calls.get());
+        assertTrue(events.stream().filter(event -> "answer.delta".equals(event.name()))
+                .map(AgentEvent::data).map(Object::toString).anyMatch(text -> text.contains("正常")));
+        assertTrue(events.stream().anyMatch(event -> "run.completed".equals(event.name())));
+    }
+
+    @Test
+    void twoCityVehicleQuestionExecutesOneIndependentResultPerCity() {
+        List<String> executedCities = new ArrayList<>();
+        AgentSkill skill = new SuccessfulTrafficSkill() {
+            @Override
+            public AgentSkillResult execute(
+                    AgentExecutionContext context,
+                    cn.fj.roadagent.application.agent.AgentEventSink sink
+            ) {
+                executedCities.add(context.decision().analysisCity());
+                return new AgentSkillResult(context.decision().analysisCity() + "结果");
+            }
+        };
+        TestMemory memory = new TestMemory();
+
+        runtime(new RecordingModel(new AgentDecision(
+                "UNSUPPORTED", null, null, null, null, null,
+                null, null, null, null, List.of(), null
+        )), memory, skill).handle(command("福州和厦门的交通运输特征如何？"), event -> { });
+
+        assertEquals(List.of("福州", "厦门"), executedCities);
+        assertTrue(memory.load("conversation-1").get(1).content().contains("福州结果"));
+        assertTrue(memory.load("conversation-1").get(1).content().contains("厦门结果"));
     }
 
     private AgentRuntime runtime(ChatModelPort model, ConversationMemoryPort memory, AgentSkill skill) {

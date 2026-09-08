@@ -6,16 +6,14 @@ import java.util.List;
 
 public record OdTrafficFacts(
         TrafficQueryType queryType, String title, List<SelectedRegionResultItem> selectedRegions,
-        List<SelectedRegionResultItem> missingRegions,
-        List<OdCityFlowResultItem> cityRows, List<OdChannelResultItem> channelRows,
-        int checkpointCount, long weeklyTotalFlow, long dailyAverageFlow,
+        List<OdDestinationTendencyResultItem> destinationRows,
+        List<OdMatrixRowResultItem> matrixRows,
         Instant acquiredAt, List<String> warnings
 ) {
     public OdTrafficFacts {
         selectedRegions = List.copyOf(selectedRegions);
-        missingRegions = List.copyOf(missingRegions);
-        cityRows = List.copyOf(cityRows);
-        channelRows = List.copyOf(channelRows);
+        destinationRows = List.copyOf(destinationRows);
+        matrixRows = List.copyOf(matrixRows);
         warnings = List.copyOf(warnings);
     }
 }

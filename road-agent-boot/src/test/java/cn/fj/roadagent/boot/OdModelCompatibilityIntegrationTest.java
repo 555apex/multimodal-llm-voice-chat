@@ -28,26 +28,26 @@ class OdModelCompatibilityIntegrationTest {
         var model = model();
         var time = Instant.parse("2026-09-03T04:00:00Z");
         var rows = List.of(
-                new OdTransportHub("DEMO-F1", "350100", "福州市", "G324", "演示路线", 7000, 900, 50, 4900L, 700L, 1400L),
-                new OdTransportHub("DEMO-X1", "350200", "厦门市", "G324", "演示路线", 3500, 450, 40, 2450L, 350L, 700L));
-        var service = new OdTrafficService((codes, vehicles) -> new OdTrafficSnapshot(rows, time, List.of()), model);
-        var result = service.query(new HighwayTrafficQuery(TrafficQueryType.OD_OVERVIEW, null, null, null, null,
-                List.of("福州", "厦门"), null, "synthetic-od"));
+                new RegionalConnectionHub("DEMO-F1", "演示卡口1", "G324", "演示路线", "350100", "福州市",
+                        "350200", "厦门市", 10d, 50, 7000, 1000),
+                new RegionalConnectionHub("DEMO-F2", "演示卡口2", "G324", "演示路线", "350100", "福州市",
+                        "350200", "厦门市", 20d, 45, 3500, 500),
+                new RegionalConnectionHub("DEMO-N1", "演示卡口3", "G104", "演示路线2", "350100", "福州市",
+                        "350900", "宁德市", 30d, 40, 1750, 250));
+        var service = new OdTrafficService(() -> new RegionalTrafficSnapshot(rows, time, List.of()), model);
+        var result = service.query(new HighwayTrafficQuery(TrafficQueryType.OD_DESTINATION_TENDENCY, null, null, null, null,
+                List.of("福州"), null, "synthetic-od"));
         assertFalse(result.summary().isBlank());
         assertFalse(result.summary().contains("未来"));
-        assertEquals(10500, result.odChannelRows().get(0).weeklyTotalFlow());
+        assertEquals(5250, result.odDestinationRows().get(0).weeklyConnectionStrength());
         var planner = new IntentPlanner(model);
-        var history = List.of(new ConversationMessage("user", "福州和厦门的OD情况如何？", time),
+        var history = List.of(new ConversationMessage("user", "福州的出行主要联系哪些城市？", time),
                 new ConversationMessage("assistant", result.summary(), time));
-        var second = planner.plan("只看第二张表", history);
-        assertEquals("OD_KEY_CHANNELS", second.trafficScope());
-        assertEquals(2, second.selectedCities().size());
-        assertTrue(planner.missingFields(second).isEmpty());
-        var expanded = planner.plan("再加上泉州", history);
-        assertEquals("OD_OVERVIEW", expanded.trafficScope());
-        assertEquals(3, expanded.selectedCities().size());
-        assertTrue(planner.missingFields(expanded).isEmpty());
-        var pressure = planner.plan("不要OD，只看两市的区域交通压力", history);
+        var matrix = planner.plan("再加上厦门和泉州，看城市联系矩阵", history);
+        assertEquals("OD_CONNECTION_MATRIX", matrix.trafficScope());
+        assertEquals(List.of("福州", "厦门", "泉州"), matrix.selectedCities());
+        assertTrue(planner.missingFields(matrix).isEmpty());
+        var pressure = planner.plan("不要OD，只看福州和厦门的区域交通压力", history);
         assertEquals("REGIONAL_TRAFFIC_OVERVIEW", pressure.trafficScope());
     }
 }

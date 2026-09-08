@@ -8,6 +8,8 @@ import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
 import cn.fj.roadagent.application.traffic.TrafficSummaryResponse;
 import cn.fj.roadagent.domain.traffic.CapacityLevel;
+import cn.fj.roadagent.domain.traffic.HighwayRoute;
+import cn.fj.roadagent.domain.traffic.HighwayTrafficSnapshot;
 import cn.fj.roadagent.domain.traffic.RoadCapacity;
 import cn.fj.roadagent.domain.traffic.RoadCapacitySnapshot;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
@@ -181,6 +183,33 @@ class RoadCapacityServiceTest {
 
         assertFalse(result.summary().contains("999"));
         assertTrue(result.summary().contains("正常路线0条"));
+    }
+
+    @Test
+    void twoCityCapacityQueryUsesWholeRoutesWhoseRegisteredEndpointsMatchEitherDirection() {
+        RoadCapacitySnapshot capacitySnapshot = new RoadCapacitySnapshot(
+                List.of(
+                        row("G104", "北京-平潭", 100, 0.1),
+                        row("S201", "柘荣-霞浦", 200, 0.2),
+                        row("G324", "福州-昆明", 300, 0.3)
+                ), Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp");
+        HighwayTrafficSnapshot trafficSnapshot = new HighwayTrafficSnapshot(
+                List.of(
+                        new HighwayRoute("G104", "北京-平潭", "国道", "宁德", "福州"),
+                        new HighwayRoute("S201", "柘荣-霞浦", "省道", "福州", "宁德"),
+                        new HighwayRoute("G324", "福州-昆明", "国道", "福州", "漳州")
+                ), List.of(), List.of(), Instant.parse("2026-08-13T01:00:00Z"), "traffic-fp");
+        RoadCapacityService service = new RoadCapacityService(
+                () -> capacitySnapshot, () -> trafficSnapshot, new RecordingModel());
+        HighwayTrafficQuery query = new HighwayTrafficQuery(
+                TrafficQueryType.CAPACITY_BOTTLENECKS, "福州", "宁德", null, null,
+                List.of(), null, "trace", false);
+
+        var result = service.query(query);
+
+        assertEquals(List.of("G104", "S201"), result.capacityRows().stream()
+                .map(row -> row.routeCode()).toList());
+        assertTrue(result.title().contains("登记起终点关联路线"));
     }
 
     private RoadCapacityService service(RecordingModel model, List<RoadCapacity> rows) {

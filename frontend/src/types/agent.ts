@@ -11,6 +11,7 @@ export interface AgentMessage {
   speechText?: string
   status: AgentMessageStatus
   traffic?: TrafficQueryResult
+  trafficResults?: TrafficQueryResult[]
   dispatch?: DispatchPlan
   errorMessage?: string
 }

@@ -24,7 +24,8 @@ public record AgentDecision(
         String severity,
         String eventDescription,
         List<String> resourceTypes,
-        String clarification
+        String clarification,
+        Boolean includeTrend
 ) {
     public AgentDecision {
         selectedCities = selectedCities == null ? List.of() : List.copyOf(selectedCities);
@@ -48,7 +49,7 @@ public record AgentDecision(
     ) {
         this(intent, trafficScope, null, null, null, null, List.of(), null,
                 city, areaName, roadName, direction,
-                eventType, location, severity, eventDescription, resourceTypes, clarification);
+                eventType, location, severity, eventDescription, resourceTypes, clarification, null);
     }
 
     /** 保留交通功能扩展前的完整构造方式。 */
@@ -72,7 +73,33 @@ public record AgentDecision(
     ) {
         this(intent, trafficScope, originCity, destinationCity, routeCode, routeName,
                 List.of(), null, city, areaName, roadName, direction, eventType, location,
-                severity, eventDescription, resourceTypes, clarification);
+                severity, eventDescription, resourceTypes, clarification, null);
+    }
+
+    /** 保留增加趋势开关前的完整构造契约。 */
+    public AgentDecision(
+            String intent,
+            String trafficScope,
+            String originCity,
+            String destinationCity,
+            String routeCode,
+            String routeName,
+            List<String> selectedCities,
+            String analysisCity,
+            String city,
+            String areaName,
+            String roadName,
+            String direction,
+            String eventType,
+            String location,
+            String severity,
+            String eventDescription,
+            List<String> resourceTypes,
+            String clarification
+    ) {
+        this(intent, trafficScope, originCity, destinationCity, routeCode, routeName,
+                selectedCities, analysisCity, city, areaName, roadName, direction, eventType, location,
+                severity, eventDescription, resourceTypes, clarification, null);
     }
 
     public AgentIntent parsedIntent() {

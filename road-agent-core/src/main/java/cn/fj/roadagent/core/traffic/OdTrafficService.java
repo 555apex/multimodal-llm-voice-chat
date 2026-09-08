@@ -3,164 +3,265 @@ package cn.fj.roadagent.core.traffic;
 import cn.fj.roadagent.application.exception.BusinessRuleException;
 import cn.fj.roadagent.application.model.ModelRequest;
 import cn.fj.roadagent.application.port.ChatModelPort;
-import cn.fj.roadagent.application.port.OdTrafficDataPort;
-import cn.fj.roadagent.application.traffic.*;
-import cn.fj.roadagent.domain.traffic.*;
+import cn.fj.roadagent.application.port.RegionalTrafficDataPort;
+import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
+import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
+import cn.fj.roadagent.application.traffic.OdDestinationTendencyResultItem;
+import cn.fj.roadagent.application.traffic.OdMatrixCellResultItem;
+import cn.fj.roadagent.application.traffic.OdMatrixRowResultItem;
+import cn.fj.roadagent.application.traffic.OdTrafficFacts;
+import cn.fj.roadagent.application.traffic.OdTrafficSummaryResponse;
+import cn.fj.roadagent.application.traffic.SelectedRegionResultItem;
+import cn.fj.roadagent.domain.traffic.FujianCity;
+import cn.fj.roadagent.domain.traffic.RegionalConnectionHub;
+import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.*;
-import java.util.function.ToLongFunction;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-/** 需求1-7：城市并集内的七日卡口统计，不计算真实城市对OD或方向。 */
+/** 需求1-7：根据跨市路线代表流量形成单城市目的地倾向或多城市联系矩阵。 */
 public final class OdTrafficService {
-    private final OdTrafficDataPort dataPort;
+    private static final int STRENGTH_SCALE = 2;
+    private static final int RATIO_SCALE = 6;
+
+    private final RegionalTrafficDataPort dataPort;
     private final ChatModelPort model;
 
-    public OdTrafficService(OdTrafficDataPort dataPort, ChatModelPort model) {
+    public OdTrafficService(RegionalTrafficDataPort dataPort, ChatModelPort model) {
         this.dataPort = dataPort;
         this.model = model;
     }
 
     public OdTrafficFacts collectFacts(HighwayTrafficQuery query) {
         if (query == null || query.queryType() == null || !query.queryType().odQuery()) {
-            throw new BusinessRuleException("OD_QUERY_TYPE_REQUIRED", "请选择城市OD统计类型");
+            throw new BusinessRuleException("OD_QUERY_TYPE_REQUIRED", "请选择城市目的地联系分析类型");
         }
-        List<String> inputs = new ArrayList<>(query.selectedCities());
-        if (inputs.isEmpty()) {
-            if (query.originCity() != null && !query.originCity().isBlank()) inputs.add(query.originCity());
-            if (query.destinationCity() != null && !query.destinationCity().isBlank()) inputs.add(query.destinationCity());
+        List<FujianCity> selected = resolveCities(query);
+        var snapshot = dataPort.load();
+        List<PairStrength> pairs = aggregatePairStrengths(snapshot.hubs());
+        if (pairs.isEmpty()) {
+            throw new BusinessRuleException("OD_ANALYSIS_NOT_FOUND", "当前暂无可用城市联系数据");
         }
-        List<FujianCity> cities = inputs.isEmpty() ? Arrays.asList(FujianCity.values()) : inputs.stream()
-                .map(name -> FujianCity.fromName(name).orElseThrow(() ->
-                        new BusinessRuleException("OD_CITY_INVALID", "请选择福建九市范围内的城市")))
-                .distinct().toList();
-        var selected = cities.stream().map(c -> new SelectedRegionResultItem(c.adcode(), c.displayName() + "市")).toList();
-        var codes = cities.stream().map(FujianCity::adcode).toList();
-        boolean vehicles = query.queryType() != TrafficQueryType.OD_CITY_FLOW;
-        var snapshot = dataPort.load(codes, vehicles);
-        var hubs = snapshot.hubs().stream().filter(h -> codes.contains(h.regionCode()))
-                .filter(h -> query.routeCode() == null || query.routeCode().isBlank()
-                        || query.routeCode().trim().equalsIgnoreCase(h.routeCode()))
-                .toList();
-        if (hubs.isEmpty()) throw new BusinessRuleException("OD_ANALYSIS_NOT_FOUND", "所选范围暂无可用卡口统计数据");
-        Set<String> available = hubs.stream().map(OdTransportHub::regionCode).collect(Collectors.toSet());
-        var missing = selected.stream().filter(c -> !available.contains(c.regionCode())).toList();
-        List<String> warnings = new ArrayList<>(snapshot.warnings());
-        if (!missing.isEmpty()) warnings.add("所选范围暂无卡口数据的城市：" + missing.stream()
-                .map(SelectedRegionResultItem::regionName).collect(Collectors.joining("、")));
-        try {
-            List<OdCityFlowResultItem> cityRows = query.queryType() == TrafficQueryType.OD_KEY_CHANNELS ? List.of()
-                    : hubs.stream().collect(Collectors.groupingBy(OdTransportHub::regionCode)).entrySet().stream()
-                    .map(e -> {
-                        var rows = e.getValue();
-                        double speed = rows.stream().map(h -> BigDecimal.valueOf(h.averageSpeedKmh()))
-                                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                                .divide(BigDecimal.valueOf(rows.size()), 2, RoundingMode.HALF_UP).doubleValue();
-                        return new OdCityFlowResultItem(e.getKey(), rows.get(0).regionName(), rows.size(),
-                                sum(rows, OdTransportHub::weeklyTotalFlow), sum(rows, OdTransportHub::dailyAverageFlow), speed);
-                    }).sorted(Comparator.comparingLong(OdCityFlowResultItem::weeklyTotalFlow).reversed()
-                            .thenComparing(OdCityFlowResultItem::regionCode)).toList();
-            List<OdChannelResultItem> channels = !vehicles ? List.of()
-                    : hubs.stream().collect(Collectors.groupingBy(OdTransportHub::routeCode)).entrySet().stream()
-                    .map(e -> {
-                        var rows = e.getValue();
-                        String name = rows.stream().map(OdTransportHub::routeName)
-                                .filter(n -> n != null && !n.isBlank() && !n.equals("未提供")).findFirst().orElse("未提供");
-                        return new OdChannelResultItem(e.getKey(), name,
-                                sum(rows, OdTransportHub::weeklyTotalFlow), sum(rows, h -> h.carWeeklyFlow()),
-                                sum(rows, h -> h.busWeeklyFlow()), sum(rows, h -> h.truckWeeklyFlow()));
-                    }).sorted(Comparator.comparingLong(OdChannelResultItem::weeklyTotalFlow).reversed()
-                            .thenComparing(OdChannelResultItem::routeCode)).toList();
-            String scope = inputs.isEmpty() ? "福建省" : selected.stream()
-                    .map(SelectedRegionResultItem::regionName).collect(Collectors.joining("、"));
-            if (query.routeCode() != null && !query.routeCode().isBlank()) scope += " " + query.routeCode().trim().toUpperCase(Locale.ROOT);
-            String title = scope + switch (query.queryType()) {
-                case OD_CITY_FLOW -> "城市区域流量不平衡分析";
-                case OD_KEY_CHANNELS -> "城市交通关键OD通道分析";
-                default -> "城市OD综合分析";
-            };
-            return new OdTrafficFacts(query.queryType(), title, selected, missing, cityRows, channels,
-                    hubs.size(), sum(hubs, OdTransportHub::weeklyTotalFlow), sum(hubs, OdTransportHub::dailyAverageFlow),
-                    snapshot.acquiredAt(), warnings);
-        } catch (ArithmeticException e) {
-            throw new BusinessRuleException("OD_ANALYSIS_DATA_INVALID", "流量汇总超出数值范围");
+        Map<FujianCity, BigDecimal> denominators = fullNetworkDenominators(pairs);
+        List<SelectedRegionResultItem> regions = selected.stream().map(this::selectedRegion).toList();
+
+        List<OdDestinationTendencyResultItem> destinations = List.of();
+        List<OdMatrixRowResultItem> matrix = List.of();
+        String title;
+        if (query.queryType() == TrafficQueryType.OD_DESTINATION_TENDENCY) {
+            FujianCity analysisCity = selected.get(0);
+            destinations = destinationRows(analysisCity, pairs, denominators);
+            if (destinations.isEmpty()) {
+                throw new BusinessRuleException("OD_ANALYSIS_NOT_FOUND", analysisCity.displayName() + "市暂无可用城市联系数据");
+            }
+            title = analysisCity.displayName() + "市目的地联系倾向分析";
+        } else {
+            matrix = matrixRows(selected, pairs, denominators);
+            title = (query.selectedCities().isEmpty() ? "福建省九市" : selected.stream()
+                    .map(city -> city.displayName() + "市").collect(Collectors.joining("、"))) + "目的地联系倾向矩阵";
         }
+        return new OdTrafficFacts(query.queryType(), title, regions, destinations, matrix,
+                snapshot.acquiredAt(), List.of());
     }
 
     public HighwayTrafficResult query(HighwayTrafficQuery query) {
-        var facts = collectFacts(query);
+        OdTrafficFacts facts = collectFacts(query);
         String serialized = serialize(facts);
-        String prompt = """
-                你是福建城市OD统计分析助手。只根据结构化事实返回JSON对象，唯一字段summary。
-                用4至6句中文综合分析：概括所选城市范围及卡口流量，再比较城市流量分布、重点路线和车型构成，最后给出简洁监测建议。只讨论提供的表格。
-                本业务OD是所选城市卡口并集的统计口径。城市区域流量不平衡表示城市间统计流量差异，不是进出城平衡；关键OD通道表示范围内高流量路线，不表示城市间真实共同通道。
-                使用“所选城市范围内”“按卡口汇总”等客观表述，不要讨论系统实现。
-                禁止声称车辆从某城驶向另一城、真实OD流量、车辆来源、净流入净流出、共同路线或这些路线直接连接所选城市；不推测事故施工天气原因。
-                只引用提供的数值、差额和占比，不自行计算或把流量改写成去重出行人数。不使用万/亿缩写以免改变数值。
-                temp_2与日均流量分别采用数据库统计，不要求七倍关系。0速度不能据此判断拥堵。
-                这是数据库最新7天统计口径，不是实时路况；不生成历史日期区间、未来趋势预测或拥堵判断。
-                全零时说明统计流量为零，不生成占比或倍数。只使用给定城市和路线名称，不编造其他城市或路线。
-                """;
-        var response = model.generateStructuredStrict(new ModelRequest(prompt, serialized, List.of(), 0.1), OdTrafficSummaryResponse.class);
-        String summary = response.summary();
+        String summary;
         try {
+            var response = model.generateStructuredStrict(new ModelRequest(summaryPrompt(), serialized, List.of(), 0.1),
+                    OdTrafficSummaryResponse.class);
+            summary = response.summary();
             ModelFactNumberValidator.validate(summary, serialized);
-            if (summary.matches("(?is).*(净流入|净流出|驶往|流向|车辆来源|真实OD|共同路线|直接连接|未来[一二12]|预计.*拥堵|事故|施工|天气|从.{1,12}到.{1,12}的车辆).*")) {
-                throw new IllegalArgumentException("不支持的方向或预测结论");
-            }
-            for (var city : FujianCity.values()) {
-                if (summary.contains(city.displayName()) && facts.selectedRegions().stream()
-                        .noneMatch(r -> r.regionCode().equals(city.adcode()))) {
-                    throw new IllegalArgumentException("未查询的城市");
-                }
-            }
-            var routes = java.util.regex.Pattern.compile("(?i)(?<![A-Z0-9])[GS]\\d{3}(?!\\d)").matcher(summary);
-            while (routes.find()) {
-                String route = routes.group().toUpperCase(Locale.ROOT);
-                if (facts.channelRows().stream().noneMatch(r -> r.routeCode().equals(route))) {
-                    throw new IllegalArgumentException("未提供的路线");
-                }
-            }
-        } catch (IllegalArgumentException e) {
-            summary = safeSummary(facts);
+            if (invalidClaim(summary)) throw new IllegalArgumentException("OD摘要包含方向性或概率化断言");
+        } catch (RuntimeException exception) {
+            summary = deterministicSummary(facts);
         }
         return HighwayTrafficResult.fromOdFacts(facts, summary,
                 query.traceId() == null || query.traceId().isBlank() ? UUID.randomUUID().toString() : query.traceId());
     }
 
+    private List<FujianCity> resolveCities(HighwayTrafficQuery query) {
+        List<String> inputs = new ArrayList<>(query.selectedCities());
+        if (inputs.isEmpty()) {
+            if (query.originCity() != null && !query.originCity().isBlank()) inputs.add(query.originCity());
+            if (query.destinationCity() != null && !query.destinationCity().isBlank()) inputs.add(query.destinationCity());
+        }
+        LinkedHashSet<FujianCity> parsed = new LinkedHashSet<>();
+        for (String input : inputs) parsed.add(FujianCity.fromName(input).orElseThrow(() ->
+                new BusinessRuleException("OD_CITY_INVALID", "请选择福建九市范围内的城市")));
+        if (query.queryType() == TrafficQueryType.OD_DESTINATION_TENDENCY) {
+            if (parsed.size() != 1) {
+                throw new BusinessRuleException("OD_SINGLE_CITY_REQUIRED", "目的地联系倾向分析请选择一个福建地级市");
+            }
+        } else {
+            if (parsed.isEmpty()) parsed.addAll(Arrays.asList(FujianCity.values()));
+            if (parsed.size() < 2) {
+                throw new BusinessRuleException("OD_MATRIX_CITY_COUNT_REQUIRED", "城市联系矩阵至少需要两个福建地级市");
+            }
+        }
+        if (parsed.size() > 9) throw new BusinessRuleException("OD_CITY_LIMIT", "一次最多选择九个福建地级市");
+        return List.copyOf(parsed);
+    }
+
+    private List<PairStrength> aggregatePairStrengths(List<RegionalConnectionHub> hubs) {
+        Map<RouteKey, List<RegionalConnectionHub>> routes = hubs.stream().collect(Collectors.groupingBy(
+                hub -> new RouteKey(hub.cityARegionCode(), hub.cityBRegionCode(), hub.routeCode()),
+                LinkedHashMap::new, Collectors.toList()));
+        Map<PairKey, PairAccumulator> pairs = new LinkedHashMap<>();
+        routes.forEach((key, routeHubs) -> {
+            BigDecimal routeStrength = routeHubs.stream()
+                    .map(hub -> BigDecimal.valueOf(hub.weeklyTotalFlow()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(routeHubs.size()), STRENGTH_SCALE, RoundingMode.HALF_UP);
+            PairKey pair = new PairKey(key.cityARegionCode(), key.cityBRegionCode());
+            pairs.computeIfAbsent(pair, ignored -> new PairAccumulator()).add(routeStrength);
+        });
+        return pairs.entrySet().stream().map(entry -> {
+            FujianCity a = FujianCity.fromAdcode(entry.getKey().cityARegionCode()).orElseThrow();
+            FujianCity b = FujianCity.fromAdcode(entry.getKey().cityBRegionCode()).orElseThrow();
+            return new PairStrength(a, b, entry.getValue().routeCount, entry.getValue().strength);
+        }).sorted(Comparator.comparing(PairStrength::strength).reversed()
+                .thenComparing(pair -> pair.cityA().adcode())
+                .thenComparing(pair -> pair.cityB().adcode())).toList();
+    }
+
+    private Map<FujianCity, BigDecimal> fullNetworkDenominators(List<PairStrength> pairs) {
+        Map<FujianCity, BigDecimal> totals = new EnumMap<>(FujianCity.class);
+        for (PairStrength pair : pairs) {
+            totals.merge(pair.cityA(), pair.strength(), BigDecimal::add);
+            totals.merge(pair.cityB(), pair.strength(), BigDecimal::add);
+        }
+        return totals;
+    }
+
+    private List<OdDestinationTendencyResultItem> destinationRows(
+            FujianCity analysisCity, List<PairStrength> pairs, Map<FujianCity, BigDecimal> denominators) {
+        BigDecimal denominator = denominators.getOrDefault(analysisCity, BigDecimal.ZERO);
+        if (denominator.signum() == 0) return List.of();
+        return pairs.stream().filter(pair -> pair.includes(analysisCity)).map(pair -> {
+            FujianCity destination = pair.other(analysisCity);
+            return new OdDestinationTendencyResultItem(analysisCity.adcode(), analysisCity.displayName() + "市",
+                    destination.adcode(), destination.displayName() + "市", pair.routeCount(),
+                    pair.strength().doubleValue(), ratio(pair.strength(), denominator));
+        }).sorted(Comparator.comparingDouble(OdDestinationTendencyResultItem::tendencyRatio).reversed()
+                .thenComparing(OdDestinationTendencyResultItem::destinationRegionCode)).toList();
+    }
+
+    private List<OdMatrixRowResultItem> matrixRows(
+            List<FujianCity> selected, List<PairStrength> pairs, Map<FujianCity, BigDecimal> denominators) {
+        Map<Set<FujianCity>, PairStrength> byCities = pairs.stream().collect(Collectors.toMap(
+                pair -> Set.of(pair.cityA(), pair.cityB()), pair -> pair));
+        return selected.stream().map(origin -> {
+            BigDecimal denominator = denominators.getOrDefault(origin, BigDecimal.ZERO);
+            List<OdMatrixCellResultItem> cells = selected.stream().map(destination -> {
+                if (origin == destination) {
+                    return new OdMatrixCellResultItem(destination.adcode(), destination.displayName() + "市", null, null);
+                }
+                PairStrength pair = byCities.get(Set.of(origin, destination));
+                if (pair == null || denominator.signum() == 0) {
+                    return new OdMatrixCellResultItem(destination.adcode(), destination.displayName() + "市", null, null);
+                }
+                return new OdMatrixCellResultItem(destination.adcode(), destination.displayName() + "市",
+                        pair.strength().doubleValue(), ratio(pair.strength(), denominator));
+            }).toList();
+            return new OdMatrixRowResultItem(origin.adcode(), origin.displayName() + "市", cells);
+        }).toList();
+    }
+
+    private double ratio(BigDecimal value, BigDecimal denominator) {
+        return value.divide(denominator, RATIO_SCALE, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    private String summaryPrompt() {
+        return """
+                你是福建省城市出行联系分析助手，只能依据所给结构化事实生成JSON，且只能包含summary字段。
+                summary写4至6句、120至700字的连贯中文。单城市查询需指出目的地联系倾向最高的2至3个城市；矩阵查询需概括所选范围内联系倾向突出的城市组合和联系范围较广的城市，最后给出交通组织或持续监测建议。
+                统一使用“目的地联系倾向”“跨市出行联系较强”等表述，不解释计算公式、数据表、卡口归属或系统限制。
+                不得写成“百分之多少的车辆去了某市”，不得声称是真实车辆去向、真实OD概率、净流入、净流出或具体行驶方向。
+                只能引用结构化事实中的城市、路线数量、7日联系强度和百分比，不得重算、修改或补充数值，不推测事故、天气、施工等原因，不使用Markdown。
+                """.strip();
+    }
+
     private String serialize(OdTrafficFacts facts) {
-        StringBuilder text = new StringBuilder(facts.toString());
-        text.append("\n统计天数=7；展示的是卡口累计观测流量；缺失城市不是零流量。\n");
-        for (var row : facts.cityRows()) {
-            if (facts.weeklyTotalFlow() > 0) text.append(row.regionName()).append("流量占比=")
-                    .append(BigDecimal.valueOf(row.weeklyTotalFlow()).multiply(BigDecimal.valueOf(100))
-                            .divide(BigDecimal.valueOf(facts.weeklyTotalFlow()), 2, RoundingMode.HALF_UP)).append("%\n");
-        }
-        if (facts.cityRows().size() > 1) text.append("最高与最低城市7天流量差额=")
-                .append(facts.cityRows().get(0).weeklyTotalFlow() - facts.cityRows().get(facts.cityRows().size() - 1).weeklyTotalFlow());
-        return text.toString();
+        StringBuilder out = new StringBuilder("queryType=").append(facts.queryType()).append('\n')
+                .append("title=").append(facts.title()).append('\n')
+                .append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n')
+                .append("selectedRegions=");
+        facts.selectedRegions().forEach(region -> out.append(region.regionName()).append('；'));
+        out.append("\ndestinationRows:\n");
+        facts.destinationRows().forEach(row -> out.append("- ").append(row.analysisCityName()).append("—")
+                .append(row.destinationCityName()).append("|路线数=").append(row.routeCount())
+                .append("|7日联系强度=").append(formatStrength(row.weeklyConnectionStrength()))
+                .append("|目的地联系倾向=").append(formatPercent(row.tendencyRatio())).append("%\n"));
+        out.append("matrixCells:\n");
+        facts.matrixRows().forEach(row -> row.cells().stream().filter(cell -> cell.tendencyRatio() != null)
+                .forEach(cell -> out.append("- ").append(row.analysisCityName()).append("—")
+                        .append(cell.destinationCityName()).append("|7日联系强度=")
+                        .append(formatStrength(cell.weeklyConnectionStrength())).append("|目的地联系倾向=")
+                        .append(formatPercent(cell.tendencyRatio())).append("%\n")));
+        return out.toString();
     }
 
-    private String safeSummary(OdTrafficFacts facts) {
-        String text = "已完成所选城市范围内的卡口统计，共计" + facts.checkpointCount()
-                + "个卡口，7天总流量为" + facts.weeklyTotalFlow() + "辆，日均流量汇总为" + facts.dailyAverageFlow() + "辆/日。";
-        if (!facts.cityRows().isEmpty()) {
-            var first = facts.cityRows().get(0);
-            text += facts.weeklyTotalFlow() == 0 ? "本次城市统计流量均为零。"
-                    : first.regionName() + "的7天统计流量在当前范围内排名靠前，可结合卡口数量比较各城市流量分布。";
-        }
-        if (!facts.channelRows().isEmpty()) {
-            text += facts.weeklyTotalFlow() == 0 ? "各路线当前7天统计总流量为零。"
-                    : facts.channelRows().get(0).routeCode() + "是当前范围内统计流量靠前的路线，可结合分车型流量关注重点通道。";
-        }
-        return text + "各项数据按所选城市卡口汇总，详细统计请见下方表格。";
+    private boolean invalidClaim(String summary) {
+        String normalized = summary == null ? "" : summary.toLowerCase(Locale.ROOT);
+        return normalized.isBlank() || normalized.contains("真实od") || normalized.contains("od概率")
+                || summary.contains("净流入") || summary.contains("净流出") || summary.contains("驶往")
+                || summary.contains("流入") || summary.contains("流出") || summary.contains("车辆去了")
+                || summary.matches("(?s).*\\d+(?:\\.\\d+)?%的(?:车辆|车).*" );
     }
 
-    private long sum(List<OdTransportHub> rows, ToLongFunction<OdTransportHub> value) {
-        long total = 0;
-        for (var row : rows) total = Math.addExact(total, value.applyAsLong(row));
-        return total;
+    private String deterministicSummary(OdTrafficFacts facts) {
+        if (!facts.destinationRows().isEmpty()) {
+            var rows = facts.destinationRows();
+            String city = rows.get(0).analysisCityName();
+            String leaders = rows.stream().limit(3).map(row -> row.destinationCityName() + "（"
+                    + formatPercent(row.tendencyRatio()) + "%）").collect(Collectors.joining("、"));
+            return city + "的跨市出行联系呈现较为清晰的目的地倾向结构。当前目的地联系倾向较高的城市为"
+                    + leaders + "。其中，" + rows.get(0).destinationCityName()
+                    + "在现有城市联系网络中的关联程度最为突出。建议持续关注主要关联城市之间的交通运行变化，并结合重点时段做好跨市通道组织。";
+        }
+        List<MatrixEntry> entries = facts.matrixRows().stream().flatMap(row -> row.cells().stream()
+                .filter(cell -> cell.tendencyRatio() != null)
+                .map(cell -> new MatrixEntry(row.analysisCityName(), cell.destinationCityName(), cell.tendencyRatio())))
+                .sorted(Comparator.comparingDouble(MatrixEntry::ratio).reversed()).toList();
+        String scope = facts.selectedRegions().stream().map(SelectedRegionResultItem::regionName)
+                .collect(Collectors.joining("、"));
+        if (entries.isEmpty()) return scope + "当前城市联系矩阵中暂无可列出的联系倾向。";
+        var top = entries.get(0);
+        return "已完成" + scope + "的城市目的地联系倾向矩阵分析。所选范围内，" + top.origin() + "与"
+                + top.destination() + "的联系倾向较为突出，占" + formatPercent(top.ratio())
+                + "%。联系倾向可用于比较不同城市在全省跨市联系结构中的相对重要程度。建议重点关注矩阵中的高值城市组合，并持续跟踪其跨市交通运行变化。";
     }
+
+    private SelectedRegionResultItem selectedRegion(FujianCity city) {
+        return new SelectedRegionResultItem(city.adcode(), city.displayName() + "市");
+    }
+    private String formatStrength(Double value) { return String.format(Locale.ROOT, "%.2f", value); }
+    private String formatPercent(double ratio) { return String.format(Locale.ROOT, "%.2f", ratio * 100); }
+
+    private record RouteKey(String cityARegionCode, String cityBRegionCode, String routeCode) { }
+    private record PairKey(String cityARegionCode, String cityBRegionCode) { }
+    private record PairStrength(FujianCity cityA, FujianCity cityB, int routeCount, BigDecimal strength) {
+        boolean includes(FujianCity city) { return cityA == city || cityB == city; }
+        FujianCity other(FujianCity city) { return cityA == city ? cityB : cityA; }
+    }
+    private static final class PairAccumulator {
+        private BigDecimal strength = BigDecimal.ZERO;
+        private int routeCount;
+        void add(BigDecimal routeStrength) { strength = strength.add(routeStrength); routeCount++; }
+    }
+    private record MatrixEntry(String origin, String destination, double ratio) { }
 }

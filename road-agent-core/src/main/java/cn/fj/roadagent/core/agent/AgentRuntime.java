@@ -15,6 +15,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** Agent总入口：规划、选择Skill、执行并记录会话。 */
 /* (agent-core层)AgentRuntime 实现 (agent-application层)的接口ConverseWithAgentUseCase
@@ -25,6 +26,8 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
     private final SkillRegistry skillRegistry;  // 技能注册表（明确系统存在的skill目录，找到相应的java代码）
     private final ConversationMemoryPort memoryPort;    // 会话记忆（存储上下文）
     private final Clock clock;  // 时钟
+    private final Map<String, TrafficContext> trafficContexts = new ConcurrentHashMap<>();
+    private static final long CONTEXT_TTL_SECONDS = 60 * 60;
 
     // 构造函数
     public AgentRuntime(
@@ -47,7 +50,8 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             List<ConversationMessage> history = memoryPort.load(command.conversationId()); // 加载历史记录
             emitStage(sink, "UNDERSTANDING", "正在理解问题"); // 前端显示：正在理解问题
             // （历史信息+用户信息）传递给大模型
-            AgentDecision decision = intentPlanner.plan(command.message(), history);
+            AgentDecision decision = intentPlanner.plan(
+                    command.message(), history, latestTrafficContext(command.conversationId()));
             AgentIntent intent = decision.parsedIntent();   // 模型结果转化为AgentIntent包含的枚举
             var recognized = new java.util.LinkedHashMap<String, Object>();
             recognized.put("intent", intent.name());
@@ -58,23 +62,43 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             memoryPort.append(command.conversationId(),
                     new ConversationMessage("user", command.message(), clock.instant()));
 
+            if (intent == AgentIntent.DIRECT_ANSWER) {
+                String answer = decision.clarification();
+                if (answer == null || answer.isBlank()) {
+                    answer = "请改问具体国省道、路段、通行能力或三市及以上跨区域交通联系。";
+                }
+                completeWithoutSkill(command, sink, runId, answer);
+                return;
+            }
+
             // 无关问题，限制Agent不回答
             if (intent == AgentIntent.UNSUPPORTED) {
                 completeWithoutSkill(command, sink, runId,
-                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析区域卡口、城市与路线交通压力，以及福州、厦门的车型出行特征、多城市OD七日统计、区域流量差异和关键通道分车型流量，并提供应急调度辅助。 ");
+                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析三市及以上的城市对联系压力与重要跨市路线、单城市目的地联系倾向和多城市联系矩阵，以及福州、厦门车型出行特征，并提供应急调度辅助。 ");
                 return;
             }
 
             // 缺少参数，限制Agent不回答
             List<String> missing = intentPlanner.missingFields(decision);
             if (!missing.isEmpty()) {
+                if (intent == AgentIntent.TRAFFIC_QUERY
+                        && decision.parsedTrafficQueryType().map(type -> type.regionalTrafficQuery()).orElse(false)) {
+                    rememberTrafficContext(command.conversationId(), decision);
+                }
                 String clarification = decision.clarification();
                 if (clarification == null || clarification.isBlank()) {
-                    clarification = decision.parsedTrafficQueryType().map(type -> type.odQuery()).orElse(false)
+                    clarification = decision.parsedTrafficQueryType().map(type -> type.regionalTrafficQuery()).orElse(false)
+                            ? "区域交通联系分析至少需要三个城市，请再补充一个或多个福建地级市。"
+                            : decision.parsedTrafficQueryType().map(type -> type.odQuery()).orElse(false)
                             ? "请选择福建九个地级市范围内的城市，可一次分析一个或多个城市。"
                             : "请补充城市、道路或事件位置等必要信息。";
                 }
                 completeWithoutSkill(command, sink, runId, clarification);
+                return;
+            }
+
+            if (isVehicleBatch(decision)) {
+                executeVehicleBatch(command, sink, runId, history, decision);
                 return;
             }
 
@@ -86,6 +110,9 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             AgentSkillResult result = skill.execute(
                     new AgentExecutionContext(command, decision, history), sink
             );
+            if (intent == AgentIntent.TRAFFIC_QUERY) {
+                rememberTrafficContext(command.conversationId(), decision);
+            }
             // 记录Agent的回答内容，作为上下文记忆
             memoryPort.append(command.conversationId(),
                     new ConversationMessage("assistant", result.assistantMessage(), clock.instant()));
@@ -117,9 +144,77 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
         emit(sink, "run.completed", Map.of("runId", runId));
     }
 
+    private boolean isVehicleBatch(AgentDecision decision) {
+        return decision.parsedTrafficQueryType().map(type -> type.vehiclePatternQuery()).orElse(false)
+                && decision.selectedCities().size() == 2;
+    }
+
+    private void executeVehicleBatch(
+            AgentMessageCommand command,
+            AgentEventSink sink,
+            String runId,
+            List<ConversationMessage> history,
+            AgentDecision decision
+    ) {
+        AgentSkill skill = skillRegistry.require(AgentIntent.TRAFFIC_QUERY);
+        emit(sink, "skill.selected", Map.of("skill", skill.getClass().getSimpleName(), "intent", "TRAFFIC_QUERY"));
+        StringBuilder combined = new StringBuilder();
+        for (int index = 0; index < decision.selectedCities().size(); index++) {
+            String city = decision.selectedCities().get(index);
+            if (index > 0) emit(sink, "answer.delta", Map.of("content", "\n\n"));
+            AgentDecision cityDecision = new AgentDecision(
+                    decision.intent(), decision.trafficScope(), decision.originCity(), decision.destinationCity(),
+                    decision.routeCode(), decision.routeName(), List.of(city), city,
+                    decision.city(), decision.areaName(), decision.roadName(), decision.direction(),
+                    decision.eventType(), decision.location(), decision.severity(), decision.eventDescription(),
+                    decision.resourceTypes(), decision.clarification(), decision.includeTrend()
+            );
+            AgentSkillResult result = skill.execute(new AgentExecutionContext(command, cityDecision, history), sink);
+            if (!combined.isEmpty()) combined.append("\n\n");
+            combined.append(result.assistantMessage());
+        }
+        String answer = combined.toString();
+        rememberTrafficContext(command.conversationId(), decision);
+        memoryPort.append(command.conversationId(),
+                new ConversationMessage("assistant", answer, clock.instant()));
+        emit(sink, "answer.speech", Map.of("content", SpeechTextSanitizer.toSpeakableText(answer)));
+        emit(sink, "run.completed", Map.of("runId", runId));
+    }
+
     // 方法：事件发送
     private void emitStage(AgentEventSink sink, String stage, String label) {
         emit(sink, "stage.changed", Map.of("stage", stage, "label", label));
+    }
+
+    private AgentDecision latestTrafficContext(String conversationId) {
+        TrafficContext context = trafficContexts.get(conversationId);
+        if (context == null) return null;
+        if (context.savedAt().plusSeconds(CONTEXT_TTL_SECONDS).isBefore(clock.instant())) {
+            trafficContexts.remove(conversationId, context);
+            return null;
+        }
+        return context.decision();
+    }
+
+    private void rememberTrafficContext(String conversationId, AgentDecision decision) {
+        trafficContexts.put(conversationId, new TrafficContext(decision, clock.instant()));
+        if (trafficContexts.size() > 1000) {
+            trafficContexts.entrySet().removeIf(entry ->
+                    entry.getValue().savedAt().plusSeconds(CONTEXT_TTL_SECONDS).isBefore(clock.instant()));
+            int excess = trafficContexts.size() - 1000;
+            if (excess > 0) {
+                trafficContexts.entrySet().stream()
+                        .sorted(java.util.Map.Entry.comparingByValue(
+                                java.util.Comparator.comparing(TrafficContext::savedAt)))
+                        .limit(excess)
+                        .map(java.util.Map.Entry::getKey)
+                        .toList()
+                        .forEach(trafficContexts::remove);
+            }
+        }
+    }
+
+    private record TrafficContext(AgentDecision decision, java.time.Instant savedAt) {
     }
 
     // 方法：回调事件经过Controller变成SSE格式推给浏览器

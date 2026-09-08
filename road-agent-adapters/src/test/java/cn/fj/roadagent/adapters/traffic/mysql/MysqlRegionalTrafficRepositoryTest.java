@@ -12,6 +12,7 @@ import java.time.Clock;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MysqlRegionalTrafficRepositoryTest {
     private JdbcTemplate jdbc;
@@ -24,67 +25,70 @@ class MysqlRegionalTrafficRepositoryTest {
         jdbc = new JdbcTemplate(dataSource);
         jdbc.execute("DROP ALL OBJECTS");
         jdbc.execute("""
-                CREATE TABLE w_region_code (
-                  id BIGINT PRIMARY KEY, code VARCHAR(6), name VARCHAR(50), del_flag VARCHAR(2)
+                CREATE TABLE w_highway_network (
+                  id BIGINT PRIMARY KEY, route_code VARCHAR(20), route_name VARCHAR(100),
+                  start_place VARCHAR(50), end_place VARCHAR(50), del_flag VARCHAR(2)
                 )
                 """);
         jdbc.execute("""
                 CREATE TABLE w_transport_hubs (
-                  id BIGINT PRIMARY KEY, checkpoint_no VARCHAR(100), route_code VARCHAR(20),
-                  route_name VARCHAR(100), average_speed DECIMAL(10,2), region_code VARCHAR(6),
-                  daily_avg_flow BIGINT, del_flag VARCHAR(2), create_time TIMESTAMP, update_time TIMESTAMP
+                  id BIGINT PRIMARY KEY, checkpoint_no VARCHAR(100), checkpoint_name VARCHAR(100),
+                  route_code VARCHAR(20), route_name VARCHAR(100), stake DECIMAL(10,2),
+                  average_speed DECIMAL(10,2), region_code VARCHAR(6), daily_avg_flow BIGINT,
+                  temp_2 VARCHAR(30), del_flag VARCHAR(2), create_time TIMESTAMP, update_time TIMESTAMP
                 )
                 """);
-        repository = new MysqlRegionalTrafficRepository(
-                jdbc, new TransactionTemplate(new DataSourceTransactionManager(dataSource)), Clock.systemUTC()
-        );
-        jdbc.update("INSERT INTO w_region_code VALUES (1, '350100', '福州市', 'N')");
-        jdbc.update("INSERT INTO w_region_code VALUES (2, '350200', '厦门市', 'N')");
+        repository = new MysqlRegionalTrafficRepository(jdbc,
+                new TransactionTemplate(new DataSourceTransactionManager(dataSource)), Clock.systemUTC());
     }
 
     @Test
-    void loadsMappedActiveRowsAndIgnoresLogicalDeletion() {
-        insertHub(1, "F001", "G104", "北京-平潭", 30, "350100", 101, "N");
-        insertHub(2, "X001", "S201", "柘荣-霞浦", 20, "350200", 200, "Y");
-
+    void joinsHubsByRouteEndpointsAndIgnoresIncorrectRegionCode() {
+        route(1, "G104", "北京-平潭", "宁德市", "福州市", "N");
+        hub(1, "N001", "G104", "错误卡口名称", "350200", 100, "700", "N");
         var snapshot = repository.load();
-
         assertEquals(1, snapshot.hubs().size());
-        assertEquals("福州市", snapshot.hubs().get(0).regionName());
-        assertEquals(101, snapshot.hubs().get(0).dailyAverageFlow());
+        assertEquals("福州市", snapshot.hubs().get(0).cityAName());
+        assertEquals("宁德市", snapshot.hubs().get(0).cityBName());
+        assertEquals("北京-平潭", snapshot.hubs().get(0).routeName());
+        assertEquals(700, snapshot.hubs().get(0).weeklyTotalFlow());
+        assertTrue(snapshot.warnings().stream().anyMatch(w -> w.contains("权威名称")));
     }
 
     @Test
-    void rejectsDuplicateCheckpointInvalidRegionNegativeAndRouteNameConflict() {
-        insertHub(1, "F001", "G104", "北京-平潭", 30, "350100", 101, "N");
-        insertHub(2, "F001", "G104", "北京-平潭", 30, "350100", 101, "N");
-        assertInvalid();
+    void skipsSameCityAndInvalidRowsButKeepsValidCrossCityData() {
+        route(1, "G104", "北京-平潭", "宁德", "福州", "N");
+        route(2, "S524", "泉州路线", "泉州", "泉州", "N");
+        hub(1, "OK", "G104", "北京-平潭", "350000", 100, "700", "N");
+        hub(2, "BAD", "G104", "北京-平潭", "350000", -1, "20", "N");
+        hub(3, "SAME", "S524", "泉州路线", "350000", 50, "350", "N");
+        var snapshot = repository.load();
+        assertEquals(1, snapshot.hubs().size());
+        assertTrue(snapshot.warnings().stream().anyMatch(w -> w.contains("已跳过2条")));
+    }
 
-        jdbc.update("DELETE FROM w_transport_hubs WHERE id=2");
-        jdbc.update("UPDATE w_transport_hubs SET region_code='359999' WHERE id=1");
+    @Test
+    void duplicateActiveRouteOrCheckpointIsFatal() {
+        route(1, "G104", "北京-平潭", "宁德", "福州", "N");
+        route(2, "G104", "重复", "宁德", "福州", "N");
+        hub(1, "CP1", "G104", "北京-平潭", "350000", 100, "700", "N");
         assertInvalid();
-
-        jdbc.update("UPDATE w_transport_hubs SET region_code='350100', daily_avg_flow=-1 WHERE id=1");
-        assertInvalid();
-
-        jdbc.update("UPDATE w_transport_hubs SET daily_avg_flow=1 WHERE id=1");
-        insertHub(3, "F003", "G104", "错误名称", 30, "350100", 1, "N");
+        jdbc.update("DELETE FROM w_highway_network WHERE id=2");
+        hub(2, "CP1", "G104", "北京-平潭", "350000", 100, "700", "N");
         assertInvalid();
     }
 
     private void assertInvalid() {
-        assertEquals("REGIONAL_TRAFFIC_DATA_INVALID", assertThrows(
-                ExternalServiceException.class, repository::load
-        ).errorCode());
+        assertEquals("REGIONAL_TRAFFIC_DATA_INVALID",
+                assertThrows(ExternalServiceException.class, repository::load).errorCode());
     }
-
-    private void insertHub(
-            long id, String checkpoint, String route, String name, double speed,
-            String region, long flow, String delFlag
-    ) {
+    private void route(long id, String code, String name, String start, String end, String flag) {
+        jdbc.update("INSERT INTO w_highway_network VALUES (?,?,?,?,?,?)", id, code, name, start, end, flag);
+    }
+    private void hub(long id, String checkpoint, String route, String name, String region,
+            long daily, String weekly, String flag) {
         jdbc.update("""
-                INSERT INTO w_transport_hubs
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, NULL)
-                """, id, checkpoint, route, name, speed, region, flow, delFlag);
+                INSERT INTO w_transport_hubs VALUES (?,?,?,?,?,10,40,?,?,?, ?,CURRENT_TIMESTAMP,NULL)
+                """, id, checkpoint, checkpoint + "卡口", route, name, region, daily, weekly, flag);
     }
 }

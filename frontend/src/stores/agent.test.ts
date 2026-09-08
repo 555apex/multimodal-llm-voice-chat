@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAgentStore } from './agent'
+import type { TrafficQueryResult } from '../types/traffic'
 
 describe('agent store', () => {
   beforeEach(() => {
@@ -56,5 +57,25 @@ describe('agent store', () => {
 
     expect(sessionStorage.getItem('roadagent-chat-session-v5')).toContain('G104')
     expect(store.messages.at(-1)?.traffic?.segments[0].routeSection).toBe('FJ001→FJ002')
+  })
+
+  it('keeps both city results from repeated traffic events in one answer', () => {
+    const store = useAgentStore()
+    const messageId = crypto.randomUUID()
+    store.messages.push({ id: messageId, role: 'assistant', content: '', status: 'pending' })
+    const result = (city: string): TrafficQueryResult => ({
+      queryType: 'VEHICLE_STRUCTURE', title: `${city}车型结构`, analysisCity: city,
+      summary: `${city}结果`, routeSummaries: [], segments: [], capacityRows: [],
+      totalSegmentCount: 0, displayedSegmentCount: 0, truncated: false,
+      source: 'MYSQL', acquiredAt: '2026-09-03T08:00:00Z', warnings: [], traceId: 'batch-1',
+    })
+
+    store.applyEvent(messageId, { name: 'result.traffic', data: result('福州市') })
+    store.applyEvent(messageId, { name: 'result.traffic', data: result('厦门市') })
+    store.applyEvent(messageId, { name: 'run.completed', data: { runId: 'run-1' } })
+
+    expect(store.findMessage(messageId).trafficResults?.map(item => item.analysisCity))
+      .toEqual(['福州市', '厦门市'])
+    expect(sessionStorage.getItem('roadagent-chat-session-v5')).toContain('trafficResults')
   })
 })

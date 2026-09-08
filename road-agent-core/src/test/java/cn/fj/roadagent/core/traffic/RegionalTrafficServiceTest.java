@@ -6,149 +6,108 @@ import cn.fj.roadagent.application.model.ModelResponse;
 import cn.fj.roadagent.application.model.ModelStreamListener;
 import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
-import cn.fj.roadagent.application.traffic.RegionInsight;
 import cn.fj.roadagent.application.traffic.RegionalTrafficSummaryResponse;
+import cn.fj.roadagent.domain.traffic.RegionalConnectionHub;
 import cn.fj.roadagent.domain.traffic.RegionalTrafficSnapshot;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
-import cn.fj.roadagent.domain.traffic.TransportHub;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RegionalTrafficServiceTest {
-
     @Test
-    void provinceOverviewProducesTop20Top5AndTop10WithStableRanking() {
-        List<TransportHub> hubs = java.util.stream.IntStream.range(0, 30)
-                .mapToObj(index -> hub(
-                        "CP%02d".formatted(index), index % 2 == 0 ? "G104" : "S201",
-                        index < 15 ? "350100" : "350200", index < 15 ? "福州市" : "厦门市",
-                        index < 2 ? 500 : index, 20 + index
-                )).toList();
-        RegionalTrafficService service = service(hubs);
-
-        var facts = service.collectFacts(query(TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW, List.of()));
-
-        assertEquals(20, facts.hubRows().size());
-        assertEquals(List.of("CP00", "CP01"), facts.hubRows().stream().limit(2)
-                .map(row -> row.checkpointNo()).toList());
-        assertEquals(2, facts.regionRows().size());
-        assertEquals(2, facts.routeRows().size());
-        assertEquals(30, facts.totalHubCount());
-    }
-
-    @Test
-    void twoCitiesAreCombinedAndHubShareUsesAllCheckpointsInSelectedScope() {
+    void aggregatesSelectedThreeCityNetworkByPairAndRoute() {
         RegionalTrafficService service = service(List.of(
-                hub("F1", "G104", "350100", "福州市", 101, 30),
-                hub("F2", "G104", "350100", "福州市", 100, 20),
-                hub("X1", "S201", "350200", "厦门市", 200, 40),
-                hub("X2", "S203", "350200", "厦门市", 150, 50),
-                hub("Q1", "G324", "350500", "泉州市", 900, 60)
+                hub("N1", "G104", "北京-平潭", "350100", "福州市", "350900", "宁德市", 700, 100),
+                hub("N2", "G104", "北京-平潭", "350100", "福州市", "350900", "宁德市", 350, 50),
+                hub("F1", "G316", "长乐-同仁", "350100", "福州市", "350700", "南平市", 1400, 200),
+                hub("X1", "G324", "福州-昆明", "350100", "福州市", "350200", "厦门市", 9999, 999)
         ));
 
-        var facts = service.collectFacts(query(
-                TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW, List.of("福州", "厦门")
-        ));
+        var facts = service.collectFacts(query(TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW,
+                List.of("福州", "宁德", "南平")));
 
-        assertEquals(4, facts.totalHubCount());
-        assertEquals(List.of("350100", "350200"), facts.selectedRegions().stream()
-                .map(row -> row.regionCode()).toList());
-        var fuzhou = facts.regionRows().stream().filter(row -> row.regionCode().equals("350100")).findFirst().orElseThrow();
-        var xiamen = facts.regionRows().stream().filter(row -> row.regionCode().equals("350200")).findFirst().orElseThrow();
-        assertEquals(1, fuzhou.activeHubCount());
-        assertEquals(0.25, fuzhou.hubShareRatio());
-        assertEquals(2, xiamen.activeHubCount());
-        assertEquals(0.50, xiamen.hubShareRatio());
-        assertTrue(facts.hubRows().stream().noneMatch(row -> row.checkpointNo().equals("Q1")));
+        assertEquals(2, facts.totalPairCount());
+        assertEquals(2, facts.totalChannelCount());
+        assertEquals("福州市", facts.pairRows().get(0).cityAName());
+        assertEquals("南平市", facts.pairRows().get(0).cityBName());
+        assertEquals(1400, facts.pairRows().get(0).weeklyTotalFlow());
+        assertEquals(1050, facts.pairRows().get(1).weeklyTotalFlow());
+        assertTrue(facts.warnings().isEmpty(), "仓储跳过明细只用于内部诊断，不应暴露给用户");
     }
 
     @Test
-    void specificQueryOnlyProducesRequestedTableAndRejectsMoreThanTwoCities() {
+    void individualQueryOnlyReturnsRequestedDimension() {
         RegionalTrafficService service = service(List.of(
-                hub("F1", "G104", "350100", "福州市", 101, 30)
+                hub("N1", "G104", "北京-平潭", "350100", "福州市", "350900", "宁德市", 700, 100),
+                hub("F1", "G316", "长乐-同仁", "350100", "福州市", "350700", "南平市", 1400, 200)
         ));
-
-        var facts = service.collectFacts(query(TrafficQueryType.ROUTE_PRESSURE, List.of("福州")));
-        assertTrue(facts.hubRows().isEmpty());
-        assertTrue(facts.regionRows().isEmpty());
-        assertEquals(1, facts.routeRows().size());
-
-        BusinessRuleException exception = assertThrows(BusinessRuleException.class, () ->
-                service.collectFacts(query(TrafficQueryType.CITY_PRESSURE, List.of("福州", "厦门", "泉州"))));
-        assertEquals("REGIONAL_TRAFFIC_CITY_LIMIT", exception.errorCode());
+        var facts = service.collectFacts(query(TrafficQueryType.REGIONAL_KEY_CHANNELS,
+                List.of("福州", "宁德", "南平")));
+        assertTrue(facts.pairRows().isEmpty());
+        assertEquals(2, facts.channelRows().size());
     }
 
     @Test
-    void missingOrMalformedCityInsightsAreSafelyCompletedWithoutFailing() {
-        ChatModelPort incompleteModel = new ChatModelPort() {
-            @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
-            @Override public <T> T generateStructured(ModelRequest request, Class<T> type) {
-                return type.cast(new RegionalTrafficSummaryResponse(
-                        "当前查询范围内城市卡口压力已经完成汇总，重点区域的运行差异较为清晰。"
-                                + "活跃卡口较集中的区域需要加强监测，并持续关注排名靠前的交通枢纽。"
-                                + "建议结合城市压力表和后续批次变化，合理安排重点卡口巡查工作。",
-                        List.of(new RegionInsight("999999", "无关区域的错误解读"))
-                ));
-            }
-            @Override public void stream(ModelRequest request, ModelStreamListener listener) {
-                throw new UnsupportedOperationException();
-            }
+    void oneOrTwoCitiesRequireClarificationAndNoConnectionFailsClearly() {
+        RegionalTrafficService service = service(List.of(
+                hub("N1", "G104", "北京-平潭", "350100", "福州市", "350900", "宁德市", 700, 100)
+        ));
+        BusinessRuleException count = assertThrows(BusinessRuleException.class,
+                () -> service.collectFacts(query(TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW, List.of("福州", "宁德"))));
+        assertEquals("REGIONAL_TRAFFIC_CITY_COUNT_REQUIRED", count.errorCode());
+        BusinessRuleException absent = assertThrows(BusinessRuleException.class,
+                () -> service.collectFacts(query(TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW,
+                        List.of("厦门", "泉州", "漳州"))));
+        assertEquals("REGIONAL_CONNECTION_NOT_FOUND", absent.errorCode());
+    }
+
+    @Test
+    void modelFailureUsesFactSafeSummaryAndDoesNotLoseTables() {
+        ChatModelPort failing = new ChatModelPort() {
+            public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
+            public <T> T generateStructured(ModelRequest request, Class<T> type) { throw new IllegalStateException("bad model"); }
+            public void stream(ModelRequest request, ModelStreamListener listener) { throw new UnsupportedOperationException(); }
         };
-        RegionalTrafficService service = new RegionalTrafficService(
-                () -> new RegionalTrafficSnapshot(List.of(
-                        hub("F1", "G104", "350100", "福州市", 300, 40),
-                        hub("X1", "S201", "350200", "厦门市", 260, 45)
-                ), Instant.parse("2026-08-27T08:00:00Z")),
-                incompleteModel
-        );
-
-        var result = service.query(query(TrafficQueryType.CITY_PRESSURE, List.of()));
-
-        assertEquals(2, result.regionPressureRows().size());
-        assertTrue(result.regionPressureRows().stream().allMatch(row -> !row.interpretation().isBlank()));
-        assertFalse(result.regionPressureRows().stream().anyMatch(row -> row.regionCode().equals("999999")));
+        RegionalTrafficService service = new RegionalTrafficService(() -> snapshot(List.of(
+                hub("N1", "G104", "北京-平潭", "350100", "福州市", "350900", "宁德市", 700, 100),
+                hub("F1", "G316", "长乐-同仁", "350100", "福州市", "350700", "南平市", 1400, 200)
+        )), failing);
+        var result = service.query(query(TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW,
+                List.of("福州", "宁德", "南平")));
+        assertEquals(2, result.regionalPairRows().size());
+        assertTrue(result.summary().contains("无方向统计"));
     }
 
-    private RegionalTrafficService service(List<TransportHub> hubs) {
-        return new RegionalTrafficService(
-                () -> new RegionalTrafficSnapshot(hubs, Instant.parse("2026-08-27T08:00:00Z")),
-                new FixedModel()
-        );
+    private RegionalTrafficService service(List<RegionalConnectionHub> hubs) {
+        return new RegionalTrafficService(() -> snapshot(hubs), new FixedModel());
     }
-
+    private RegionalTrafficSnapshot snapshot(List<RegionalConnectionHub> hubs) {
+        return new RegionalTrafficSnapshot(hubs, Instant.parse("2026-08-27T08:00:00Z"), List.of(
+                "已跳过2条起终点或名称不合法的路网记录。",
+                "已跳过125条不属于有效跨市路线或数值不合法的卡口记录。"
+        ));
+    }
     private HighwayTrafficQuery query(TrafficQueryType type, List<String> cities) {
         return new HighwayTrafficQuery(type, null, null, null, null, cities, null, "trace");
     }
-
-    private TransportHub hub(
-            String checkpoint, String route, String regionCode, String regionName, long flow, double speed
-    ) {
-        return new TransportHub(
-                checkpoint, route, route.equals("G104") ? "北京-平潭" : "测试路线",
-                speed, regionCode, regionName, flow
-        );
+    private RegionalConnectionHub hub(String checkpoint, String route, String routeName,
+            String aCode, String aName, String bCode, String bName, long weekly, long daily) {
+        return new RegionalConnectionHub(checkpoint, checkpoint + "卡口", route, routeName,
+                aCode, aName, bCode, bName, 10d, 40d, weekly, daily);
     }
 
     private static final class FixedModel implements ChatModelPort {
-        @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
-        @Override public <T> T generateStructured(ModelRequest request, Class<T> type) {
-            if (type == RegionalTrafficSummaryResponse.class) {
-                @SuppressWarnings("unchecked") T response = (T) new RegionalTrafficSummaryResponse(
-                        "当前查询范围内卡口交通压力已经完成综合统计，重点卡口和路线分布较为清晰。日均流量较高的监测点需要优先关注，城市压力可结合活跃卡口规模综合研判。路线排名反映了当前范围内不同通道承担的交通负荷差异。建议持续关注排名靠前对象并合理安排监测资源。",
-                        List.of(new RegionInsight("350100", "福州市当前活跃卡口和日总流量值得持续关注"),
-                                new RegionInsight("350200", "厦门市当前卡口流量压力相对较为突出"))
-                );
-                return response;
-            }
-            throw new UnsupportedOperationException();
+        public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
+        public <T> T generateStructured(ModelRequest request, Class<T> type) {
+            return type.cast(new RegionalTrafficSummaryResponse(
+                    "本次已完成所选城市范围内跨市交通联系统计。城市对排名反映了无方向联系压力。重要跨市路线可结合表格查看。排名以七日总流量为主要依据。建议持续关注高流量城市对与路线的后续变化。"));
         }
-        @Override public void stream(ModelRequest request, ModelStreamListener listener) { throw new UnsupportedOperationException(); }
+        public void stream(ModelRequest request, ModelStreamListener listener) { throw new UnsupportedOperationException(); }
     }
 }

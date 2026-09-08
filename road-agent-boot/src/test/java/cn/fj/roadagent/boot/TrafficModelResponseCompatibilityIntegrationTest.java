@@ -16,7 +16,7 @@ import cn.fj.roadagent.domain.traffic.RoadCapacitySnapshot;
 import cn.fj.roadagent.domain.traffic.RouteTrafficSummary;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 import cn.fj.roadagent.domain.traffic.TrafficStatus;
-import cn.fj.roadagent.domain.traffic.TransportHub;
+import cn.fj.roadagent.domain.traffic.RegionalConnectionHub;
 import cn.fj.roadagent.domain.traffic.VehicleHourlyFlow;
 import cn.fj.roadagent.domain.traffic.VehicleTravelPatternSnapshot;
 import cn.fj.roadagent.domain.traffic.VehicleType;
@@ -99,16 +99,18 @@ class TrafficModelResponseCompatibilityIntegrationTest {
     @Test
     void acceptsRegionalSummaryEvenWhenInsightWordingVaries() {
         RegionalTrafficSnapshot snapshot = new RegionalTrafficSnapshot(List.of(
-                new TransportHub("DEMO-FZ-1", "G104", "北京-平潭", 51.2, "350100", "福州市", 620),
-                new TransportHub("DEMO-XM-1", "G324", "福州-昆明", 47.8, "350200", "厦门市", 580)
-        ), Instant.parse("2026-08-28T08:00:00Z"));
+                new RegionalConnectionHub("DEMO-FZ-1", "示例卡口1", "G104", "北京-平潭",
+                        "350100", "福州市", "350900", "宁德市", 10d, 51.2, 4340, 620),
+                new RegionalConnectionHub("DEMO-NP-1", "示例卡口2", "G316", "长乐-同仁",
+                        "350100", "福州市", "350700", "南平市", 20d, 47.8, 4060, 580)
+        ), Instant.parse("2026-08-28T08:00:00Z"), List.of());
         var result = new RegionalTrafficService(() -> snapshot, model).query(new HighwayTrafficQuery(
                 TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW, null, null, null, null,
-                List.of("福州", "厦门"), null, "synthetic"
+                List.of("福州", "宁德", "南平"), null, "synthetic"
         ));
 
         assertFalse(result.summary().isBlank());
-        assertTrue(result.regionPressureRows().stream().allMatch(row -> !row.interpretation().isBlank()));
+        assertTrue(result.regionalPairRows().size() == 2);
     }
 
     @Test

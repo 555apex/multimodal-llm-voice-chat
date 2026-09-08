@@ -23,10 +23,24 @@ public record TrafficQueryRequest(
         @Size(max = 100, message = "路线名称不能超过100个字符")
         String routeName,
 
-        @Size(max = 9, message = "一次最多选择九个城市；区域交通压力仍限定两个城市")
+        @Size(max = 9, message = "一次最多选择九个城市")
         List<@NotBlank(message = "城市名称不能为空") @Size(max = 20, message = "城市名称不能超过20个字符") String> selectedCities,
 
         @Size(max = 20, message = "车型分析城市不能超过20个字符")
-        String analysisCity
+        String analysisCity,
+
+        Boolean includeTrend
 ) {
+    public TrafficQueryRequest(
+            TrafficQueryType queryType,
+            String originCity,
+            String destinationCity,
+            String routeCode,
+            String routeName,
+            List<String> selectedCities,
+            String analysisCity
+    ) {
+        this(queryType, originCity, destinationCity, routeCode, routeName,
+                selectedCities, analysisCity, null);
+    }
 }

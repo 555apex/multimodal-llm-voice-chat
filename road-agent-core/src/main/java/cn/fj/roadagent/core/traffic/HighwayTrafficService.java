@@ -4,6 +4,7 @@ import cn.fj.roadagent.application.exception.BusinessRuleException;
 import cn.fj.roadagent.application.model.ModelRequest;
 import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
+import cn.fj.roadagent.application.port.TrafficContextEventPort;
 import cn.fj.roadagent.application.traffic.HighwayTrafficFacts;
 import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
 import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
@@ -14,6 +15,8 @@ import cn.fj.roadagent.domain.traffic.HighwayTrafficSegment;
 import cn.fj.roadagent.domain.traffic.HighwayTrafficSnapshot;
 import cn.fj.roadagent.domain.traffic.RouteTrafficSummary;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
+import cn.fj.roadagent.domain.traffic.TrafficContextEvent;
+import cn.fj.roadagent.domain.traffic.TrafficContextScope;
 
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -37,13 +40,23 @@ public final class HighwayTrafficService {
 
     private final HighwayTrafficSnapshotPort snapshotPort;
     private final ChatModelPort chatModelPort;
+    private final TrafficContextEventPort contextEventPort;
 
     public HighwayTrafficService(
             HighwayTrafficSnapshotPort snapshotPort,
             ChatModelPort chatModelPort
     ) {
+        this(snapshotPort, chatModelPort, ignored -> List.of());
+    }
+
+    public HighwayTrafficService(
+            HighwayTrafficSnapshotPort snapshotPort,
+            ChatModelPort chatModelPort,
+            TrafficContextEventPort contextEventPort
+    ) {
         this.snapshotPort = snapshotPort;
         this.chatModelPort = chatModelPort;
+        this.contextEventPort = contextEventPort == null ? ignored -> List.of() : contextEventPort;
     }
 
     public HighwayTrafficFacts collectFacts(HighwayTrafficQuery query) {
@@ -53,15 +66,16 @@ public final class HighwayTrafficService {
         HighwayTrafficSnapshot snapshot = snapshotPort.current();
         return switch (query.queryType()) {
             case PROVINCE_OVERVIEW -> overview(snapshot);
+            case ROUTE_CATALOG -> routeCatalog(snapshot);
             case PROVINCE_ABNORMAL -> abnormal(snapshot);
             case CITY_PAIR -> cityPair(snapshot, query.originCity(), query.destinationCity());
             case ROUTE_DETAIL -> routeDetail(snapshot, query.routeCode(), query.routeName());
-            case OD_OVERVIEW, OD_CITY_FLOW, OD_KEY_CHANNELS ->
-                    throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于城市OD七日统计分析");
+            case OD_DESTINATION_TENDENCY, OD_CONNECTION_MATRIX ->
+                    throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于城市目的地联系倾向分析");
             case CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL ->
                     throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于道路通行能力评估");
-            case REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE ->
-                    throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于区域交通压力分析");
+            case REGIONAL_TRAFFIC_OVERVIEW, REGIONAL_PAIR_PRESSURE, REGIONAL_KEY_CHANNELS ->
+                    throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于区域交通联系分析");
             case VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN,
                  VEHICLE_DAY_TYPE_COMPARISON ->
                     throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于车型出行特征分析");
@@ -70,12 +84,44 @@ public final class HighwayTrafficService {
 
     public HighwayTrafficResult query(HighwayTrafficQuery query) {
         HighwayTrafficFacts facts = collectFacts(query);
+        if (facts.queryType() == TrafficQueryType.ROUTE_CATALOG) {
+            String traceId = query.traceId() == null || query.traceId().isBlank()
+                    ? UUID.randomUUID().toString() : query.traceId();
+            return HighwayTrafficResult.fromFacts(facts, catalogSummary(facts), traceId);
+        }
         TrafficForecastSummaryResponse response = chatModelPort.generateStructuredStrict(
                 summaryRequest(facts), TrafficForecastSummaryResponse.class
         );
         String traceId = query.traceId() == null || query.traceId().isBlank()
                 ? UUID.randomUUID().toString() : query.traceId();
-        return HighwayTrafficResult.fromFacts(facts, response.combinedSummary(), traceId);
+        String summary;
+        if (query.trendOnly()) {
+            summary = response.trendForecast();
+        } else {
+            String cause = verifiedCause(query, facts);
+            summary = response.summary() + cause + (query.includeTrend() ? response.trendForecast() : "");
+        }
+        return HighwayTrafficResult.fromFacts(facts, summary, traceId);
+    }
+
+    private HighwayTrafficFacts routeCatalog(HighwayTrafficSnapshot snapshot) {
+        List<RouteTrafficSummary> summaries = snapshot.routeSummaries().stream()
+                .sorted(Comparator.comparing(RouteTrafficSummary::routeCode))
+                .toList();
+        List<HighwayTrafficSegment> segments = snapshot.segments().stream()
+                .sorted(Comparator.comparing(HighwayTrafficSegment::routeCode)
+                        .thenComparing(HighwayTrafficSegment::routeSection))
+                .toList();
+        return facts(TrafficQueryType.ROUTE_CATALOG, "当前有数据的国省道路线目录",
+                summaries, segments, List.of(), segments.size(), snapshot, List.of());
+    }
+
+    private String catalogSummary(HighwayTrafficFacts facts) {
+        long routeCount = java.util.stream.Stream.concat(
+                facts.routeSummaries().stream().map(RouteTrafficSummary::routeCode),
+                facts.segments().stream().map(HighwayTrafficSegment::routeCode)).distinct().count();
+        return "已列出当前交通知识库中有数据的%d条国省道路线，共对应%d条交调站划分路段。路线编号、路线名称和路段名称见下方目录；目录仅表示当前有数据的业务覆盖范围。"
+                .formatted(routeCount, facts.segments().size());
     }
 
     private HighwayTrafficFacts overview(HighwayTrafficSnapshot snapshot) {
@@ -222,17 +268,91 @@ public final class HighwayTrafficService {
                 状态含义固定为：10畅通、20轻度拥堵、30中度拥堵、40重度拥堵、50堵塞。
                 status>=20时可给出当前拥堵提示、错峰通行、预留时间等一般性建议。
                 趋势不得给出未来具体速度、流量、概率、恢复时刻或解除时间，不得假装使用了历史序列或实时增量数据。
-                用户询问拥堵原因时，不分析或猜测事故、施工、天气、流量变化等原因，直接聚焦当前通行状态、重点路段和建议。
+                节假日和重大活动原因句由Java依据时间与影响范围校验后另行附加；你不得自行分析或猜测事故、施工、天气、流量变化、节假日或活动原因。
                 不要复述全部表格，不要使用Markdown，不要将国省干线事实改写为城市道路数据。
                 """.strip();
         return new ModelRequest(systemPrompt, serializeFacts(facts), List.of(), 0.1);
+    }
+
+    private String verifiedCause(HighwayTrafficQuery query, HighwayTrafficFacts facts) {
+        Set<String> abnormalRoutes = java.util.stream.Stream.of(
+                        facts.routeSummaries().stream()
+                                .filter(summary -> summary.status().abnormal())
+                                .map(RouteTrafficSummary::routeCode),
+                        facts.segments().stream()
+                                .filter(segment -> segment.status().abnormal())
+                                .map(HighwayTrafficSegment::routeCode),
+                        facts.forecastSegments().stream()
+                                .filter(segment -> segment.status().abnormal())
+                                .map(HighwayTrafficSegment::routeCode)
+                ).flatMap(stream -> stream)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (abnormalRoutes.isEmpty()) return "";
+
+        Set<String> queryRegions = new LinkedHashSet<>();
+        FujianCity.fromName(query.originCity()).map(FujianCity::adcode).ifPresent(queryRegions::add);
+        FujianCity.fromName(query.destinationCity()).map(FujianCity::adcode).ifPresent(queryRegions::add);
+        Set<String> queryRoutes = new LinkedHashSet<>(abnormalRoutes);
+
+        List<TrafficContextEvent> matches = contextEventPort.findActiveAt(facts.acquiredAt()).stream()
+                .filter(event -> event.activeAt(facts.acquiredAt()))
+                .filter(event -> matchesScope(event, query.queryType(), queryRegions, queryRoutes))
+                .sorted(Comparator
+                        .comparingInt((TrafficContextEvent event) -> scopePriority(event.scope()))
+                        .thenComparing(TrafficContextEvent::impactStartAt)
+                        .thenComparing(TrafficContextEvent::eventCode))
+                .filter(distinctByCode())
+                .limit(3)
+                .toList();
+        if (matches.isEmpty()) return "";
+
+        String names = matches.stream().map(TrafficContextEvent::eventName)
+                .distinct().map(name -> "“" + name + "”").collect(Collectors.joining("、"));
+        boolean hasHoliday = matches.stream().anyMatch(event -> event.eventType().holidayRelated());
+        boolean hasActivity = matches.stream().anyMatch(event -> !event.eventType().holidayRelated());
+        String factor = hasHoliday && hasActivity ? "节假日、调休或重大活动期间集中出行和人车集散需求"
+                : hasHoliday ? "节假日或调休期间集中出行需求"
+                : "重大活动期间人车集散需求";
+        return "当前异常可能受到" + names + "相关的" + factor + "叠加影响。";
+    }
+
+    private boolean matchesScope(
+            TrafficContextEvent event,
+            TrafficQueryType queryType,
+            Set<String> queryRegions,
+            Set<String> abnormalRoutes
+    ) {
+        if (event.scope() == TrafficContextScope.PROVINCE) return true;
+        boolean routeMatch = !event.affectedRouteCodes().isEmpty()
+                && event.affectedRouteCodes().stream().anyMatch(abnormalRoutes::contains);
+        if (event.scope() == TrafficContextScope.ROUTE) return routeMatch;
+        if (event.scope() != TrafficContextScope.CITY) return false;
+        if (queryType == TrafficQueryType.CITY_PAIR) {
+            boolean cityMatch = event.regionCode() != null && queryRegions.contains(event.regionCode());
+            return cityMatch && (event.affectedRouteCodes().isEmpty() || routeMatch);
+        }
+        // 全省或单路线查询无法仅凭城市名定位路段，必须有明确受影响路线。
+        return routeMatch;
+    }
+
+    private int scopePriority(TrafficContextScope scope) {
+        return switch (scope) {
+            case ROUTE -> 1;
+            case CITY -> 2;
+            case PROVINCE -> 3;
+        };
+    }
+
+    private java.util.function.Predicate<TrafficContextEvent> distinctByCode() {
+        Set<String> seen = new LinkedHashSet<>();
+        return event -> seen.add(event.eventCode());
     }
 
     private String serializeFacts(HighwayTrafficFacts facts) {
         StringBuilder value = new StringBuilder();
         value.append("queryType=").append(facts.queryType()).append('\n');
         value.append("title=").append(facts.title()).append('\n');
-        value.append("acquiredAt=").append(facts.acquiredAt()).append('\n');
+        value.append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n');
         value.append("totalSegmentCount=").append(facts.totalSegmentCount()).append('\n');
         value.append("displayedSegmentCount=").append(facts.segments().size()).append('\n');
         value.append("truncated=").append(facts.truncated()).append('\n');

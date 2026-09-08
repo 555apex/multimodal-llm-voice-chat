@@ -14,14 +14,19 @@ import cn.fj.roadagent.domain.traffic.HighwayTrafficSnapshot;
 import cn.fj.roadagent.domain.traffic.RouteTrafficSummary;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 import cn.fj.roadagent.domain.traffic.TrafficStatus;
+import cn.fj.roadagent.domain.traffic.TrafficContextEvent;
+import cn.fj.roadagent.domain.traffic.TrafficContextEventType;
+import cn.fj.roadagent.domain.traffic.TrafficContextScope;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,7 +92,7 @@ class HighwayTrafficServiceTest {
                 .map(route -> route.routeCode()).toList());
         assertEquals(88.8, result.routeSummaries().get(0).averageSpeedKmh());
         assertTrue(result.segments().isEmpty());
-        assertTrue(result.summary().contains("未来1至2小时"));
+        assertFalse(result.summary().contains("未来1至2小时"));
         assertTrue(model.lastRequest.userPrompt().contains("status=10/畅通"));
         assertTrue(model.lastRequest.userPrompt().contains("routeStatusCounts="));
         assertTrue(model.lastRequest.systemPrompt().contains("3至4句"));
@@ -99,7 +104,7 @@ class HighwayTrafficServiceTest {
     }
 
     @Test
-    void everyRoadConditionQueryIncludesForecastWhilePublicTablesRemainUnchanged() {
+    void trendIsOnlyIncludedWhenRequestedWhilePublicTablesRemainUnchanged() {
         HighwayTrafficService service = service(new RecordingModel());
         List<HighwayTrafficQuery> queries = List.of(
                 query(TrafficQueryType.PROVINCE_OVERVIEW),
@@ -110,9 +115,89 @@ class HighwayTrafficServiceTest {
 
         for (HighwayTrafficQuery trafficQuery : queries) {
             var result = service.query(trafficQuery);
-            assertTrue(result.summary().contains("未来1至2小时"));
+            assertFalse(result.summary().contains("未来1至2小时"));
         }
+        HighwayTrafficQuery withTrend = new HighwayTrafficQuery(
+                TrafficQueryType.ROUTE_DETAIL, null, null, "G104", null, List.of(), null, "trace", true);
+        assertTrue(service.query(withTrend).summary().contains("未来1至2小时"));
+        HighwayTrafficQuery trendOnly = new HighwayTrafficQuery(
+                TrafficQueryType.ROUTE_DETAIL, null, null, "G104", null, List.of(), null, "trace", true, true);
+        assertTrue(service.query(trendOnly).summary().startsWith("未来1至2小时"));
+        assertFalse(service.query(trendOnly).summary().contains("当前福建"));
         assertTrue(service.query(query(TrafficQueryType.PROVINCE_OVERVIEW)).segments().isEmpty());
+    }
+
+    @Test
+    void verifiedHolidayOrActivityIsAddedOnlyForAbnormalMatchingScope() {
+        TrafficContextEvent matching = contextEvent(
+                "DEMO_FUZHOU", "福州市大型体育赛事（模拟）", TrafficContextEventType.SPORTS_EVENT,
+                TrafficContextScope.CITY, "350100", Set.of("G104")
+        );
+        TrafficContextEvent unrelated = contextEvent(
+                "DEMO_OTHER", "无关路线活动（模拟）", TrafficContextEventType.CONCERT,
+                TrafficContextScope.ROUTE, null, Set.of("G999")
+        );
+        HighwayTrafficService service = new HighwayTrafficService(
+                this::snapshot, new RecordingModel(), ignored -> List.of(unrelated, matching)
+        );
+
+        HighwayTrafficQuery query = new HighwayTrafficQuery(
+                TrafficQueryType.CITY_PAIR, "宁德", "福州", null, null,
+                List.of(), null, "trace", true
+        );
+        var result = service.query(query);
+
+        assertTrue(result.summary().contains("福州市大型体育赛事（模拟）"));
+        assertTrue(result.summary().contains("可能受到"));
+        assertTrue(result.summary().contains("人车集散需求叠加影响"));
+        assertFalse(result.summary().contains("无关路线活动"));
+        assertTrue(result.summary().indexOf("叠加影响") < result.summary().indexOf("未来1至2小时"));
+    }
+
+    @Test
+    void provinceHolidayMatchesButTrendOnlyAndSmoothResultsDoNotAddCause() {
+        TrafficContextEvent holiday = contextEvent(
+                "HOLIDAY_TEST", "测试节假日", TrafficContextEventType.HOLIDAY,
+                TrafficContextScope.PROVINCE, null, Set.of()
+        );
+        HighwayTrafficService service = new HighwayTrafficService(
+                this::snapshot, new RecordingModel(), ignored -> List.of(holiday)
+        );
+        var abnormal = service.query(query(TrafficQueryType.PROVINCE_ABNORMAL));
+        assertTrue(abnormal.summary().contains("测试节假日"));
+        assertTrue(abnormal.summary().contains("集中出行需求"));
+
+        HighwayTrafficQuery trendOnly = new HighwayTrafficQuery(
+                TrafficQueryType.ROUTE_DETAIL, null, null, "G104", null,
+                List.of(), null, "trace", true, true
+        );
+        assertFalse(service.query(trendOnly).summary().contains("测试节假日"));
+
+        HighwayTrafficSnapshot smooth = new HighwayTrafficSnapshot(
+                List.of(new HighwayRoute("G104", "北京-平潭", "国道", "宁德", "福州")),
+                List.of(new RouteTrafficSummary("G104", "北京-平潭", 80d, TrafficStatus.SMOOTH)),
+                List.of(new HighwayTrafficSegment("G104", "北京-平潭", "畅通段", 1d, 80d,
+                        TrafficStatus.SMOOTH, 0d)),
+                snapshot().acquiredAt(), "smooth"
+        );
+        HighwayTrafficService smoothService = new HighwayTrafficService(
+                () -> smooth, new RecordingModel(), ignored -> List.of(holiday)
+        );
+        assertFalse(smoothService.query(new HighwayTrafficQuery(
+                TrafficQueryType.ROUTE_DETAIL, null, null, "G104", null, "trace"
+        )).summary().contains("测试节假日"));
+    }
+
+    @Test
+    void routeCatalogReturnsEveryActiveRouteAndSegmentWithoutModelGeneration() {
+        RecordingModel model = new RecordingModel();
+        var result = service(model).query(query(TrafficQueryType.ROUTE_CATALOG));
+
+        assertEquals(List.of("G104", "S201"), result.routeSummaries().stream()
+                .map(route -> route.routeCode()).toList());
+        assertEquals(13, result.segments().size());
+        assertTrue(result.summary().contains("已列出"));
+        assertNull(model.lastRequest);
     }
 
     @Test
@@ -261,6 +346,25 @@ class HighwayTrafficServiceTest {
         }
         return new HighwayTrafficSnapshot(
                 routes, summaries, segments, Instant.parse("2026-08-13T01:00:00Z"), "fp"
+        );
+    }
+
+    private TrafficContextEvent contextEvent(
+            String code,
+            String name,
+            TrafficContextEventType type,
+            TrafficContextScope scope,
+            String regionCode,
+            Set<String> routes
+    ) {
+        return new TrafficContextEvent(
+                1L, code, name, type,
+                Instant.parse("2026-08-13T00:00:00Z"),
+                Instant.parse("2026-08-13T02:00:00Z"),
+                Instant.parse("2026-08-12T23:00:00Z"),
+                Instant.parse("2026-08-13T03:00:00Z"),
+                scope, regionCode, regionCode == null ? null : "福州市",
+                routes, null, "DEMO"
         );
     }
 

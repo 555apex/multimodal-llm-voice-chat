@@ -16,7 +16,7 @@ import cn.fj.roadagent.domain.traffic.RoadCapacity;
 import cn.fj.roadagent.domain.traffic.RoadCapacitySnapshot;
 import cn.fj.roadagent.domain.traffic.TrafficStatus;
 import cn.fj.roadagent.domain.traffic.RegionalTrafficSnapshot;
-import cn.fj.roadagent.domain.traffic.TransportHub;
+import cn.fj.roadagent.domain.traffic.RegionalConnectionHub;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -25,6 +25,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HighwayTrafficSkillTest {
 
@@ -87,7 +88,7 @@ class HighwayTrafficSkillTest {
     }
 
     @Test
-    void regionalModelFailureDoesNotPublishSummaryTablesOrSpeech() {
+    void regionalModelFailureUsesDeterministicSummaryAndPublishesCompleteResult() {
         ChatModelPort failingModel = new ChatModelPort() {
             @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
             @Override public <T> T generateStructured(ModelRequest request, Class<T> type) {
@@ -99,28 +100,28 @@ class HighwayTrafficSkillTest {
         };
         HighwayTrafficService trafficService = new HighwayTrafficService(this::snapshot, failingModel);
         RegionalTrafficService regionalService = new RegionalTrafficService(
-                () -> new RegionalTrafficSnapshot(List.of(new TransportHub(
-                        "FJ001", "G104", "北京-平潭", 30, "350100", "福州市", 200
-                )), Instant.parse("2026-08-13T01:00:00Z")),
+                () -> new RegionalTrafficSnapshot(List.of(new RegionalConnectionHub(
+                        "FJ001", "宁德卡口", "G104", "北京-平潭", "350100", "福州市",
+                        "350900", "宁德市", 10d, 30, 1400, 200
+                )), Instant.parse("2026-08-13T01:00:00Z"), List.of()),
                 failingModel
         );
         HighwayTrafficSkill skill = new HighwayTrafficSkill(trafficService, null, regionalService, null);
         AgentDecision decision = new AgentDecision(
-                "TRAFFIC_QUERY", "CHECKPOINT_PRESSURE", null, null, null, null,
-                null, null, null, null, null, null, null, null, List.of(), null
+                "TRAFFIC_QUERY", "REGIONAL_KEY_CHANNELS", null, null, null, null,
+                List.of(), null, null, null, null, null, null, null, null, null, List.of(), null
         );
         AgentExecutionContext context = new AgentExecutionContext(
-                new AgentMessageCommand("conversation-1", "哪些卡口交通压力大", "trace-1"),
+                new AgentMessageCommand("conversation-1", "福建省跨市通道关键卡口", "trace-1"),
                 decision, List.of()
         );
         List<AgentEvent> events = new ArrayList<>();
 
-        assertThrows(IllegalStateException.class, () -> skill.execute(context, events::add));
+        skill.execute(context, events::add);
 
         List<String> names = events.stream().map(AgentEvent::name).toList();
-        assertFalse(names.contains("answer.delta"));
-        assertFalse(names.contains("answer.speech"));
-        assertFalse(names.contains("result.traffic"));
+        assertTrue(names.contains("answer.delta"));
+        assertTrue(names.contains("result.traffic"));
     }
 
     private AgentExecutionContext context() {

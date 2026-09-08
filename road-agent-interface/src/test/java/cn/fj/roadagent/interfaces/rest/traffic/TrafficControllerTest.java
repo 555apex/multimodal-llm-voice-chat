@@ -21,23 +21,30 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TrafficControllerTest {
 
     @Test
-    void acceptsThreeCityOdRequestAndSerializesBothNewTables() throws Exception {
+    void acceptsThreeCityOdRequestAndSerializesTendencyMatrix() throws Exception {
         QueryHighwayTrafficUseCase useCase = query -> {
             org.junit.jupiter.api.Assertions.assertEquals(3, query.selectedCities().size());
             var facts = new cn.fj.roadagent.application.traffic.OdTrafficFacts(
-                    query.queryType(), "城市OD综合分析", List.of(), List.of(),
-                    List.of(new cn.fj.roadagent.application.traffic.OdCityFlowResultItem("350100", "福州市", 2, 100, 20, 0)),
-                    List.of(new cn.fj.roadagent.application.traffic.OdChannelResultItem("G324", "福州—昆明", 100, 70, 10, 20)),
-                    2, 100, 20, Instant.parse("2026-09-03T04:00:00Z"), List.of());
-            return HighwayTrafficResult.fromOdFacts(facts, "已完成所选城市的卡口统计。", query.traceId());
+                    query.queryType(), "城市目的地联系倾向矩阵",
+                    List.of(new cn.fj.roadagent.application.traffic.SelectedRegionResultItem("350100", "福州市"),
+                            new cn.fj.roadagent.application.traffic.SelectedRegionResultItem("350200", "厦门市"),
+                            new cn.fj.roadagent.application.traffic.SelectedRegionResultItem("350500", "泉州市")),
+                    List.of(), List.of(new cn.fj.roadagent.application.traffic.OdMatrixRowResultItem(
+                            "350100", "福州市", List.of(
+                            new cn.fj.roadagent.application.traffic.OdMatrixCellResultItem("350100", "福州市", null, null),
+                            new cn.fj.roadagent.application.traffic.OdMatrixCellResultItem("350200", "厦门市", 1200.5, 0.3),
+                            new cn.fj.roadagent.application.traffic.OdMatrixCellResultItem("350500", "泉州市", null, null)))),
+                    Instant.parse("2026-09-03T04:00:00Z"), List.of());
+            return HighwayTrafficResult.fromOdFacts(facts, "已完成所选城市的目的地联系倾向分析。", query.traceId());
         };
         var mvc = MockMvcBuilders.standaloneSetup(new TrafficController(useCase))
                 .setControllerAdvice(new GlobalExceptionHandler()).addFilter(new TraceIdFilter()).build();
         mvc.perform(post("/api/v1/traffic/queries").contentType("application/json")
-                .content("{\"queryType\":\"OD_OVERVIEW\",\"selectedCities\":[\"福州\",\"厦门\",\"泉州\"]}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data.periodDays").value(7))
-                .andExpect(jsonPath("$.data.odCityFlowRows[0].weeklyTotalFlow").value(100))
-                .andExpect(jsonPath("$.data.odChannelRows[0].carWeeklyFlow").value(70))
+                .content("{\"queryType\":\"OD_CONNECTION_MATRIX\",\"selectedCities\":[\"福州\",\"厦门\",\"泉州\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.odMatrixRows[0].analysisCityName").value("福州市"))
+                .andExpect(jsonPath("$.data.odMatrixRows[0].cells[1].weeklyConnectionStrength").value(1200.5))
+                .andExpect(jsonPath("$.data.odMatrixRows[0].cells[1].tendencyRatio").value(0.3))
                 .andExpect(jsonPath("$.data.segments").isEmpty());
     }
 

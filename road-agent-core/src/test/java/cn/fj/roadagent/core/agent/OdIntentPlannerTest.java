@@ -12,18 +12,18 @@ class OdIntentPlannerTest {
     @Test void distinguishesNewOdQueriesFromAllExistingBusinessTypes() {
         var planner = new IntentPlanner(new Model());
         Map<String, String> cases = new LinkedHashMap<>();
-        cases.put("福州和厦门的OD情况如何？", "OD_OVERVIEW");
-        cases.put("我想了解福州和厦门的OD分析", "OD_OVERVIEW");
-        cases.put("请给我一份福州与厦门的OD综合分析", "OD_OVERVIEW");
-        cases.put("福州、厦门的O D情况", "OD_OVERVIEW");
-        cases.put("分析福州、厦门、泉州的OD情况。", "OD_OVERVIEW");
-        cases.put("福建各城市近7天流量分布是否均衡？", "OD_CITY_FLOW");
-        cases.put("福州和厦门有哪些关键OD通道，各车型流量多少？", "OD_KEY_CHANNELS");
-        cases.put("福州和厦门的OD通道小型客车比例是多少？", "OD_KEY_CHANNELS");
-        cases.put("G324关键OD通道的货车总流量", "OD_KEY_CHANNELS");
-        cases.put("城市区域流量不平衡", "OD_CITY_FLOW");
-        cases.put("福建省哪些卡口承担较大的交通压力？", "CHECKPOINT_PRESSURE");
-        cases.put("福州和厦门的区域交通压力分布如何？", "REGIONAL_TRAFFIC_OVERVIEW");
+        cases.put("福州的出行主要联系哪些城市？", "OD_DESTINATION_TENDENCY");
+        cases.put("福州车辆主要去哪些城市？", "OD_DESTINATION_TENDENCY");
+        cases.put("福州的主要出行去向是哪里？", "OD_DESTINATION_TENDENCY");
+        cases.put("福州的目的地分布如何？", "OD_DESTINATION_TENDENCY");
+        cases.put("福州与哪些城市的出行需求强度较高？", "OD_DESTINATION_TENDENCY");
+        cases.put("分析福州的目的地联系倾向", "OD_DESTINATION_TENDENCY");
+        cases.put("福州和厦门的OD情况如何？", "OD_CONNECTION_MATRIX");
+        cases.put("请给我一份福州与厦门的OD综合分析", "OD_CONNECTION_MATRIX");
+        cases.put("分析福州、厦门、泉州的OD情况。", "OD_CONNECTION_MATRIX");
+        cases.put("福建省城市联系矩阵", "OD_CONNECTION_MATRIX");
+        cases.put("福建省哪些卡口承担较大的交通压力？", "REGIONAL_KEY_CHANNELS");
+        cases.put("福州、厦门、泉州的区域交通压力分布如何？", "REGIONAL_TRAFFIC_OVERVIEW");
         cases.put("福州到厦门目前拥堵吗？", "CITY_PAIR");
         cases.put("福州市车型占比如何？", "VEHICLE_STRUCTURE");
         cases.put("福建省各国省道通行能力利用率如何？", "CAPACITY_OVERVIEW");
@@ -39,7 +39,7 @@ class OdIntentPlannerTest {
     @Test void unresolvedScopeHistoryDatesAndOutsideCitiesAskRatherThanDroppingCities() {
         var planner = new IntentPlanner(new Model());
         for (String question : List.of("这两个城市的OD分析", "福州上个月OD分析", "福州和南京的OD分析",
-                "北京的OD分析", "福州和上海的关键OD通道", "福州实际OD流向", "福州2025年8月OD分析",
+                "北京的OD分析", "福州和上海的OD分析", "福州实际OD流向", "福州2025年8月OD分析",
                 "福州OD未来趋势", "福州厦门OD分析以及通行能力利用率")) {
             var decision = planner.plan(question, List.of());
             assertFalse(planner.missingFields(decision).isEmpty(), question);
@@ -55,7 +55,7 @@ class OdIntentPlannerTest {
         for (String question : List.of("再加上泉州", "只看第二张表", "去掉厦门", "不是路况，我要OD分析", "不要OD，只看交通压力")) {
             assertNotNull(planner.plan(question, history));
             assertNotNull(model.last, question);
-            assertTrue(model.last.systemPrompt().contains("新增城市不是替换"));
+            assertTrue(model.last.systemPrompt().contains("再加上泉州"));
             assertFalse(model.last.history().isEmpty());
         }
         assertTrue(planner.missingFields(od(List.of("福州", "厦门", "泉州"))).isEmpty());
@@ -63,7 +63,7 @@ class OdIntentPlannerTest {
     }
 
     static AgentDecision od(List<String> cities) {
-        return new AgentDecision("TRAFFIC_QUERY", "OD_OVERVIEW", null, null, null, null,
+        return new AgentDecision("TRAFFIC_QUERY", cities.size() == 1 ? "OD_DESTINATION_TENDENCY" : "OD_CONNECTION_MATRIX", null, null, null, null,
                 cities, null, null, null, null, null, null, null, null, null, List.of(), null);
     }
     static class Model implements ChatModelPort {
