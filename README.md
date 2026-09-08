@@ -3,22 +3,23 @@
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
 ```text
-交通问答：自然语言 → 识别路况、通行能力、区域交通压力、车型出行特征或城市OD七日统计 → MySQL只读事实 → Java确定性统计 → 模型摘要与可视化结果
-应急调度：MySQL 异常事件 → AI提出受限资源需求 → Java按库存和九市距离分配 → 三级上报通告 → 归还资源 → 全程留痕
+交通问答：自然语言 → 识别路况、通行能力、跨区域交通联系、车型出行特征或城市目的地联系倾向 → MySQL只读事实 → Java确定性统计 → 模型摘要与可视化结果
+设施预警：w_realtime_abnormal异常快照 → Java确定性汇总 → 预警清单/健康报告/重点关注 → 确认、消除或忽略回写
+应急调度：w_lw_incident应急事件 → 规则/模型自动分类 → 版本化预案填充 → Java按库存和数据库城市坐标分配 → 三级上报通告 → 全程留痕
 语音交互：浏览器录音 → Java语音接口 → Docker内faster-whisper识别；回答摘要 → Edge-TTS分段合成 → 浏览器播放
 ```
 
 DeepSeek 负责意图理解和应急方案生成；Java 负责交通事实回答、Skill 白名单、参数校验、Tool 调用、审批和状态转换。模型不能直接创建工单、修改业务状态或改写交通事实。
 
-本版新增城市 OD 七日卡口统计：可选择福建 1—9 个城市，查看城市流量对比及关键路线的分车型流量，路线表默认展示 10 条并支持展开。这里的 OD 是项目约定的城市卡口并集统计，不是车辆真实起终点或城市间净流入流出分析。
+需求1-7基于跨市路线与同路线卡口7日流量，提供单城市目的地联系倾向排名和多城市联系倾向矩阵。该指标用于表达相对联系结构，不代表真实单车起终点、行驶方向或净流入流出。
 
 首次协作按下面的顺序即可跑通，测试不是启动前置条件：
 
 1. 准备第 1 节环境，按第 2 节克隆指定分支。
 2. 按第 3 节申请自己的 DeepSeek Key，向负责人获取数据库配置，并复制本地配置文件。
-3. 请负责人确认第 4 节数据库结构、权限和 OD 字段数据；使用共享库的协作者不要自行批量执行 SQL。
+3. 请负责人确认第 4 节数据库结构、权限以及跨市路线与卡口流量数据；使用共享库的协作者不要自行批量执行 SQL。
 4. 按第 5 节启动 Java 后端和 Vue 前端；需要录音/朗读时再启动 Docker 语音服务。
-5. 在 AI 抽屉输入“福州和厦门的OD情况如何？”，查看摘要和两张统计表；数据不足时先请负责人确认对应城市数据。
+5. 在 AI 抽屉输入“福州的出行主要联系哪些城市？”，查看摘要和目的地联系倾向排名。
 
 ## 1. 环境要求
 
@@ -152,7 +153,9 @@ Copy-Item .env.example .env
 
 ## 4. 共享数据库要求
 
-本版本不会在应用启动时自动建表或修改表结构。“建表/迁移脚本”是由数据库负责人对目标 schema 执行一次的 SQL。项目负责人应确保共享数据库依次执行过：
+本版本不会在应用启动时自动建表或修改表结构。普通协作者连接负责人已经准备好的共享库时，**不需要执行任何 SQL**；只需填写第3节的数据库连接信息。以下操作只由数据库负责人进行，执行前必须备份并确认目标是项目 Demo schema。
+
+如果是从空白 Demo 库建立完整历史结构，先按顺序执行基础脚本：
 
 ```text
 docs/sql/20260728_emergency_dispatch.sql
@@ -162,24 +165,47 @@ docs/sql/20260820_seed_demo_emergency_resources.sql
 docs/sql/20260820_level3_provincial_decision_metadata.sql
 ```
 
-前两个脚本创建基础工单与三级工作流；第三个增加事件城市、资源需求/缺口快照，并创建资源库存与占用流水表；第四个仅插入不存在的 `resource_id`，生成 108 条福建九市虚构 Demo 资源，不覆盖已人工修改的库存；第五个只把既有三级表的数据库注释统一为“省级决策”，不修改状态编码或业务数据。可用 `docs/sql/20260820_verify_emergency_resources.sql` 只读核验数量与一致性。在 IDEA 右侧数据库工具中执行时，必须先选中 `ROADAGENT_DB_URL` 指向的同一个 schema，执行后再同步表列表。
+如果共享库已经具备上述基础结构，则不要重复初始化资源，直接按顺序执行本版升级脚本：
+
+```text
+docs/sql/20260904_lw_incident_emergency_migration.sql
+docs/sql/20260904_fix_incident_id_collation.sql
+docs/sql/20260904_seed_lw_incident_emergency_demo.sql
+docs/sql/20260904_extend_emergency_resource_types.sql
+docs/sql/20260904_emergency_response_plan_and_resource_coordinates.sql
+docs/sql/20260904_seed_emergency_response_plans_v1.sql
+docs/sql/20260904_festival_data.sql
+docs/sql/20260904_verify_lw_incident_emergency.sql
+docs/sql/20260904_verify_response_plans_and_coordinates.sql
+docs/sql/20260904_verify_festival_data.sql
+```
+
+本版脚本依次完成 `w_lw_incident` 事件迁移、事件编号排序规则统一、Demo事件整理、16类资源适用关系、版本化预案与资源坐标、16类v1预案和节假日/模拟活动数据。三个 `verify_*.sql` 只读核验对应结果。`seed_lw_incident_emergency_demo.sql`、`extend_emergency_resource_types.sql` 和 `festival_data.sql` 都会写入或更新Demo数据；如果负责人只升级表结构而不需要仓库自带Demo数据，应先审阅脚本并按实际环境取舍，不能机械执行整段清单。协作者不要对 `docs/sql/` 批量导入。
+
+`docs/sql/20260819_reset_demo_events.sql` 是旧 Demo 的永久重置脚本，不创建备份且面向旧 `w_abnormal_event`；当前应用已经切换到 `w_lw_incident`，普通协作者和本版升级均不应执行它。
 
 协作者连接共享数据库时不需要重复执行此脚本，也不需要 `CREATE`、`ALTER` 或 `DROP` 权限。正常运行至少需要：
 
 - 连接共享数据库的权限；
 - 对 `w_road_network_status`、`w_congestion_detection_result`、`w_highway_network` 和 `w_road_capacity` 的 `SELECT` 权限；
 - 对 `w_transport_hubs`、`w_region_code` 和 `w_vehicletravelpatternanalyzer` 的 `SELECT` 权限；
-- 对 `w_abnormal_event` 的 `SELECT`、`UPDATE` 权限；
+- 对 `w_festival_data` 的 `SELECT` 权限；
+- 对 `w_realtime_abnormal` 的 `SELECT`、`UPDATE(status, remark)` 权限；
+- 对 `w_lw_incident` 的 `SELECT`、`UPDATE` 权限；
 - 对 `w_emergency_dispatch_order` 的 `SELECT`、`INSERT`、`UPDATE` 权限；
 - 对 `w_emergency_dispatch_workflow`、`w_emergency_professional_review`、`w_emergency_command_decision` 的 `SELECT`、`INSERT`、`UPDATE` 权限；
 - 对 `w_emergency_resource` 的 `SELECT`、`UPDATE` 权限；
+- 对 `w_emergency_response_plan` 的 `SELECT` 权限；
 - 对 `w_emergency_resource_allocation` 的 `SELECT`、`INSERT`、`UPDATE` 权限；
-- 对只增不改的 `w_emergency_dispatch_action_log` 只授予 `SELECT`、`INSERT` 权限。
+- 对只增不改的 `w_emergency_dispatch_action_log`、`w_emergency_event_classification` 只授予 `SELECT`、`INSERT` 权限。
 
 如果协作者完全没有数据库连接或上述读写权限，后端将无法查询告警或保存工单，项目的数据库应急调度功能不能运行。当前工作流使用：
 
-- `w_abnormal_event`：保存异常事件；
+- `w_realtime_abnormal`：设施预警的唯一数据源；项目读取异常值和阈值快照，处置时仅更新 `status/remark`；
+- `w_lw_incident`：唯一事件数据源，业务使用 `c_no`；
+- `w_emergency_event_classification`：规则、模型和人工分类的只增不改留痕；
 - `w_emergency_dispatch_order`：按版本保存模型生成的应急调度方案和当时事件快照；
+- `w_emergency_response_plan`：按事件类型保存已发布预案版本、固定模板和资源基线；
 - `w_emergency_dispatch_workflow`：每个事件一条稳定的三级流程主记录；
 - `w_emergency_professional_review`：二级市交通应急办的结构化专业会商记录；
 - `w_emergency_command_decision`：三级省级决策及最终不可修改通告快照；
@@ -187,20 +213,19 @@ docs/sql/20260820_level3_provincial_decision_metadata.sql
 - `w_emergency_resource`：福建九市城市级聚合库存，是正式调度的唯一资源事实来源；
 - `w_emergency_resource_allocation`：按方案版本保存软占用、已调度和已释放流水及来源城市快照。
 
-路况业务读取 `w_road_network_status`、`w_congestion_detection_result` 和 `w_highway_network`，通行能力业务读取 `w_road_capacity`；区域交通压力业务读取 `w_transport_hubs` 并使用 `w_region_code` 映射城市，车型出行特征业务读取 `w_vehicletravelpatternanalyzer`。本期明确不使用 `w_checkpoint_info`，运行时也不使用 `w_transport_hubs.temp_1`。
+路况业务读取 `w_road_network_status`、`w_congestion_detection_result` 和 `w_highway_network`，并按交通快照时间读取 `w_festival_data` 作为节假日及重大活动背景；通行能力业务读取 `w_road_capacity`；跨区域交通联系业务以 `w_highway_network` 的路线起终点城市建立无方向城市对，再按 `route_code` 汇总 `w_transport_hubs` 卡口流量，车型出行特征业务读取 `w_vehicletravelpatternanalyzer`。本期明确不使用 `w_checkpoint_info`；需求1-5不使用 `w_transport_hubs.region_code` 和 `temp_1`。
 
-城市 OD 七日统计同样只读取 `w_transport_hubs` 和 `w_region_code`，不需要新增业务表。请负责人确认以下现有字段及数据已准备好；仅有连接账号、但没有这些字段或有效数据，不能跑通 OD 查询：
+城市目的地联系倾向直接复用1-5的 `w_highway_network` 与 `w_transport_hubs`，不读取卡口 `region_code`，也不需要新增业务表。请负责人确认以下数据已准备好：
 
 | 数据 | 要求 |
 |---|---|
-| `w_transport_hubs.checkpoint_no`、`region_code` | 所选范围内卡口编号唯一且非空；城市代码对应福建地级市，并在 `w_region_code.code/name` 中有有效映射 |
-| `daily_avg_flow`、`average_speed` | 日均流量为非负整数，均速为非负数；0 是有效数据，缺失值不能用 0 冒充 |
-| `temp_2` | 七日总流量，非负整数字符串，例如 `151` |
-| `temp_3` | 七日分车型 JSON，例如 `{"car":75,"bus":40,"truck":36}`；三个值都必须是非负整数，仅查询城市流量表时不读取此字段 |
-| `route_code`、`route_name` | 通道统计按路线编号分组，编号不能为空，同一路线名称不得冲突 |
-| `del_flag`、`update_time`、`create_time` | 有效记录的删除标记为 `N`、`0` 或 `NULL`；更新时间用于展示数据时间，不代表七日区间的起止日期 |
+| `w_highway_network.route_code/route_name` | 活动路线编号唯一，名称非空 |
+| `w_highway_network.start_place/end_place` | 可映射为福建九市；起终城市不同的路线才纳入跨市联系 |
+| `w_transport_hubs.checkpoint_no/route_code` | 卡口编号唯一，路线编号能匹配活动跨市路线 |
+| `w_transport_hubs.temp_2` | 卡口7日流量，必须是非负整数；同路线先对所有卡口求均值，作为路线代表联系强度 |
+| `del_flag`、`update_time`、`create_time` | 有效记录的删除标记为 `N`、`0` 或 `NULL`；卡口最新更新时间用于展示数据时间 |
 
-不要求九市数据全部齐备。部分城市无数据时显示缺失提示，其余城市仍可展示；全部无数据返回 `OD_ANALYSIS_NOT_FOUND`。字段非法或重复卡口返回 `OD_ANALYSIS_DATA_INVALID`，连接/表结构问题可能返回 `OD_ANALYSIS_DATA_UNAVAILABLE`。请联系负责人核对数据和权限，不要用重置脚本排查。
+统计不要求每个城市对都存在直连路线；矩阵中无直接联系的单元格留空。全部无可用跨市联系时返回 `OD_ANALYSIS_NOT_FOUND`。
 
 以下两个文件仅保留作历史方案参考，**不属于本版迁移，不要为启动项目执行**：
 
@@ -209,16 +234,18 @@ docs/sql/20260820_level3_provincial_decision_metadata.sql
 
 它们包含建表和插入/覆盖数据操作；当前 OD 实现既不读取也不要求创建对应的表。不要对 `docs/sql/` 执行通配符批量导入。
 
-关键状态约定：
+应急事件筛选与状态约定：
 
-- `event_status=0`：三级流程尚未办结，一级、二级、三级流转期间始终保持 `0`；
-- `event_status=1`：三级最终批准并生成通告；
-- `event_status=2`：已确认无需调度；
-- `del_flag=N`、`0` 或 `NULL`：有效数据；`del_flag=Y` 或 `1`：逻辑删除。
+- 只处理 `c_type='4' AND status='1' AND completed=0 AND deleted=0` 的记录；
+- `event_type` 为空时由后台每5秒按规则优先、模型兜底分类，失败留痕后退避重试；
+- 三级批准或确认无需调度后回写 `status='2', completed=1`；
+- 无需调度原因保存在工作流 `terminal_reason` 和动作流水，不污染贴源事件表。
 
-`w_abnormal_event.id` 是 `BIGINT`，后端会以字符串形式返回给前端，避免 JavaScript 精度丢失。正式生成工单前，事件必须有 `event_city_code/event_city_name`；福清、闽侯和平潭在本期统一归入福州调度范围。若需要在 IDEA 中查看共享数据库，应单独创建 MySQL 数据源并选择连接参数中的 schema；刷新表列表只会刷新 IDEA 缓存，不会改变后端连接。
+`c_no` 是全链路字符串ID，`w_lw_incident.id` 仅保留给贴源表自身使用。展示和模型使用的事件事实字段范围止于 `route_name`，`post`、处置人员和管理单位字段不进入领域对象、模型提示或前端响应；`status/completed/deleted` 仅作为系统待办过滤及完成状态回写字段。`content` 中带有明确“联系人/联系电话”等标签的片段也会在适配层清理，贴源原文保持不变。城市不回写事件表，依次从来源、所属单位、县区地点、清理后的描述和经纬度推导，并冻结到工单快照。`w_abnormal_event` 只保留一个版本周期供回滚，应用不再读取。
 
-`docs/sql/20260819_reset_demo_events.sql` 只用于当前 Demo 数据的永久重置，不依赖固定事件条数。脚本会锁定执行时 `w_abnormal_event` 中实际存在的事件，删除关联资源占用、工单和三级历史，将资源库存恢复为初始可用状态，并恢复 `event_status=0`、清空无需调度原因；事件原始创建信息保持不变。脚本不创建备份，普通协作者不需要执行；未经数据库负责人明确确认，不得在共享验收或生产数据上执行。
+16类事件的人工审阅源稿位于 `docs/福建公路应急事件分类与处置预案草案.docx`。运行时不读取Word，只读取 `w_emergency_response_plan` 中的唯一已发布版本。模型只填充受控变量、在预案基线中调整资源需求并给出有限补充建议；Java保留模板主体、补齐必选资源并将预案快照冻结到工单和最终通告。
+
+预案后续修订不覆盖已发布行：先插入更高的 `plan_version` 草稿，审阅后在同一事务中将旧版设为 `plan_status=2`、新版设为 `plan_status=1` 并填写 `activation_time`。唯一约束保证每类事件最多只有一个已发布版本；历史工单继续使用生成时快照。
 
 ## 5. 启动项目
 
@@ -290,10 +317,14 @@ java -jar road-agent-boot/target/road-agent-boot-0.1.0-SNAPSHOT.jar
 ```bash
 curl http://localhost:8080/api/v1/emergency-events/pending/next
 curl 'http://localhost:8080/api/v1/emergency-workflows/inbox?stage=LEVEL_1'
+curl 'http://localhost:8080/api/v1/facility-alerts?status=PENDING&page=0&size=20'
+curl http://localhost:8080/api/v1/facility-alerts/health-report
 curl http://localhost:8080/api/v1/speech/capabilities
 ```
 
-如果共享数据库中存在 `event_status=0` 且未逻辑删除的事件，接口会返回最早的一条事件、已有最新工单以及待处理总数。
+如果共享数据库中存在满足 `c_type='4'、status='1'、completed=0、deleted=0` 且已经完成 `event_type` 分类的事件，接口会返回最早的一条事件、已有最新工单以及待处理总数。
+
+后端默认每5秒尝试分类一条尚无 `event_type` 的应急事件。规则无法确定类型时会调用配置好的模型；如果协作者只调试无需自动分类的功能，可在启动后端前设置 `ROADAGENT_EVENT_CLASSIFICATION_ENABLED=false`。关闭分类不会影响已经完成分类的事件、交通问答或设施预警。
 
 ### 5.3 前端
 
@@ -326,13 +357,14 @@ npm run dev
 
 ### 6.1 交通问答
 
-- 同一个交通 Skill 支持四类路况、三类通行能力、四类区域交通压力、四类车型出行特征和三类城市 OD 七日统计，共 18 种查询；模型只负责意图选择与摘要，所有统计均由 Java 完成；
+- 同一个交通 Skill 支持路线目录、四类路况、三类通行能力、三类跨区域交通联系、四类车型出行特征和两类城市目的地联系分析，共 17 种查询；模型只负责意图选择与摘要，所有统计均由 Java 完成；
 - 全省总览使用 `w_road_network_status` 的路线整体均速和五级状态，不对路段速度二次平均；
 - 异常榜单仅使用 `w_congestion_detection_result` 中 `status>=20` 的路段，按状态、`severity`、均速排序展示前 10 条；
 - 城市间查询用 `w_highway_network.start_place/end_place` 双向精确匹配福建九市；单路线编号精确匹配优先，名称统一连接符和空格后精确匹配；
 - 五级状态保留数据库定义：10 畅通、20 轻度拥堵、30 中度拥堵、40 重度拥堵、50 堵塞；
-- 四类路况查询都会在当前态势摘要后给出未来 1–2 小时的定性趋势，趋势限定为“基本稳定、持续拥堵、可能加剧、逐渐缓解、局部分化”；该结果只依据当前 `status`、`uniform_speed`、`severity` 与交通常识作启发式研判，不是精确交通预测模型；
-- 趋势研判以数据库 `status` 为权威状态，均速和 `severity` 仅作辅助；不输出未来具体速度、流量、概率或解除时间，也不推测事故、施工、天气等拥堵原因；
+- 普通当前路况查询不再强制附加趋势；拥堵、异常、未来或缓解类问法才会给出未来 1–2 小时定性趋势，且可只返回趋势文字；趋势仅限“基本稳定、持续拥堵、可能加剧、逐渐缓解、局部分化”，不是精确交通预测模型；
+- 趋势研判以数据库 `status` 为权威状态，均速和 `severity` 仅作辅助；不输出未来具体速度、流量、概率或解除时间，也不推测事故、施工、天气等未验证原因；当 `status>=20` 且交通快照时间、城市或路线范围命中 `w_festival_data` 时，Java会增加“可能受某节假日或重大活动叠加影响”的谨慎原因提示；
+- `w_festival_data` 采用按请求即时只读，不进入30秒交通快照等待。2026年使用国务院正式放假区间，2027—2028只维护法规确定的法定日期；模拟演出和赛事以 `DEMO` 标记，可通过 `enabled=0` 停用。城市活动未配置受影响路线时不会被归因到无关的全省或单路线查询；
 - 通行能力总览直接采用 `w_road_capacity.avg_previous_hour` 作为项目定义的实际通行能力（辆/小时）、`design_flow` 作为设计通行能力、`utilization_perc` 作为实际/设计利用率，Java 和模型均不重新计算这些数值；
 - 通行能力采用三级项目口径：利用率 `>=0.80` 为正常，`0.30<利用率<0.80` 为瓶颈，`<=0.30` 为严重瓶颈；数据库中的 0 是有效值并判定为严重瓶颈；
 - 瓶颈路线按利用率、实际通行能力升序稳定排序，默认展示前 10 条；当前容量表是一条路线一条记录，因此只称“瓶颈路线”，不虚构路段位置；
@@ -343,55 +375,63 @@ npm run dev
 - 会话最多保留 20 条消息，闲置 60 分钟后失效；
 - 保留 `POST /api/v1/traffic/queries`，使用与 Agent 相同的 MySQL 查询和模型摘要流程。
 
-### 6.2 区域交通压力与车型出行特征
+### 6.2 跨区域交通联系与车型出行特征
 
-- 产品内置标准问法会先经过Java确定性识别，再进入对应交通服务，不依赖模型首次猜测。覆盖全省路况、拥堵异常、两市路况、G/S路线、通行能力总览、瓶颈排行、区域卡口/城市/路线压力以及福州或厦门车型分析；例如“福建省各国省道通行能力利用率怎么样”“宁德到福州交通情况”“G104当前通行情况”“福州市的交通运输特征如何”等。模糊追问和依赖上下文的问题仍由模型规划；
-- 区域交通压力按 `w_transport_hubs.region_code` 筛选范围：不指定城市统计全省，指定一个城市统计该市，指定两个城市统计两市卡口并集；该口径不计算城市OD流量，也不将卡口流量描述成某一方向的车辆数；
-- 综合查询依次展示日均流量 Top20 卡口、日总流量 Top5 城市和 Top10 路线；明确询问卡口、城市或路线时只返回相应表格。活跃卡口固定为 `daily_avg_flow>100`，交通枢纽占比为城市活跃卡口数除以当前查询范围全部卡口数；
+- 产品内置标准问法会先经过Java确定性识别，再进入对应交通服务，不依赖模型首次猜测。覆盖全省路况、拥堵异常、两市路况、G/S路线、通行能力总览、瓶颈排行、三市及以上城市对/跨市路线以及福州或厦门车型分析；例如“福州、宁德、南平三市的跨区域交通联系如何”“这些城市的主要跨市通道有哪些”等。模糊追问和依赖上下文的问题仍由模型规划；
+- 跨区域交通联系以 `w_highway_network.start_place/end_place` 形成无方向城市对，只保留福建九市之间且起终点不同的路线，再关联同 `route_code` 的卡口。未指定城市时分析九市；指定范围时要求3至9市，并只纳入起终点均位于所选范围的路线；
+- 综合查询依次展示城市对交通联系压力 Top5 和重要跨市路线 Top10；专项问题只返回相应表格。排名以 `w_transport_hubs.temp_2` 的7日总流量为主、`daily_avg_flow` 为辅助；卡口数据仅用于路线级聚合，不对外展示卡口排名；
+- 结果用于识别哪些城市对、路线和卡口承担较高的跨区域交通压力，不区分方向，不推断真实OD、净流入净流出、车辆来源或途经城市。单市或两市的区域联系问法会追问补充至至少三个城市；两城市当前路况仍进入 `CITY_PAIR`；
 - 区域和路线日总流量均为范围内对应卡口 `daily_avg_flow` 之和，路线均速为对应卡口 `average_speed` 算术平均值，不构造额外压力指数；
 - 城市表解读仍优先使用模型内容；模型遗漏某个城市、返回重复代码或解读格式不合格时，Java按已统计的活跃卡口事实补齐安全解读，不再因此中断整次回答；
-- 车型出行特征目前按单城市分析福州或厦门，每次执行 `create_time DESC, id DESC` 选取该城市最新有效记录；`result1` 为一周三车型总量，`result2` 为24小时数据，`result3` 为周末两天总量；
-- `car/bus/truck` 分别展示为小型客车、中型客车和大型货车。24小时缺失时间点补0，工作日5天合计为 `result1-result3`，周末2天合计直接使用 `result3`；
+- 车型出行特征单份结果按福州或厦门生成；同时询问福州和厦门时，Agent依次执行两次并在同一回答中保留两张独立结果卡。每次执行 `create_time DESC, id DESC` 选取该城市最新有效记录；
+- `car/bus/truck` 分别展示为小型客车、中型客车和大型货车。24小时缺失时间点补0时同步警告“补0不代表实际无车”；工作日5天合计为 `result1-result3`，周末2天合计直接使用 `result3`；
 - 前端使用固定 ECharts 模板绘制车型占比饼图、24小时折线图和工作日/周末柱状图；模型不生成图表配置，语音只朗读3–5句总结，不朗读表格和图表。
 
-### 6.2.1 城市OD七日统计（需求1-7）
+### 6.2.1 城市目的地联系倾向（需求1-7）
 
-本业务采用项目约定的“城市卡口并集统计”口径，与1-5使用同一数据表但采用不同字段、意图和展示；不表示车辆真实起讫点、方向、净流入净流出或去重出行量。
+本业务与1-5复用同一套跨市路线—卡口事实，但展示相对的目的地联系结构，不重复1-5的绝对压力排名。
 
-- 唯一业务表为 `w_transport_hubs`，以 `region_code` 和 `w_region_code` 映射城市。独立只读一致性事务，不等待30秒，不校验九市/48条路线齐全，不使用 `w_highway_network`、`w_route_city_mapping`、`w_city_od_connection_result`。同一事务只保证读取视图一致，不保证协作者分次提交的业务批次绝对完整。
-- `OD_OVERVIEW`返回两张表；`OD_CITY_FLOW`仅返回“城市区域流量不平衡”；`OD_KEY_CHANNELS`仅返回“城市交通关键OD通道”。REST和SSE均增加 `odCityFlowRows、odChannelRows、periodDays、missingRegions`，旧字段保持兼容。
-- `selectedCities`允许1至9个福建地级市；为空默认全省；两市或多市按卡口并集，不求共同路线。部分城市无数据时返回其他城市及提示；全部无数据为 `OD_ANALYSIS_NOT_FOUND`，不能填0代替无数据。
-- 城市表：卡口数为全部有效卡口数量；7日总量为 `SUM(temp_2)`，日均流量为 `SUM(daily_avg_flow)`，均速为包含有效0值的卡口均速算术平均（两位小数）。不沿用1-5的活跃阈值或Top5。
-- 通道表：在所选城市范围内按 `route_code` 汇总 `temp_2` 和 `temp_3.car/bus/truck`；车型映射为小型客车、中型客车、大型货车，均为7天总量。两表按7日总量降序、代码升序排列；后端返回所有路线，前端默认显示10条，可展开全部。
-- `temp_2`为非负整数字符串，`temp_3`示例为 `{"car":75,"bus":40,"truck":36}`。必要值非法、重复卡口等返回 `OD_ANALYSIS_DATA_INVALID`；校验局限查询范围。仅查城市表不读取或校验车型JSON。车型合计与总量不一致仅提示，不修正源值。
-- 不强制7日总量等于日均流量乘7；`periodDays=7`来自数据库字段口径，`acquiredAt`是所选记录的最新更新时间，不作为历史统计起止日期。历史日期请求先追问是否改查最新7天数据。
-- 摘要由Java事实驱动模型生成，允许句数及措辞差异；新增数值、方向/真实OD或原因结论会改用事实摘要。模型超时、空响应或JSON解析失败时不发布文本、表格或语音半成品。语音仅朗读摘要；本业务不生成1–2小时拥堵趋势。
-- 问法：“福州和厦门的OD情况如何？”、“分析福州、厦门、泉州的OD情况。”、“福建各城市近7天流量分布是否均衡？”、“福州和厦门有哪些关键OD通道，各车型流量多少？”。
-- “交通压力/卡口排名/区域交通联系”继续进入1-5；“OD通道的车型流量”优先进入1-7，不能误入1-6；“福州到厦门拥堵吗”仍是路况查询。上下文中的增减城市、切换表格由规划器结合历史解析。
-- 旧的两份 `docs/sql/20260902_*.sql` 是此前方案草稿，本业务不会执行，也不要求创建对应表。共享数据库只读测试：配置数据库环境变量后执行 `./mvnw test -Dtest=OdTrafficReadOnlyIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false`，不启动应用或写入数据库。
+- 数据源为 `w_highway_network` 的起终城市和 `w_transport_hubs.temp_2`；不使用 `region_code`、`w_route_city_mapping` 或 `w_city_od_connection_result`。
+- 同一路线先对其卡口7日流量求均值，一个城市对的联系强度是所有相关路线代表值之和；避免因某条路线卡口较多而重复放大。
+- `OD_DESTINATION_TENDENCY`要求单城市，返回其与各关联城市的路线数、7日联系强度和联系倾向占比；占比分母始终是该城市在全省跨市网络中的联系强度总和。
+- `OD_CONNECTION_MATRIX`用于两市、多市或全省；为空时默认九市。矩阵只缩小展示范围，不重新计算分母，因此同一城市的倾向值在不同查询范围中保持一致。
+- 摘要用“目的地联系倾向”和“跨市出行联系”表达，不宣称真实车辆去向、方向性或OD概率。语音仅朗读摘要，不朗读整张矩阵。
+- 问法：“福州的出行主要联系哪些城市？”、“分析福州的目的地联系倾向”、“福州和厦门的OD联系如何？”、“分析福州、厦门、泉州的城市联系矩阵”。
+- 1-5回答“哪些城市对和跨市路线的绝对压力较大”；1-7回答“某城市的相对目的地联系结构”。“福州到厦门拥堵吗”仍进入实时路况查询。
 
-### 6.3 数据库应急调度
+### 6.3 设施健康预警
+
+- AI抽屉第三个功能“设施预警”默认展示待确认清单，页面可见时每5秒刷新，也可切换处理中、已结束和告警等级；
+- 清单显示设施名称、异常指标、实际值/状态值、阈值快照、等级、采集/触发时间、处理状态和最新备注；
+- 健康报告和重点关注对象只基于 `status IN (1,2)` 的活动记录，由Java按最高风险、告警数量和持续时间确定性汇总，不调用大模型；
+- 处理流程严格为 `1 待确认 → 2 处理中 → 3 已结束`，结束时必须选择“已消除”或“已忽略”；更新带原状态条件，并用带处理类型前缀的最新说明覆盖 `remark`；
+- `w_threshold_config → w_monitoring_data → w_realtime_abnormal` 的阈值配置、历史对比与异常识别由上游系统负责；本功能不重算阈值，发现表内实际值与阈值快照不一致时显示“源数据待核验”；
+- 当前表不含设施地点/类型和气象关联字段，因此本期以 `facility_name` 作为识别信息，不生成防台防汛专项名单。
+
+### 6.4 数据库应急调度
 
 - 页面可见时每 5 秒查询三级待办，每级都按事件发生时间最早优先；
+- 只处理 `w_lw_incident` 中的应急待办；`event_type` 缺失时后台自动分类，前端显示待分类和失败数量；
 - “应急处置”页签独立于聊天运行状态，用户可在问答与工单流程之间自主切换；
-- 模型只能从数据库资源类型白名单中提出需求数量和用途，不能编造资源 ID、来源城市、距离或库存；
+- 模型只能填充已发布预案变量，并从预案资源基线和数据库白名单交集中提出需求；不能编造资源 ID、来源城市、距离或库存；
 - 模型契约要求 `rescuePlan` 返回单个文本字符串；若兼容模型返回由纯文本章节组成的JSON对象，Core会确定性合并为方案正文，数组、嵌套对象等异常结构仍会拒绝；
 - Java 先使用事件同城库存，不足时按九市中心直线估算距离从近到远补足，跨市调度保留来源城市最低库存；
 - 全省仍不足时工单明确显示缺口，不把缺口伪装成已调度资源；带缺口方案可继续上报，但二、三级必须补充协调依据和批示；
 - 一级现场席位可要求AI返工、确认上报二级，或在尚未生成工单时二次确认“无需调度”；
+- 一级可人工更正16类事件之一；已生成方案会留存旧版、释放资源并按新类型重新生成；
 - 工单生成时库存由 `available` 转为 `reserved`；任一级退回时释放旧版占用并按新库存重新匹配；三级批准后转为 `dispatched`；
 - 二级市交通应急办填写事件等级、资源可行性、影响研判、协同要求和专业意见；带缺口时必须选择“有缺口但可执行”并填协调要求；
 - 三级省级决策席位可退回一级重新生成，或批准并生成确定性、不可修改的正式通告快照；
-- 三级批准前 `event_status` 始终为 `0`；只有最终通告与事件、方案、决策和流水在同一事务内办结后才改为 `1`；
+- 三级批准前 `w_lw_incident.status='1', completed=0`；最终通告或无需调度与本地工作流在同一事务中回写为 `status='2', completed=1`；
 - 任一级退回都必须填写意见，旧版本保留为 `REJECTED`，模型生成下一版本并重新走完三级；
 - 工作流、市级专业复核、省级决策和每次动作都持久化，“流程记录”可查看已通告/无需调度事件的时间线；
 - 已通告记录支持输入原因、二次确认后整单归还已调度资源；最终通告快照和事件状态不因归还而改变；
-- 选择“不生成”必须填写原因并二次确认，事件状态改为 `2`；
+- 选择“不生成”必须填写原因并二次确认，原因保存在工作流和动作流水；
 - 模型失败会保存 `FAILED` 记录，事件保持待处理并允许重试；
-- 当前 108 条资源是虚构 Demo 数据，不代表真实保障能力；城市距离仅用于资源排序，不代表道路里程、到达时间或路线；
+- 当前资源是虚构 Demo 数据，不代表真实保障能力；九市中心经纬度保存在资源表，Java用Haversine公式计算城市级直线距离，仅用于资源排序，不代表道路里程、到达时间或路线；
 - 聊天识别到应急调度意图时只引导用户使用“应急处置”页签，不创建无数据库来源的正式工单。
 
-### 6.4 语音输入与回答朗读
+### 6.5 语音输入与回答朗读
 
 - 输入框麦克风按钮支持开始、停止和取消录音；最长 60 秒、最大 10 MB，识别文字插入当前光标位置，不会自动发送；
 - 浏览器优先使用 WebM/Opus，按能力回退到 MP4/AAC 或 Ogg/Opus；非 `localhost` 部署需要 HTTPS 才能稳定获取麦克风权限；
@@ -406,13 +446,13 @@ npm run dev
 
 | 模块 | 作用 | 主要内容 |
 |---|---|---|
-| `road-agent-domain` | 纯业务对象和规则 | 交通领域、事件、资源库存/分配/缺口、版本化方案、三级流程和通告快照 |
-| `road-agent-application` | 模块间稳定契约 | UseCase、Port、命令、结果、Agent 事件 |
-| `road-agent-core` | Agent 和业务工作流 | 意图规划、Skill 注册、交通 Skill、三级状态机、返工和最终通告事务编排 |
-| `road-agent-adapters` | 外部能力实现 | MySQL 交通快照/事件/方案/应急资源/三级流程、九市距离、DeepSeek、事务适配器 |
+| `road-agent-domain` | 纯业务对象和规则 | 交通领域、设施预警、事件分类、版本化预案、资源库存/分配/缺口、三级流程和通告快照 |
+| `road-agent-application` | 模块间稳定契约 | UseCase、Port、命令、交通/设施/应急结果和 Agent 事件 |
+| `road-agent-core` | Agent 和业务工作流 | 意图规划、交通统计、设施健康汇总与状态机、事件分类、预案填充、三级状态机和最终通告事务编排 |
+| `road-agent-adapters` | 外部能力实现 | MySQL 交通/设施/事件/预案/资源/三级流程、城市坐标距离、DeepSeek和事务适配器 |
 | `road-agent-interface` | HTTP 边界 | REST、SSE、请求响应 DTO 和错误转换 |
 | `road-agent-boot` | 统一装配 | Spring Boot 启动、配置和具体实现选择 |
-| `frontend` | 对话界面 | 数字人、流式消息、交通卡片、三级待办、会商表、通告和时间线 |
+| `frontend` | 指挥大屏与交互 | AI抽屉、ECharts车型图表、OD联系矩阵、设施预警、三级待办、会商表、通告和时间线 |
 | `speech-service` | Docker语音服务 | FastAPI、faster-whisper、Edge-TTS、健康检查和无外部依赖的替身测试 |
 
 依赖方向：
@@ -431,15 +471,21 @@ POST /api/v1/conversations/{conversationId}/messages/stream
 GET  /api/v1/emergency-events/pending/next
 POST /api/v1/emergency-events/{eventId}/dispatches
 POST /api/v1/emergency-events/{eventId}/no-dispatch
+POST /api/v1/emergency-events/{eventId}/classification-retries
 GET  /api/v1/dispatches/{planId}
 POST /api/v1/dispatches/{planId}/approvals
 GET  /api/v1/emergency-workflows/inbox?stage=LEVEL_1|LEVEL_2|LEVEL_3
 POST /api/v1/emergency-workflows/{workflowId}/level-1-decisions
+POST /api/v1/emergency-workflows/{workflowId}/event-type-corrections
 POST /api/v1/emergency-workflows/{workflowId}/professional-reviews
 POST /api/v1/emergency-workflows/{workflowId}/command-decisions
 POST /api/v1/emergency-workflows/{workflowId}/resource-releases
 GET  /api/v1/emergency-workflows/{workflowId}
 GET  /api/v1/emergency-workflows/history
+GET  /api/v1/facility-alerts?status=PENDING&alarmLevel=EMERGENCY&page=0&size=20
+GET  /api/v1/facility-alerts/health-report
+GET  /api/v1/facility-alerts/focus?limit=10
+POST /api/v1/facility-alerts/{alertId}/status-transitions
 POST /api/v1/traffic/queries
 GET  /api/v1/speech/capabilities
 POST /api/v1/speech/transcriptions
@@ -448,10 +494,10 @@ POST /api/v1/speech/syntheses
 
 流式入口返回 SSE 事件，包括运行阶段、意图、Skill、Tool、文字增量、独立朗读文本 `answer.speech`、业务结果、审批要求和失败信息。接口契约见 [contracts/openapi/traffic-api.yaml](contracts/openapi/traffic-api.yaml)。
 
-本版沿用 `POST /api/v1/traffic/queries`，没有新增独立 OD URL。新增类型为 `OD_OVERVIEW`、`OD_CITY_FLOW`、`OD_KEY_CHANNELS`；OD 的 `selectedCities` 支持 1—9 市或留空查全省，其他类型的城市范围限制不变。REST 和 SSE 交通结果增加 `odCityFlowRows`、`odChannelRows`、`periodDays`、`missingRegions`。例如请求体：
+本版沿用 `POST /api/v1/traffic/queries`，没有新增独立 OD URL。类型为 `OD_DESTINATION_TENDENCY` 和 `OD_CONNECTION_MATRIX`，结果分别使用 `odDestinationRows` 和 `odMatrixRows`。例如请求体：
 
 ```json
-{"queryType":"OD_OVERVIEW","selectedCities":["福州","厦门"]}
+{"queryType":"OD_DESTINATION_TENDENCY","selectedCities":["福州"]}
 ```
 
 此接口也会调用模型生成摘要，需要有效的模型配置，并非仅验证数据库连接的健康接口。
@@ -461,16 +507,18 @@ POST /api/v1/speech/syntheses
 1. `AgentController`：自然语言请求如何进入后端；
 2. `AgentRuntime`：规划、选择 Skill、执行和记忆如何串联；
 3. `IntentPlanner` 与 `SkillRegistry`：模型选择和 Java 白名单的边界；
-4. `HighwayTrafficSkill`、`UnifiedTrafficQueryService` 与 `OdTrafficService`：18 种交通查询如何分流，新增 OD 如何按城市汇总；
+4. `HighwayTrafficSkill`、`UnifiedTrafficQueryService` 与 `OdTrafficService`：17 种交通查询如何分流，目的地联系倾向如何按跨市路线确定性统计；
 5. `EmergencyWorkflowController` 与 `DispatchApplicationService`：三级状态机、版本返工、幂等和最终通告事务；
 6. `MysqlHighwayTrafficSnapshotSource`、`InMemoryHighwayTrafficSnapshotCache` 与 Port：一致性读取、完整性校验和原子发布；
 7. `EmergencyResourceAllocator`、`MysqlEmergencyResourceRepository`、`MysqlResourceAllocationRepository` 与 `FujianCityDistanceAdapter`：受限资源需求如何转成库存占用、跨市调度和缺口；
-8. `AbnormalEventRepository`、`MysqlDispatchRepository`、`MysqlEmergencyWorkflowRepository` 与 `SpringUnitOfWork`：MySQL 持久化和事务边界；
-9. `OpenAiCompatibleChatModelAdapter`：结构化输出和流式输出如何实现；
-10. `SpeechController`、`SpeechApplicationService` 与 `PythonSpeechServiceAdapter`：Java 如何隔离语音容器故障；
-11. `speech-service/app` 与前端 `speech` Store：识别、自然分段、预合成和播放取消；
-12. [语音录音停止与识别问题修复日志](docs/VOICE_INPUT_RECORDING_BUGFIX_20260812.md)：历史故障、当前抽屉结构下的修复和回归验证；
-13. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
+8. `AbnormalEventRepository`、`EmergencyEventClassificationService`、`MysqlEmergencyResponsePlanRepository` 与 `SpringUnitOfWork`：事件贴源、自动分类、版本化预案和事务边界；
+9. `FacilityAlertController`、`FacilityAlertService` 与 `MysqlFacilityAlertRepository`：设施预警查询、健康汇总和并发安全状态流转；
+10. `VehiclePatternCharts.vue` 与 `TrafficResultPanel.vue`：ECharts车型图表和OD联系矩阵如何绘制；
+11. `OpenAiCompatibleChatModelAdapter`：结构化输出和流式输出如何实现；
+12. `SpeechController`、`SpeechApplicationService` 与 `PythonSpeechServiceAdapter`：Java 如何隔离语音容器故障；
+13. `speech-service/app` 与前端 `speech` Store：识别、自然分段、预合成和播放取消；
+14. [语音录音停止与识别问题修复日志](docs/VOICE_INPUT_RECORDING_BUGFIX_20260812.md)：历史故障、当前抽屉结构下的修复和回归验证；
+15. [docs/LEARNING_GUIDE.md](docs/LEARNING_GUIDE.md)：三人后续练习任务。
 
 ## 10. 可选开发验证（不是启动步骤）
 
@@ -499,9 +547,13 @@ Python 测试使用替身 ASR/TTS，不下载模型，也不会访问 Edge-TTS�
 
 1. 后端已在 `8080` 端口启动；
 2. `GET /api/v1/emergency-workflows/inbox?stage=LEVEL_1` 能返回事件和三级数量；
-3. 事件满足 `event_status=0 AND (del_flag IS NULL OR del_flag IN ('N', '0'))`；
+3. 事件满足 `c_type='4' AND status='1' AND completed=0 AND deleted=0`，且 `event_type` 已分类；
 4. 前端已在 `5173` 端口启动，浏览器页面处于可见状态；
 5. 前后端终端中没有数据库连接或代理错误。
+
+### 设施预警页没有数据或无法处置
+
+先调用 `GET /api/v1/facility-alerts?status=PENDING&page=0&size=20`。如果返回空列表，请负责人确认 `w_realtime_abnormal` 中是否存在相应状态的数据；本项目不会从 `w_threshold_config` 或 `w_monitoring_data` 重新生成异常。能够查看但无法更新时，检查账号是否拥有 `UPDATE(status, remark)` 权限。状态只允许“待确认→处理中→已结束”，结束时还必须选择“已消除”或“已忽略”并填写备注。
 
 ### 是否每次都要 Maven Reload 或运行测试
 

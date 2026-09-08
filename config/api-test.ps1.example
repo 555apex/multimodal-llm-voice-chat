@@ -18,6 +18,11 @@ $env:ROADAGENT_DB_URL = 'jdbc:mysql://database-host:3306/road_agent?useUnicode=t
 $env:ROADAGENT_DB_USERNAME = 'replace-with-database-user'
 $env:ROADAGENT_DB_PASSWORD = 'replace-with-database-password'
 
+# 后台默认每5秒分类一条event_type为空的应急事件；只调试其他功能时可以设为false。
+# $env:ROADAGENT_EVENT_CLASSIFICATION_ENABLED = 'true'
+# $env:ROADAGENT_EVENT_CLASSIFICATION_POLL_SECONDS = '5'
+# $env:ROADAGENT_EVENT_CLASSIFICATION_RETRY_SECONDS = '30'
+
 # Java 通过 HTTP 调用 Docker 语音容器；容器离线不会阻止后端启动。
 $env:ROADAGENT_SPEECH_ENABLED = 'true'
 $env:ROADAGENT_SPEECH_SERVICE_URL = 'http://localhost:8091'
