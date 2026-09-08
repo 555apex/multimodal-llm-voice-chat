@@ -40,8 +40,10 @@ class OpenAiCompatibleChatModelAdapterTest {
     @Test
     void shouldReadTextAndSendBearerHeader() {
         AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
         server.createContext("/chat/completions", exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             sendJson(exchange, """
                     {"choices":[{"message":{"content":"五四路当前缓行。"}}]}
                     """);
@@ -52,6 +54,30 @@ class OpenAiCompatibleChatModelAdapterTest {
 
         assertEquals("五四路当前缓行。", response.content());
         assertEquals("Bearer test-secret", authorization.get());
+        assertTrue(!requestBody.get().contains("chat_template_kwargs"));
+    }
+
+    @Test
+    void shouldSendOptionalThinkingFlagWithoutBearerHeader() {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> upgrade = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server.createContext("/chat/completions", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            upgrade.set(exchange.getRequestHeaders().getFirst("Upgrade"));
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            sendJson(exchange, """
+                    {"choices":[{"message":{"content":"严格JSON模式已启用。"}}]}
+                    """);
+        });
+        server.start();
+
+        var response = adapter(false, false).generate(new ModelRequest("system", "answer", 0.0));
+
+        assertEquals("严格JSON模式已启用。", response.content());
+        assertEquals(null, authorization.get());
+        assertEquals(null, upgrade.get());
+        assertTrue(requestBody.get().contains("\"chat_template_kwargs\":{\"enable_thinking\":false}"));
     }
 
     @Test
@@ -159,9 +185,13 @@ class OpenAiCompatibleChatModelAdapterTest {
     }
 
     private OpenAiCompatibleChatModelAdapter adapter() {
+        return adapter(true, null);
+    }
+
+    private OpenAiCompatibleChatModelAdapter adapter(boolean authEnabled, Boolean enableThinking) {
         return new OpenAiCompatibleChatModelAdapter(
                 HttpClient.newHttpClient(), new ObjectMapper(), endpoint,
-                "test-secret", "deepseek-v4-flash", true, Duration.ofSeconds(3)
+                "test-secret", "deepseek-v4-flash", authEnabled, enableThinking, Duration.ofSeconds(3)
         );
     }
 

@@ -150,16 +150,16 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .human-orbit i:nth-child(2) { right: 3%; top: 52%; }
 .human-orbit i:nth-child(3) { left: 23%; bottom: 3%; }
 .human-portrait-wrap { position: relative; z-index: 2; width: 100%; height: 157px; display: flex; align-items: flex-end; justify-content: center; }
-.human-portrait { width: 100%; height: 100%; object-fit: contain; object-position: bottom center; filter: drop-shadow(0 15px 25px rgba(0, 8, 27, .55)); animation: human-breathe 4.4s ease-in-out infinite; transform-origin: center bottom; }
-.human-speaking-wave { position: absolute; right: 1%; top: 42%; height: 30px; display: flex; align-items: center; gap: 3px; opacity: 0; transition: .2s; }
-.human-speaking-wave i { width: 3px; height: 9px; border-radius: 4px; background: #70f0df; animation: voice-wave .8s ease-in-out infinite alternate; }
-.human-speaking-wave i:nth-child(2) { animation-delay: .15s; }
-.human-speaking-wave i:nth-child(3) { animation-delay: .3s; }
-.human-speaking-wave i:nth-child(4) { animation-delay: .45s; }
-.human-panel[data-state='speaking'] .human-speaking-wave { opacity: 1; }
+.human-digital-portrait { width: 100%; height: 100%; }
 .human-panel[data-state='speaking']::after { background: rgba(38, 231, 211, .48); }
 .human-panel[data-state='listening'] .human-orbit { border-color: rgba(247, 190, 85, .72); animation-duration: 8s; }
+.human-panel[data-state='listening']::after { background: rgba(247, 190, 85, .36); }
+.human-panel[data-state='thinking'] .human-orbit { animation-duration: 13s; }
+.human-panel[data-state='thinking']::after { background: rgba(56, 170, 232, .42); }
+.human-panel[data-state='answering']::after { background: rgba(48, 219, 201, .4); }
 .human-panel[data-state='error'] { background: linear-gradient(110deg, rgba(91, 42, 67, .96), rgba(36, 24, 52, .92)); }
+.human-panel[data-state='error'] .human-orbit { animation-play-state: paused; }
+.human-panel[data-state='error'] .online-dot { background: #ef8f88; box-shadow: 0 0 9px #ef8f88; }
 .human-details { position: relative; z-index: 2; height: 146px; padding: 11px 13px; display: flex; flex-direction: column; justify-content: center; border: 1px solid rgba(45, 127, 187, .32); border-radius: 12px; background: rgba(5, 29, 61, .54); }
 .human-identity { display: flex; align-items: center; gap: 9px; }
 .human-identity div { display: grid; }

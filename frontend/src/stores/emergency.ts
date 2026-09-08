@@ -37,6 +37,7 @@ export const useEmergencyStore = defineStore('emergency', {
     counts: emptyCounts(),
     history: null as WorkflowHistoryPage | null,
     polling: false,
+    requestSequence: 0,
     actionBusy: false,
     queryStatus: 'idle' as EmergencyQueryStatus,
     errorMessage: '',
@@ -50,6 +51,10 @@ export const useEmergencyStore = defineStore('emergency', {
   },
 
   actions: {
+    invalidateQuery() {
+      this.requestSequence++
+      this.polling = false
+    },
     startPolling() {
       if (this.timerId) return
       void this.refresh()
@@ -60,6 +65,7 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     stopPolling() {
+      this.invalidateQuery()
       if (this.timerId) window.clearInterval(this.timerId)
       this.timerId = 0
       document.removeEventListener('visibilitychange', this.handleVisibility)
@@ -70,6 +76,7 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async selectStage(stage: WorkflowStage) {
+      this.invalidateQuery()
       this.selectedStage = stage
       this.viewMode = 'inbox'
       this.item = null
@@ -82,6 +89,7 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async showInbox() {
+      this.invalidateQuery()
       this.viewMode = 'inbox'
       await this.refresh()
     },
@@ -89,44 +97,54 @@ export const useEmergencyStore = defineStore('emergency', {
     async refresh() {
       if (this.polling || this.actionBusy) return
       if (this.viewMode === 'history') {
-        await this.loadHistory()
+        await this.loadHistory(this.history?.page ?? 0)
         return
       }
       this.polling = true
+      const sequence = ++this.requestSequence
+      const stage = this.selectedStage
       if (!this.item) this.queryStatus = 'loading'
       try {
-        const inbox = await fetchWorkflowInbox(this.selectedStage)
+        const inbox = await fetchWorkflowInbox(stage)
+        if (sequence !== this.requestSequence || this.selectedStage !== stage || this.viewMode !== 'inbox') return
         this.item = inbox.item
         this.counts = inbox.counts
         this.queryStatus = inbox.item ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        if (sequence !== this.requestSequence) return
         // 单次网络波动时保留当前待办，避免用户正在填写的表单消失。
         this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '应急工作流查询失败'
       } finally {
-        this.polling = false
+        if (sequence === this.requestSequence) this.polling = false
       }
     },
 
     async loadHistory(page = 0) {
-      if (this.polling || this.actionBusy) return
+      if (this.actionBusy) return
+      this.viewMode = 'history'
+      const sequence = ++this.requestSequence
       this.polling = true
       this.queryStatus = 'loading'
       try {
-        this.history = await fetchWorkflowHistory(page, 20)
+        const history = await fetchWorkflowHistory(page, 20)
+        if (sequence !== this.requestSequence || this.viewMode !== 'history') return
+        this.history = history
         this.queryStatus = this.history.items.length ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        if (sequence !== this.requestSequence) return
         this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '流程记录查询失败'
       } finally {
-        this.polling = false
+        if (sequence === this.requestSequence) this.polling = false
       }
     },
 
     async generate() {
       if (!this.item || this.actionBusy) return
+      this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
       try {
@@ -141,6 +159,7 @@ export const useEmergencyStore = defineStore('emergency', {
 
     async markNoDispatch(reason: string) {
       if (!this.item || this.actionBusy) return
+      this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
       try {
@@ -174,6 +193,7 @@ export const useEmergencyStore = defineStore('emergency', {
 
     async retryClassification() {
       if (this.actionBusy) return
+      this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
       try {
@@ -206,6 +226,7 @@ export const useEmergencyStore = defineStore('emergency', {
 
     async releaseResources(workflowId: string, expectedVersion: number, reason: string) {
       if (this.actionBusy) return
+      this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
       try {
@@ -219,6 +240,7 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async runWorkflowAction(operation: () => Promise<void>) {
+      this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
       try {

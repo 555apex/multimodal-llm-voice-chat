@@ -18,6 +18,11 @@ PROGRESS_STEP = 32 * 1024 * 1024
 
 def resolve_model_reference(settings: Settings) -> str:
     """Use the Hub normally, or a resumable direct mirror for restricted networks."""
+    if settings.asr_model_path:
+        model_path = Path(settings.asr_model_path)
+        if not model_path.is_dir():
+            raise FileNotFoundError(f"ASR model directory not found: {model_path}")
+        return str(model_path)
     if not settings.asr_model_base_url:
         return settings.asr_model
     safe_model_name = re.sub(r"[^A-Za-z0-9_.-]", "-", settings.asr_model)

@@ -121,15 +121,23 @@ class EmergencyResourceWorkflowIntegrationTest {
 
         var plan = service.generate(eventId);
         assertFalse(plan.hasResourceShortage());
-        assertTrue(plan.allocatedResources().stream()
-                .allMatch(item -> item.dispatchScope() == DispatchScope.CROSS_CITY));
+        // The versioned response plan also adds mandatory baseline resources; only
+        // the selected type is deliberately unavailable in the local city.
+        var crossCityResources = plan.allocatedResources().stream()
+                .filter(item -> item.resourceTypeCode().equals(candidate.get("resource_type_code").toString()))
+                .toList();
+        assertFalse(crossCityResources.isEmpty());
+        assertTrue(crossCityResources.stream().allMatch(item -> item.dispatchScope() == DispatchScope.CROSS_CITY));
         plan.allocatedResources().forEach(item -> {
             var quantities = jdbc.queryForMap("""
                     SELECT available_quantity, minimum_reserve_quantity
                     FROM w_emergency_resource WHERE resource_id = ?
                     """, item.resourceId());
-            assertTrue(((Number) quantities.get("available_quantity")).intValue()
-                    >= ((Number) quantities.get("minimum_reserve_quantity")).intValue());
+            int available = ((Number) quantities.get("available_quantity")).intValue();
+            assertTrue(available >= 0);
+            if (item.dispatchScope() == DispatchScope.CROSS_CITY) {
+                assertTrue(available >= ((Number) quantities.get("minimum_reserve_quantity")).intValue());
+            }
         });
 
         var published = publish(plan.planId(), eventId, false);

@@ -37,12 +37,22 @@ export async function streamAgentMessage(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-
-  while (true) {
-    const { value, done } = await reader.read()
-    buffer += decoder.decode(value, { stream: !done }).replaceAll('\r\n', '\n')
-    buffer = consumeFrames(buffer, onEvent, done)
-    if (done) break
+  let terminal = false
+  try {
+    while (!terminal) {
+      const { value, done } = await reader.read()
+      buffer += decoder.decode(value, { stream: !done })
+      buffer = consumeFrames(buffer, (event) => {
+        if (terminal) return
+        terminal = event.name === 'run.completed' || event.name === 'run.failed'
+        onEvent(event)
+      }, done)
+      if (done) break
+    }
+    if (!terminal) throw new AgentStreamError('回答连接已中断，请重新提交问题', 'AGENT_STREAM_INTERRUPTED')
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
   }
 }
 
@@ -52,7 +62,8 @@ export function consumeFrames(
   onEvent: (event: AgentEvent) => void,
   flush = false,
 ) {
-  let buffer = input
+  // Normalize after appending: CR and LF may arrive in different network chunks.
+  let buffer = input.replaceAll('\r\n', '\n')
   let boundary = buffer.indexOf('\n\n')
   while (boundary >= 0) {
     parseFrame(buffer.slice(0, boundary), onEvent)

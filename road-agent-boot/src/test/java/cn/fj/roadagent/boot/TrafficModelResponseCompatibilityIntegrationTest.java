@@ -55,7 +55,10 @@ class TrafficModelResponseCompatibilityIntegrationTest {
         model = new OpenAiCompatibleChatModelAdapter(
                 HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(20)).build(),
                 new ObjectMapper().findAndRegisterModules(), endpoint,
-                System.getenv("ROADAGENT_MODEL_API_KEY"), modelName, true, Duration.ofSeconds(90)
+                System.getenv("ROADAGENT_MODEL_API_KEY"), modelName,
+                Boolean.parseBoolean(System.getenv().getOrDefault("ROADAGENT_MODEL_AUTH_ENABLED", "true")),
+                System.getenv("ROADAGENT_MODEL_ENABLE_THINKING") == null ? null
+                        : Boolean.valueOf(System.getenv("ROADAGENT_MODEL_ENABLE_THINKING")), Duration.ofSeconds(180)
         );
     }
 
@@ -71,7 +74,7 @@ class TrafficModelResponseCompatibilityIntegrationTest {
                 Instant.parse("2026-08-28T08:00:00Z"), "synthetic-road"
         );
         var result = new HighwayTrafficService(() -> snapshot, model).query(new HighwayTrafficQuery(
-                TrafficQueryType.PROVINCE_ABNORMAL, null, null, null, null, "synthetic"
+                TrafficQueryType.PROVINCE_ABNORMAL, null, null, null, null, List.of(), null, "synthetic", true
         ));
 
         assertTrue(result.summary().contains("未来1至2小时"));

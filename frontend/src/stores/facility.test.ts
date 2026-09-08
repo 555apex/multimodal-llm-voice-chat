@@ -35,6 +35,35 @@ describe('facility warning store', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('discards a report arriving after switching to focus', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof fetchFacilityHealthReport>>) => void
+    vi.mocked(fetchFacilityHealthReport).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    vi.mocked(fetchFacilityFocus).mockResolvedValue([])
+    const store = useFacilityStore()
+    const old = store.showReport()
+    await store.showFocus()
+    finish({ generatedAt: '', activeAlertCount: 1, affectedFacilityCount: 1,
+      warningCount: 1, severeCount: 0, emergencyCount: 0, pendingCount: 1, confirmedCount: 0,
+      overallHealth: 'NO_ACTIVE_ALERT', overallHealthName: '', summary: 'old report', facilities: [] })
+    await old
+    expect(store.viewMode).toBe('focus')
+    expect(store.focusItems).toEqual([])
+    expect(store.report).toBeNull()
+    expect(store.polling).toBe(false)
+  })
+
+  it('discards an old filter response and fetches the new status immediately', async () => {
+    let finish!: (value: FacilityAlertPage) => void
+    vi.mocked(fetchFacilityAlerts).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const store = useFacilityStore()
+    const old = store.refresh()
+    await store.selectStatus('CONFIRMED')
+    finish({ ...page, total: 999 })
+    await old
+    expect(fetchFacilityAlerts).toHaveBeenLastCalledWith('CONFIRMED', '', 0, 20)
+    expect(store.pageData?.total).toBe(0)
+  })
+
   it('polls pending warnings every five seconds only while visible', async () => {
     const store = useFacilityStore()
     store.startPolling()

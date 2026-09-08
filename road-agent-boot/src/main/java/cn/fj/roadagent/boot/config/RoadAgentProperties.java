@@ -59,6 +59,7 @@ public class RoadAgentProperties {
         private String apiKey = "";
         private String modelName = "deepseek-v4-flash";
         private boolean authEnabled = true;
+        private Boolean enableThinking;
         private int timeoutSeconds = 60;
 
         public String getProvider() {
@@ -100,6 +101,10 @@ public class RoadAgentProperties {
         public void setAuthEnabled(boolean authEnabled) {
             this.authEnabled = authEnabled;
         }
+
+        public Boolean getEnableThinking() { return enableThinking; }
+
+        public void setEnableThinking(Boolean value) { enableThinking = value; }
 
         public int getTimeoutSeconds() {
             return timeoutSeconds;

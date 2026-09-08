@@ -1,5 +1,9 @@
 # 福建应急交通 Agent
 
+> **DGX 合并部署版本（业务基准 `61e64d4`）**：运行配置、发布和回滚见 [合并记录](docs/DGX_MERGE_20260908.md)，模型依赖见 [configs/models.yaml](configs/models.yaml)。
+> DGX 使用本地 Qwen3.6、Qwen3-TTS 和 faster-whisper small，保留数字人动作与口型。公网入口与登录凭据沿用 DGX。
+> 下方通用开发说明继承上游版本，其中申请云端 API Key、Edge-TTS、首次数据库初始化及旧容器资源估算不适用于本次 DGX 部署。原文另存于 [上游 README](docs/UPSTREAM_README_61e64d4.md)，供业务设计查阅；现有 DGX 不应执行初始化脚本。
+
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
 ```text

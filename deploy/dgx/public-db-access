@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_ENV_FILE="$ROOT/.env"
+ADMIN_ENV_FILE="$ROOT/.env.db-admin"
+DB_ADMIN_ENV_FILE="${ROADAGENT_DB_ADMIN_ENV_FILE:-$ADMIN_ENV_FILE}"
+PUBLIC_CONFIG_DIR="${ROADAGENT_PUBLIC_CONFIG_DIR:-/home/whtc/.config/road-agent}"
+PUBLIC_DB_ACCESS_FILE="${ROADAGENT_PUBLIC_DB_ACCESS_FILE:-$PUBLIC_CONFIG_DIR/public-original-db.env}"
+CLIENT_ENTRYPOINT="$ROOT/mysql-client-entrypoint"
+PUBLIC_DB_USERNAME="roadagent_public_app"
+
+TRAFFIC_TABLES=(
+  w_highway_network
+  w_road_network_status
+  w_congestion_detection_result
+  w_road_capacity
+  w_transport_hubs
+  w_region_code
+  w_vehicletravelpatternanalyzer
+)
+
+EMERGENCY_TABLES=(
+  w_abnormal_event
+  w_emergency_dispatch_order
+  w_emergency_dispatch_workflow
+  w_emergency_professional_review
+  w_emergency_command_decision
+  w_emergency_dispatch_action_log
+  w_emergency_resource
+  w_emergency_resource_allocation
+)
+
+die() {
+  echo "$*" >&2
+  exit 1
+}
+
+env_value() {
+  local file="$1"
+  local key="$2"
+  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+client_image() {
+  local configured
+  configured="$(env_value "$BASE_ENV_FILE" MYSQL_CLIENT_IMAGE)"
+  printf '%s\n' "${configured:-dockerproxy.net/library/mysql:8.4.11-oraclelinux9}"
+}
+
+database_schema() {
+  local jdbc schema_and_query schema
+  jdbc="$(env_value "$BASE_ENV_FILE" ROADAGENT_DB_URL)"
+  jdbc="${jdbc#jdbc:mysql://}"
+  [[ "$jdbc" == */* ]] || die "invalid ROADAGENT_DB_URL in $BASE_ENV_FILE"
+  schema_and_query="${jdbc#*/}"
+  schema="${schema_and_query%%\?*}"
+  [[ "$schema" =~ ^[A-Za-z0-9_]+$ ]] || die "unsafe or empty original database schema"
+  printf '%s\n' "$schema"
+}
+
+require_files() {
+  [[ -f "$BASE_ENV_FILE" ]] || die "missing runtime database environment: $BASE_ENV_FILE"
+  if [[ ! -f "$DB_ADMIN_ENV_FILE" ]]; then
+    DB_ADMIN_ENV_FILE="$BASE_ENV_FILE"
+  fi
+  [[ -x "$CLIENT_ENTRYPOINT" ]] || die "database client is not executable: $CLIENT_ENTRYPOINT"
+  local file
+  for file in "$BASE_ENV_FILE" "$DB_ADMIN_ENV_FILE"; do
+    local key
+    for key in ROADAGENT_DB_URL ROADAGENT_DB_USERNAME ROADAGENT_DB_PASSWORD; do
+      grep -Eq "^${key}=.+" "$file" || die "missing $key in $file"
+    done
+    [[ "$(stat -c '%a' "$file")" == "600" ]] || die "database environment must have mode 600: $file"
+  done
+}
+
+db_client() {
+  local environment_file="$1"
+  shift
+  docker run --rm --network host \
+    --env-file "$environment_file" \
+    --volume "$CLIENT_ENTRYPOINT:/db-tool:ro" \
+    --entrypoint /db-tool \
+    "$(client_image)" "$@"
+}
+
+ensure_public_environment() {
+  mkdir -p "$PUBLIC_CONFIG_DIR"
+  chmod 700 "$PUBLIC_CONFIG_DIR"
+  if [[ -f "$PUBLIC_DB_ACCESS_FILE" ]]; then
+    [[ "$(stat -c '%a' "$PUBLIC_DB_ACCESS_FILE")" == "600" ]] || \
+      die "public database access file must have mode 600: $PUBLIC_DB_ACCESS_FILE"
+    [[ "$(env_value "$PUBLIC_DB_ACCESS_FILE" ROADAGENT_DB_USERNAME)" == "$PUBLIC_DB_USERNAME" ]] || \
+      die "unexpected public database username in $PUBLIC_DB_ACCESS_FILE"
+    return
+  fi
+
+  local password temporary_file
+  password="$(openssl rand -hex 24)"
+  temporary_file="$(mktemp "$PUBLIC_CONFIG_DIR/public-original-db.env.XXXXXX")"
+  chmod 600 "$temporary_file"
+  {
+    echo "ROADAGENT_DB_URL=$(env_value "$BASE_ENV_FILE" ROADAGENT_DB_URL)"
+    echo "ROADAGENT_DB_USERNAME=$PUBLIC_DB_USERNAME"
+    echo "ROADAGENT_DB_PASSWORD=$password"
+  } > "$temporary_file"
+  mv "$temporary_file" "$PUBLIC_DB_ACCESS_FILE"
+  chmod 600 "$PUBLIC_DB_ACCESS_FILE"
+  echo "Created original-database public application credentials: $PUBLIC_DB_ACCESS_FILE"
+}
+
+apply_grants() {
+  local schema password sql table
+  schema="$(database_schema)"
+  password="$(env_value "$PUBLIC_DB_ACCESS_FILE" ROADAGENT_DB_PASSWORD)"
+  [[ "$password" =~ ^[a-f0-9]{48}$ ]] || die "unexpected generated public database password format"
+
+  sql="CREATE USER IF NOT EXISTS '$PUBLIC_DB_USERNAME'@'%' IDENTIFIED BY '$password';"
+  sql+=" ALTER USER '$PUBLIC_DB_USERNAME'@'%' IDENTIFIED BY '$password';"
+  sql+=" REVOKE ALL PRIVILEGES, GRANT OPTION FROM '$PUBLIC_DB_USERNAME'@'%';"
+  for table in "${TRAFFIC_TABLES[@]}"; do
+    sql+=" GRANT SELECT ON \`$schema\`.\`$table\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  done
+  for table in "${EMERGENCY_TABLES[@]}"; do
+    sql+=" GRANT SELECT, INSERT, UPDATE, DELETE ON \`$schema\`.\`$table\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  done
+  sql+=" GRANT SELECT, UPDATE ON \`$schema\`.\`w_lw_incident\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  sql+=" GRANT SELECT, INSERT ON \`$schema\`.\`w_emergency_event_classification\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  sql+=" GRANT SELECT ON \`$schema\`.\`w_emergency_response_plan\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  sql+=" GRANT SELECT ON \`$schema\`.\`w_festival_data\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  sql+=" GRANT SELECT, UPDATE (status, remark) ON \`$schema\`.\`w_realtime_abnormal\` TO '$PUBLIC_DB_USERNAME'@'%';"
+  db_client "$DB_ADMIN_ENV_FILE" query "$sql" >/dev/null
+  unset password sql
+}
+
+verify_access() {
+  local schema table probe_id probe_custom result
+  schema="$(database_schema)"
+
+  for table in "${TRAFFIC_TABLES[@]}" "${EMERGENCY_TABLES[@]}" w_lw_incident w_emergency_event_classification w_emergency_response_plan w_festival_data w_realtime_abnormal; do
+    db_client "$PUBLIC_DB_ACCESS_FILE" query "SELECT 1 FROM \`$schema\`.\`$table\` LIMIT 0" >/dev/null
+  done
+  if db_client "$PUBLIC_DB_ACCESS_FILE" query \
+      "UPDATE \`$schema\`.\`w_highway_network\` SET route_name=route_name WHERE 1=0" \
+      >/dev/null 2>&1; then
+    die "traffic table write protection failed for $PUBLIC_DB_USERNAME"
+  fi
+
+  probe_id="-$(( $(date +%s) * 1000 + RANDOM ))"
+  probe_custom="PUBLIC-PERM-$(date +%s)-$RANDOM"
+  result="$(db_client "$PUBLIC_DB_ACCESS_FILE" query "
+    START TRANSACTION;
+    INSERT INTO \`$schema\`.\`w_abnormal_event\`
+      (id, custom_id, occurrence_time, device_id, event_type, description,
+       event_city_code, event_city_name, del_flag, create_time, update_time, event_status)
+      VALUES ($probe_id, '$probe_custom', CURRENT_TIMESTAMP, 'PUBLIC-PERMISSION-PROBE',
+              'ET101', '公网权限验证临时记录', '350100', '福州', 'N',
+              CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0);
+    UPDATE \`$schema\`.\`w_abnormal_event\`
+      SET description='公网权限验证已更新' WHERE id=$probe_id;
+    SELECT description FROM \`$schema\`.\`w_abnormal_event\` WHERE id=$probe_id;
+    DELETE FROM \`$schema\`.\`w_abnormal_event\` WHERE id=$probe_id;
+    ROLLBACK;
+  " | tr -d '\r')"
+  [[ "$result" == "公网权限验证已更新" ]] || die "emergency table CRUD verification failed"
+  echo "Original database access verified: traffic=SELECT only; emergency=SELECT,INSERT,UPDATE,DELETE"
+}
+
+ensure_access() {
+  require_files
+  ensure_public_environment
+  apply_grants
+  verify_access
+}
+
+case "${1:-}" in
+  ensure)
+    ensure_access
+    ;;
+  verify)
+    require_files
+    [[ -f "$PUBLIC_DB_ACCESS_FILE" ]] || die "public original-database access is not configured; run ensure first"
+    verify_access
+    ;;
+  grants)
+    require_files
+    [[ -f "$PUBLIC_DB_ACCESS_FILE" ]] || die "public original-database access is not configured; run ensure first"
+    db_client "$PUBLIC_DB_ACCESS_FILE" info
+    ;;
+  *)
+    echo "usage: public-db-access [ensure|verify|grants]" >&2
+    exit 2
+    ;;
+esac

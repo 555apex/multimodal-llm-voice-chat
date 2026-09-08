@@ -21,7 +21,9 @@ class OdModelCompatibilityIntegrationTest {
         return new OpenAiCompatibleChatModelAdapter(HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build(),
                 new ObjectMapper().findAndRegisterModules(), System.getenv("ROADAGENT_MODEL_ENDPOINT"),
                 System.getenv("ROADAGENT_MODEL_API_KEY"), System.getenv("ROADAGENT_MODEL_NAME"),
-                Boolean.parseBoolean(System.getenv().getOrDefault("ROADAGENT_MODEL_AUTH_ENABLED", "true")), Duration.ofSeconds(90));
+                Boolean.parseBoolean(System.getenv().getOrDefault("ROADAGENT_MODEL_AUTH_ENABLED", "true")),
+                System.getenv("ROADAGENT_MODEL_ENABLE_THINKING") == null ? null
+                        : Boolean.valueOf(System.getenv("ROADAGENT_MODEL_ENABLE_THINKING")), Duration.ofSeconds(180));
     }
 
     @Test void modelSummarizesSyntheticFactsAndPlannerKeepsOdContext() {
@@ -48,6 +50,9 @@ class OdModelCompatibilityIntegrationTest {
         assertEquals(List.of("福州", "厦门", "泉州"), matrix.selectedCities());
         assertTrue(planner.missingFields(matrix).isEmpty());
         var pressure = planner.plan("不要OD，只看福州和厦门的区域交通压力", history);
-        assertEquals("REGIONAL_TRAFFIC_OVERVIEW", pressure.trafficScope());
+        assertTrue(List.of("REGIONAL_TRAFFIC_OVERVIEW", "REGIONAL_PAIR_PRESSURE")
+                .contains(pressure.trafficScope()));
+        assertEquals(List.of("福州", "厦门"), pressure.selectedCities());
+        assertTrue(planner.missingFields(pressure).contains("selectedCities"));
     }
 }

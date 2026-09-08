@@ -104,7 +104,7 @@ public class RoadAgentConfiguration {
         HttpClient client = HttpClient.newBuilder().connectTimeout(timeout).build();
         return new OpenAiCompatibleChatModelAdapter(
                 client, objectMapper, model.getEndpoint(), model.getApiKey(), model.getModelName(),
-                model.isAuthEnabled(), timeout
+                model.isAuthEnabled(), model.getEnableThinking(), timeout
         );
     }
 

@@ -61,6 +61,28 @@ describe('emergency workflow store', () => {
 
   afterEach(() => vi.useRealTimers())
 
+  it('keeps the newest stage when an older inbox arrives late', async () => {
+    let finish!: (value: WorkflowInbox) => void
+    vi.mocked(fetchWorkflowInbox).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const store = useEmergencyStore()
+    const old = store.refresh()
+    vi.mocked(fetchWorkflowInbox).mockResolvedValue({ ...inbox, item: { ...item, currentStage: 'LEVEL_2' } })
+    await store.selectStage('LEVEL_2')
+    finish(inbox)
+    await old
+    expect(store.item?.currentStage).toBe('LEVEL_2')
+    expect(store.polling).toBe(false)
+  })
+
+  it('preserves the history page during automatic refresh', async () => {
+    vi.mocked(fetchWorkflowHistory).mockImplementation(async (page = 0) => ({ page, size: 20, total: 80, items: [] }))
+    const store = useEmergencyStore()
+    await store.loadHistory(2)
+    await store.refresh()
+    expect(fetchWorkflowHistory).toHaveBeenLastCalledWith(2, 20)
+    expect(store.history?.page).toBe(2)
+  })
+
   it('polls the selected stage every five seconds only while visible', async () => {
     const store = useEmergencyStore()
     store.startPolling()

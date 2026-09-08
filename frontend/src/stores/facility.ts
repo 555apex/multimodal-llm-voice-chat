@@ -37,6 +37,7 @@ export const useFacilityStore = defineStore('facility', {
     focusItems: [] as FacilityFocusItem[],
     counts: emptyCounts(),
     polling: false,
+    requestSequence: 0,
     actionBusy: false,
     queryStatus: 'idle' as FacilityQueryStatus,
     errorMessage: '',
@@ -45,6 +46,10 @@ export const useFacilityStore = defineStore('facility', {
   }),
 
   actions: {
+    invalidateQuery() {
+      this.requestSequence++
+      this.polling = false
+    },
     startPolling() {
       if (this.timerId) return
       void this.refresh()
@@ -55,6 +60,7 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     stopPolling() {
+      this.invalidateQuery()
       if (this.timerId) window.clearInterval(this.timerId)
       this.timerId = 0
       document.removeEventListener('visibilitychange', this.handleVisibility)
@@ -66,12 +72,14 @@ export const useFacilityStore = defineStore('facility', {
 
     async selectStatus(status: FacilityAlertStatus) {
       this.selectedStatus = status
+      this.pageData = null
       this.viewMode = 'alerts'
       await this.loadAlerts(0)
     },
 
     async selectAlarmLevel(level: AlarmLevel | '') {
       this.selectedAlarmLevel = level
+      this.pageData = null
       this.viewMode = 'alerts'
       await this.loadAlerts(0)
     },
@@ -82,11 +90,13 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     async showReport() {
+      this.invalidateQuery()
       this.viewMode = 'report'
       await this.refresh()
     },
 
     async showFocus() {
+      this.invalidateQuery()
       this.viewMode = 'focus'
       await this.refresh()
     },
@@ -98,12 +108,15 @@ export const useFacilityStore = defineStore('facility', {
         return
       }
       this.polling = true
+      const sequence = ++this.requestSequence
+      const view = this.viewMode
       this.queryStatus = 'loading'
       try {
         const [countPage, content] = await Promise.all([
           fetchFacilityAlerts('PENDING', '', 0, 1),
-          this.viewMode === 'report' ? fetchFacilityHealthReport() : fetchFacilityFocus(10),
+          view === 'report' ? fetchFacilityHealthReport() : fetchFacilityFocus(10),
         ])
+        if (sequence !== this.requestSequence || view !== this.viewMode) return
         this.counts = countPage.counts
         if (this.viewMode === 'report') this.report = content as FacilityHealthReport
         else this.focusItems = content as FacilityFocusItem[]
@@ -113,29 +126,37 @@ export const useFacilityStore = defineStore('facility', {
         this.queryStatus = hasContent ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        if (sequence !== this.requestSequence) return
         this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '设施预警查询失败'
       } finally {
-        this.polling = false
+        if (sequence === this.requestSequence) this.polling = false
       }
     },
 
     async loadAlerts(page = 0) {
-      if (this.polling || this.actionBusy || this.formOpen) return
+      if (this.actionBusy || this.formOpen) return
+      const sequence = ++this.requestSequence
+      const status = this.selectedStatus
+      const level = this.selectedAlarmLevel
       this.polling = true
       if (!this.pageData) this.queryStatus = 'loading'
       try {
-        this.pageData = await fetchFacilityAlerts(
-          this.selectedStatus, this.selectedAlarmLevel, page, 20,
+        const result = await fetchFacilityAlerts(
+          status, level, page, 20,
         )
+        if (sequence !== this.requestSequence || this.viewMode !== 'alerts'
+          || status !== this.selectedStatus || level !== this.selectedAlarmLevel) return
+        this.pageData = result
         this.counts = this.pageData.counts
         this.queryStatus = this.pageData.items.length ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        if (sequence !== this.requestSequence) return
         this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '设施预警查询失败'
       } finally {
-        this.polling = false
+        if (sequence === this.requestSequence) this.polling = false
       }
     },
 
@@ -147,6 +168,7 @@ export const useFacilityStore = defineStore('facility', {
       resolutionType?: FacilityAlertResolution,
     ) {
       if (this.actionBusy) return
+      this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
       try {

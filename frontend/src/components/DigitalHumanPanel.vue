@@ -1,17 +1,19 @@
 <script setup lang="ts">
-defineProps<{ state: 'idle' | 'listening' | 'speaking' | 'error' }>()
+import DigitalHumanPortrait from './DigitalHumanPortrait.vue'
+import type { DigitalHumanSignal } from '../types/digitalHuman'
+
+defineProps<{ signal: DigitalHumanSignal }>()
 </script>
 
 <template>
-  <aside class="human-panel" :data-state="state">
+  <aside class="human-panel" :data-state="signal.mode">
     <div class="human-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
     <div class="human-portrait-wrap">
-      <img
-        class="human-portrait"
-        src="/emergency-agent-avatar.png"
-        alt="应急交通数字助手"
+      <DigitalHumanPortrait
+        class="human-digital-portrait"
+        :mode="signal.mode"
+        :speech-level="signal.speechLevel"
       />
-      <div class="human-speaking-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
     </div>
     <div class="human-details">
       <div class="human-identity">
@@ -28,9 +30,7 @@ defineProps<{ state: 'idle' | 'listening' | 'speaking' | 'error' }>()
         <li><span aria-hidden="true">◆</span>应急处置与设施预警</li>
         <li><span aria-hidden="true">◆</span>语音智能交互</li>
       </ul>
-      <div class="human-state">
-        {{ state === 'speaking' ? '正在朗读' : state === 'listening' ? '正在聆听或处理' : state === 'error' ? '处理异常' : '在线待命' }}
-      </div>
+      <div class="human-state" aria-live="polite">{{ signal.statusLabel }}</div>
     </div>
   </aside>
 </template>

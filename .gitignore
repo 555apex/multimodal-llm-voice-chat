@@ -54,3 +54,7 @@ speech-service/tmp/
 
 # Maven Wrapper must remain tracked:
 # mvnw, mvnw.cmd and .mvn/wrapper/maven-wrapper.properties
+
+outputs/
+.releases/
+.env.db-admin

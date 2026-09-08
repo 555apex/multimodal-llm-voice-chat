@@ -76,8 +76,13 @@ export const useAgentStore = defineStore('agent', {
           this.applyEvent(assistantMessage.id, event)
         })
       } catch (error) {
+        useSpeechStore().stop()
         const target = this.findMessage(assistantMessage.id)
         target.content = ''
+        target.traffic = undefined
+        target.trafficResults = undefined
+        target.dispatch = undefined
+        target.speechText = undefined
         target.status = 'failed'
         target.errorMessage = error instanceof Error ? error.message : '流式请求失败'
       } finally {
@@ -119,6 +124,7 @@ export const useAgentStore = defineStore('agent', {
           }
           break
         case 'run.failed': {
+          useSpeechStore().stop()
           const failed = event.data as RunFailedData
           // 按约定丢弃模型已生成的半截内容，整次请求显示失败。
           message.content = ''

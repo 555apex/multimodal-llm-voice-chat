@@ -13,6 +13,117 @@ let activePlaybackCompletion: {
 let playbackGeneration = 0
 const audioCache = new Map<string, Blob>()
 
+type CapturableAudio = HTMLAudioElement & { captureStream?: () => MediaStream }
+type AudioContextConstructor = new () => AudioContext
+
+let amplitudeFrame: number | undefined
+let amplitudeCancelFrame: ((handle: number) => void) | undefined
+let amplitudeContext: AudioContext | null = null
+let amplitudeSource: MediaStreamAudioSourceNode | null = null
+let amplitudeStream: MediaStream | null = null
+
+function scheduleAmplitudeFrame(callback: FrameRequestCallback) {
+  if (typeof window.requestAnimationFrame === 'function') {
+    amplitudeCancelFrame = (handle) => window.cancelAnimationFrame(handle)
+    amplitudeFrame = window.requestAnimationFrame(callback)
+    return
+  }
+  amplitudeCancelFrame = (handle) => window.clearTimeout(handle)
+  amplitudeFrame = window.setTimeout(() => callback(performance.now()), 33)
+}
+
+function stopAmplitudeTracking(update: (level: number) => void) {
+  if (amplitudeFrame !== undefined) amplitudeCancelFrame?.(amplitudeFrame)
+  amplitudeFrame = undefined
+  amplitudeCancelFrame = undefined
+  amplitudeSource?.disconnect()
+  amplitudeSource = null
+  amplitudeStream?.getTracks().forEach((track) => track.stop())
+  amplitudeStream = null
+  const context = amplitudeContext
+  amplitudeContext = null
+  if (context && context.state !== 'closed') void context.close().catch(() => undefined)
+  update(0)
+}
+
+function startFallbackAmplitude(audio: HTMLAudioElement, update: (level: number) => void) {
+  const startedAt = performance.now()
+  const tick: FrameRequestCallback = (timestamp) => {
+    if (activeAudio !== audio || audio.paused) {
+      update(0)
+      return
+    }
+    const currentTime = Number.isFinite(audio.currentTime)
+      ? audio.currentTime
+      : (timestamp - startedAt) / 1000
+    const carrier = Math.abs(Math.sin(currentTime * 19.1))
+    const variation = 0.72 + 0.28 * Math.abs(Math.sin(currentTime * 7.3 + 0.8))
+    update(0.12 + 0.5 * carrier * variation)
+    scheduleAmplitudeFrame(tick)
+  }
+  scheduleAmplitudeFrame(tick)
+}
+
+function startAmplitudeTracking(audio: HTMLAudioElement, update: (level: number) => void) {
+  stopAmplitudeTracking(update)
+  const capture = (audio as CapturableAudio).captureStream
+  const AudioContextClass = window.AudioContext
+    ?? (window as typeof window & { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext
+  if (!capture || !AudioContextClass) {
+    startFallbackAmplitude(audio, update)
+    return
+  }
+
+  try {
+    const context = new AudioContextClass()
+    const stream = capture.call(audio)
+    const source = context.createMediaStreamSource(stream)
+    const analyser = context.createAnalyser()
+    analyser.fftSize = 256
+    analyser.smoothingTimeConstant = 0.65
+    source.connect(analyser)
+    amplitudeContext = context
+    amplitudeSource = source
+    amplitudeStream = stream
+    const samples = new Uint8Array(analyser.fftSize)
+    let envelope = 0
+    let lastUpdate = 0
+
+    const tick: FrameRequestCallback = (timestamp) => {
+      if (activeAudio !== audio || audio.paused) {
+        update(0)
+        return
+      }
+      if (timestamp - lastUpdate >= 33) {
+        analyser.getByteTimeDomainData(samples)
+        let squareSum = 0
+        for (const sample of samples) {
+          const normalized = (sample - 128) / 128
+          squareSum += normalized * normalized
+        }
+        const rms = Math.sqrt(squareSum / samples.length)
+        const target = Math.min(1, Math.max(0, (rms - 0.025) / 0.18))
+        envelope += (target - envelope) * (target > envelope ? 0.55 : 0.22)
+        if (target === 0 && envelope < 0.012) envelope = 0
+        update(envelope)
+        lastUpdate = timestamp
+      }
+      scheduleAmplitudeFrame(tick)
+    }
+
+    void context.resume().catch(() => {
+      if (activeAudio === audio) {
+        stopAmplitudeTracking(update)
+        startFallbackAmplitude(audio, update)
+      }
+    })
+    scheduleAmplitudeFrame(tick)
+  } catch {
+    stopAmplitudeTracking(update)
+    startFallbackAmplitude(audio, update)
+  }
+}
+
 export const useSpeechStore = defineStore('speech', {
   state: () => ({
     capabilities: null as SpeechCapabilities | null,
@@ -22,6 +133,7 @@ export const useSpeechStore = defineStore('speech', {
     surfaceActive: true,
     playbackMessageId: '',
     playbackStatus: 'idle' as SpeechPlaybackStatus,
+    playbackAmplitude: 0,
     playbackError: '',
   }),
 
@@ -58,6 +170,7 @@ export const useSpeechStore = defineStore('speech', {
       if (this.playbackMessageId === messageId) {
         if (this.playbackStatus === 'playing') {
           activeAudio?.pause()
+          stopAmplitudeTracking((level) => { this.playbackAmplitude = level })
           this.playbackStatus = 'paused'
           return
         }
@@ -65,6 +178,7 @@ export const useSpeechStore = defineStore('speech', {
           try {
             await activeAudio.play()
             this.playbackStatus = 'playing'
+            startAmplitudeTracking(activeAudio, (level) => { this.playbackAmplitude = level })
           } catch {
             this.playbackStatus = 'failed'
             this.playbackError = '浏览器阻止了音频播放，请再次点击播放'
@@ -143,7 +257,10 @@ export const useSpeechStore = defineStore('speech', {
           this.releaseActiveAudio(new Error('合成音频无法播放'))
         }
         void audio.play().then(() => {
-          if (generation === playbackGeneration) this.playbackStatus = 'playing'
+          if (generation === playbackGeneration) {
+            this.playbackStatus = 'playing'
+            startAmplitudeTracking(audio, (level) => { this.playbackAmplitude = level })
+          }
         }).catch((error) => {
           this.releaseActiveAudio(
             error instanceof Error ? error : new Error('浏览器阻止了音频播放'),
@@ -172,6 +289,7 @@ export const useSpeechStore = defineStore('speech', {
     releaseActiveAudio(error?: Error) {
       const completion = activePlaybackCompletion
       activePlaybackCompletion = null
+      stopAmplitudeTracking((level) => { this.playbackAmplitude = level })
       if (activeAudio) {
         activeAudio.onended = null
         activeAudio.onerror = null

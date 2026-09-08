@@ -1,0 +1,10 @@
+--- a/core/tokenizer_25hz/vq/speech_vq.py
++++ b/core/tokenizer_25hz/vq/speech_vq.py
+@@ -25 +24,0 @@
+-import torchaudio.compliance.kaldi as kaldi
+@@ -140,2 +139,5 @@
+     def extract_code(self, audio):
++        # CustomVoice preset speakers do not use the x-vector path. Import the
++        # optional binary dependency only when voice-cloning code is requested.
++        import torchaudio.compliance.kaldi as kaldi
+         with torch.no_grad():

@@ -293,6 +293,34 @@ class DispatchApplicationServiceTest {
         return new Fixture(service, events, plans, workflows, resources, allocations);
     }
 
+    @Test
+    void lateSuccessOrFailureMustNotOverwriteANewerGenerationClaim() {
+        for (boolean fail : List.of(false, true)) {
+            Fixture[] active = new Fixture[1];
+            FixedModel model = new FixedModel() {
+                @Override
+                public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+                    // While this model call was running, a retry acquired the same plan version.
+                    var repository = active[0].workflows;
+                    var current = repository.findWorkflowByEventId(event().eventId()).orElseThrow();
+                    var retry = current.retryGeneration(NOW.plusSeconds(180));
+                    assertTrue(repository.updateWorkflow(retry, current.lockVersion()));
+                    if (fail) throw new RuntimeException("old model request failed late");
+                    return super.generateStructured(request, resultType);
+                }
+            };
+            active[0] = fixture(model);
+            Fixture f = active[0];
+            assertThrows(RuntimeException.class, () -> f.service.generate(event().eventId()));
+            var latest = f.workflows.findWorkflowByEventId(event().eventId()).orElseThrow();
+            assertEquals(WorkflowStatus.GENERATING, latest.status());
+            assertEquals(1, latest.lockVersion());
+            assertEquals(DispatchStatus.GENERATING, f.plans.findLatestByEventId(event().eventId()).orElseThrow().status());
+            assertTrue(f.allocations.values.isEmpty());
+            assertEquals(5, f.resources.resources.get("ER-FZ-ROAD").availableQuantity());
+        }
+    }
+
     private EmergencyEvent event() {
         return new EmergencyEvent(
                 "202607280000000001",

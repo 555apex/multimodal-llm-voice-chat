@@ -839,7 +839,10 @@ public final class DispatchApplicationService implements
             return unitOfWork.required(() -> {
                 EmergencyWorkflow locked = lockWorkflow(workflow.workflowId());
                 if (!locked.planId().equals(generating.planId())
-                        || locked.planVersion() != generating.version()) {
+                        || locked.planVersion() != generating.version()
+                        || locked.lockVersion() != workflow.lockVersion()
+                        || (locked.status() != WorkflowStatus.GENERATING
+                            && locked.status() != WorkflowStatus.REVISING)) {
                     throw conflict("DISPATCH_VERSION_CONFLICT", "返工期间方案版本已变化");
                 }
                 Set<String> typeCodes = requirements.stream()
@@ -897,7 +900,10 @@ public final class DispatchApplicationService implements
             unitOfWork.required(() -> {
                 EmergencyWorkflow locked = lockWorkflow(workflow.workflowId());
                 if (!locked.planId().equals(generating.planId())
-                        || locked.planVersion() != generating.version()) {
+                        || locked.planVersion() != generating.version()
+                        || locked.lockVersion() != workflow.lockVersion()
+                        || (locked.status() != WorkflowStatus.GENERATING
+                            && locked.status() != WorkflowStatus.REVISING)) {
                     return;
                 }
                 Instant now = clock.instant();
@@ -1131,12 +1137,15 @@ public final class DispatchApplicationService implements
                 你是福建公路应急预案填充与资源需求分析器。数据库预案和资源库是唯一可信来源。
                 必须输出严格JSON对象，仅包含templateVariables、resourceRequirements和supplementalAdvice。
                 templateVariables是对象，键必须逐字选自用户提供的待填项；事实不明时填“待核实”，不得臆测。
+                每个待填项是模板一对【】之间的完整文本，可能包含分号、顿号、斜线和句号，必须完整复制，禁止拆分、缩写或改写。
+                “应核实现场事实”仅用于理解上下文，不能将其中的单条事实名称作为templateVariables的键。
+                可以省略任何不确定的填充项（系统会显示“待核实”）；不能确定键名时返回空对象templateVariables:{}，不要猜测键名。
                 resourceRequirements是数组，每项仅包含resourceTypeCode、quantity、purpose。
                 resourceTypeCode必须逐字选自预案资源基线，不得创造其他类型。BASE项不得删除，CONDITIONAL项只在现场事实满足条件时选择。
                 quantity必须是大于0的整数。不得输出资源ID、资源名称、来源城市、距离、库存或到达时间。
                 即使当前库存可能不足，也只能提出白名单内资源的真实需求，缺口由系统计算。
                 supplementalAdvice只写预案模板未覆盖且由事件事实支持的补充建议，没有则返回空字符串；不得重写或删改预案。
-                输出格式示例：{"templateVariables":{"信息更新间隔":"30"},"resourceRequirements":[{"resourceTypeCode":"ROAD_RESCUE_TEAM","quantity":1,"purpose":"现场抢通"}],"supplementalAdvice":""}
+                输出结构示例：{"templateVariables":{},"resourceRequirements":[],"supplementalAdvice":""}。实际资源需求仍须遵守上述预案基线规则。
                 """.strip();
         StringBuilder user = new StringBuilder("""
                 事件ID：%s

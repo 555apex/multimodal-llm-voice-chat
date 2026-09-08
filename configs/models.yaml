@@ -1,0 +1,18 @@
+deployment: dgx
+models:
+  llm:
+    service: model-serving-qwen
+    model: qwen3.6-35b-a3b-nvfp4
+    directory: /home/whtc/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4
+    endpoint: http://qwen:8000/v1/chat/completions
+    enable_thinking: false
+  tts:
+    directory: /home/whtc/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice
+    container_directory: /models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice
+    device: cuda:0
+    speaker: Serena
+  asr:
+    directory: /home/whtc/models/Systran--faster-whisper-small
+    container_directory: /models/Systran--faster-whisper-small
+    device: cpu
+    compute_type: int8

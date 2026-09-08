@@ -9,6 +9,8 @@ import cn.fj.roadagent.application.port.ChatModelPort;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
@@ -24,9 +26,10 @@ import java.util.stream.Stream;
 
 /**
  * 直接调用OpenAI兼容HTTP接口，不依赖LangChain。
- * DeepSeek和未来兼容OpenAI协议的服务器模型都可以使用该适配器。
+ * DGX 本地 Qwen 和其他兼容 OpenAI 协议的服务器模型都可以使用该适配器。
  */
 public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OpenAiCompatibleChatModelAdapter.class);
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -34,6 +37,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     private final String apiKey;
     private final String modelName;
     private final boolean authEnabled;
+    private final Boolean enableThinking;
     private final Duration requestTimeout;
 
     public OpenAiCompatibleChatModelAdapter(
@@ -43,6 +47,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
             String apiKey,
             String modelName,
             boolean authEnabled,
+            Boolean enableThinking,
             Duration requestTimeout
     ) {
         this.httpClient = httpClient;
@@ -51,7 +56,22 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.modelName = modelName;
         this.authEnabled = authEnabled;
+        this.enableThinking = enableThinking;
         this.requestTimeout = requestTimeout;
+    }
+
+    /** 保留未配置 Qwen thinking 参数的 OpenAI-compatible 调用方式。 */
+    public OpenAiCompatibleChatModelAdapter(
+            HttpClient httpClient,
+            ObjectMapper objectMapper,
+            String endpoint,
+            String apiKey,
+            String modelName,
+            boolean authEnabled,
+            Duration requestTimeout
+    ) {
+        this(httpClient, objectMapper, endpoint, apiKey, modelName,
+                authEnabled, null, requestTimeout);
     }
 
     @Override
@@ -143,6 +163,13 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
             HttpResponse<String> response = httpClient.send(
                     httpRequest, HttpResponse.BodyHandlers.ofString()
             );
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                LOGGER.warn(
+                        "Model request rejected status={} structured={} enableThinking={} response={}",
+                        response.statusCode(), structured, enableThinking,
+                        abbreviate(response.body(), 2000)
+                );
+            }
             requireSuccess(response.statusCode(), "模型请求失败");
             JsonNode root = objectMapper.readTree(response.body());
             JsonNode content = root.path("choices").path(0).path("message").path("content");
@@ -169,12 +196,17 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         body.put("messages", buildMessages(request));
         body.put("temperature", request.temperature());
         body.put("stream", stream);
+        if (enableThinking != null) {
+            body.put("chat_template_kwargs", Map.of("enable_thinking", enableThinking));
+        }
         if (structured) {
             body.put("response_format", Map.of("type", "json_object"));
         }
 
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
+                    // DGX's vLLM ASGI server does not accept the JDK's cleartext h2c upgrade.
+                    .version(HttpClient.Version.HTTP_1_1)
                     .timeout(requestTimeout)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)));
@@ -272,5 +304,12 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         return new ExternalServiceException(
                 "CHAT_MODEL", "MODEL_UPSTREAM_ERROR", message, cause
         );
+    }
+
+    private String abbreviate(String value, int maximumLength) {
+        if (value == null || value.length() <= maximumLength) {
+            return value;
+        }
+        return value.substring(0, maximumLength) + "...";
     }
 }
