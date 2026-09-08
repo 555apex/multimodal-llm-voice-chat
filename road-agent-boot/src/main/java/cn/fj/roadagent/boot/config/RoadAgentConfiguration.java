@@ -8,9 +8,8 @@ import cn.fj.roadagent.adapters.traffic.mysql.InMemoryHighwayTrafficSnapshotCach
 import cn.fj.roadagent.adapters.traffic.mysql.InMemoryRoadCapacitySnapshotCache;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlHighwayTrafficSnapshotSource;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlRoadCapacitySnapshotSource;
+import cn.fj.roadagent.adapters.traffic.mysql.MysqlTrafficContextEventRepository;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlRegionalTrafficRepository;
-import cn.fj.roadagent.adapters.traffic.mysql.MysqlOdTrafficRepository;
-import cn.fj.roadagent.application.port.OdTrafficDataPort;
 import cn.fj.roadagent.core.traffic.OdTrafficService;
 import cn.fj.roadagent.adapters.traffic.mysql.MysqlVehicleTravelPatternRepository;
 import cn.fj.roadagent.application.agent.ConverseWithAgentUseCase;
@@ -20,6 +19,9 @@ import cn.fj.roadagent.application.port.CityDistancePort;
 import cn.fj.roadagent.application.port.ConversationMemoryPort;
 import cn.fj.roadagent.application.port.DispatchRepository;
 import cn.fj.roadagent.application.port.EmergencyWorkflowRepository;
+import cn.fj.roadagent.application.port.EmergencyResponsePlanPort;
+import cn.fj.roadagent.application.port.EventClassificationLogPort;
+import cn.fj.roadagent.application.port.FacilityAlertPort;
 import cn.fj.roadagent.application.port.ResourceAllocationPort;
 import cn.fj.roadagent.application.port.ResourceDataPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
@@ -31,6 +33,7 @@ import cn.fj.roadagent.application.port.VehicleTravelPatternPort;
 import cn.fj.roadagent.application.port.SpeechCapabilityPort;
 import cn.fj.roadagent.application.port.SpeechRecognitionPort;
 import cn.fj.roadagent.application.port.SpeechSynthesisPort;
+import cn.fj.roadagent.application.port.TrafficContextEventPort;
 import cn.fj.roadagent.application.port.UnitOfWork;
 import cn.fj.roadagent.core.agent.AgentRuntime;
 import cn.fj.roadagent.core.agent.AgentSkill;
@@ -38,7 +41,9 @@ import cn.fj.roadagent.core.agent.IntentPlanner;
 import cn.fj.roadagent.core.agent.SkillRegistry;
 import cn.fj.roadagent.core.dispatch.DispatchApplicationService;
 import cn.fj.roadagent.core.dispatch.EmergencyDispatchSkill;
+import cn.fj.roadagent.core.dispatch.EmergencyEventClassificationService;
 import cn.fj.roadagent.core.dispatch.EmergencyResourceAllocator;
+import cn.fj.roadagent.core.facility.FacilityAlertService;
 import cn.fj.roadagent.core.speech.SpeechApplicationService;
 import cn.fj.roadagent.core.traffic.HighwayTrafficService;
 import cn.fj.roadagent.core.traffic.HighwayTrafficSkill;
@@ -130,11 +135,23 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
+    TrafficContextEventPort trafficContextEventPort(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            ObjectMapper objectMapper
+    ) {
+        return new MysqlTrafficContextEventRepository(
+                jdbcTemplate, new TransactionTemplate(transactionManager), objectMapper
+        );
+    }
+
+    @Bean
     HighwayTrafficService highwayTrafficService(
             HighwayTrafficSnapshotPort snapshotPort,
-            ChatModelPort chatModelPort
+            ChatModelPort chatModelPort,
+            TrafficContextEventPort contextEventPort
     ) {
-        return new HighwayTrafficService(snapshotPort, chatModelPort);
+        return new HighwayTrafficService(snapshotPort, chatModelPort, contextEventPort);
     }
 
     @Bean
@@ -166,9 +183,10 @@ public class RoadAgentConfiguration {
     @Bean
     RoadCapacityService roadCapacityService(
             RoadCapacitySnapshotPort snapshotPort,
+            HighwayTrafficSnapshotPort trafficSnapshotPort,
             ChatModelPort chatModelPort
     ) {
-        return new RoadCapacityService(snapshotPort, chatModelPort);
+        return new RoadCapacityService(snapshotPort, trafficSnapshotPort, chatModelPort);
     }
 
     @Bean
@@ -202,13 +220,7 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
-    OdTrafficDataPort odTrafficDataPort(JdbcTemplate jdbcTemplate, PlatformTransactionManager transactionManager,
-                                      ObjectMapper objectMapper, Clock clock) {
-        return new MysqlOdTrafficRepository(jdbcTemplate, new TransactionTemplate(transactionManager), objectMapper, clock);
-    }
-
-    @Bean
-    OdTrafficService odTrafficService(OdTrafficDataPort dataPort, ChatModelPort chatModelPort) {
+    OdTrafficService odTrafficService(RegionalTrafficDataPort dataPort, ChatModelPort chatModelPort) {
         return new OdTrafficService(dataPort, chatModelPort);
     }
 
@@ -252,6 +264,11 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
+    FacilityAlertService facilityAlertService(FacilityAlertPort alertPort, Clock clock) {
+        return new FacilityAlertService(alertPort, clock);
+    }
+
+    @Bean
     UnitOfWork unitOfWork(PlatformTransactionManager transactionManager) {
         return new SpringUnitOfWork(new TransactionTemplate(transactionManager));
     }
@@ -270,6 +287,8 @@ public class RoadAgentConfiguration {
             ResourceDataPort resourceDataPort,
             ResourceAllocationPort resourceAllocationPort,
             EmergencyResourceAllocator resourceAllocator,
+            EventClassificationLogPort classificationLogPort,
+            EmergencyResponsePlanPort responsePlanPort,
             UnitOfWork unitOfWork,
             RoadAgentProperties properties,
             Clock clock
@@ -282,9 +301,39 @@ public class RoadAgentConfiguration {
                 resourceDataPort,
                 resourceAllocationPort,
                 resourceAllocator,
+                classificationLogPort,
+                responsePlanPort,
                 unitOfWork,
                 clock,
                 Duration.ofSeconds(properties.getDispatch().getStaleGeneratingSeconds())
+        );
+    }
+
+    @Bean
+    EmergencyEventClassificationService emergencyEventClassificationService(
+            AbnormalEventPort eventPort,
+            EventClassificationLogPort classificationLogPort,
+            ChatModelPort chatModelPort,
+            UnitOfWork unitOfWork,
+            RoadAgentProperties properties,
+            Clock clock
+    ) {
+        return new EmergencyEventClassificationService(
+                eventPort, classificationLogPort, chatModelPort, unitOfWork, clock,
+                Duration.ofSeconds(properties.getDispatch().getClassificationRetrySeconds()),
+                properties.getModel().getModelName()
+        );
+    }
+
+    @Bean(initMethod = "start", destroyMethod = "close")
+    @ConditionalOnProperty(prefix = "roadagent.dispatch", name = "classification-enabled",
+            havingValue = "true", matchIfMissing = true)
+    EmergencyClassificationPoller emergencyClassificationPoller(
+            EmergencyEventClassificationService service,
+            RoadAgentProperties properties
+    ) {
+        return new EmergencyClassificationPoller(
+                service, Duration.ofSeconds(properties.getDispatch().getClassificationPollSeconds())
         );
     }
 
@@ -334,8 +383,8 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
-    IntentPlanner intentPlanner(ChatModelPort chatModelPort) {
-        return new IntentPlanner(chatModelPort);
+    IntentPlanner intentPlanner(ChatModelPort chatModelPort, HighwayTrafficSnapshotPort snapshotPort) {
+        return new IntentPlanner(chatModelPort, snapshotPort);
     }
 
     @Bean

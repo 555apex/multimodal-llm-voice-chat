@@ -48,7 +48,7 @@ class RoadAgentApplicationTest {
     @Test
     void shouldAssembleAgentWithoutCallingExternalServices() {
         when(jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM w_abnormal_event",
+                "SELECT COUNT(*) FROM w_lw_incident",
                 Integer.class
         )).thenReturn(0);
 

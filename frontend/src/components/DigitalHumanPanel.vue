@@ -25,7 +25,7 @@ defineProps<{ state: 'idle' | 'listening' | 'speaking' | 'error' }>()
       <ul class="human-capabilities">
         <li><span aria-hidden="true">◆</span>实时路况问询</li>
         <li><span aria-hidden="true">◆</span>区域交通研判</li>
-        <li><span aria-hidden="true">◆</span>应急工单辅助</li>
+        <li><span aria-hidden="true">◆</span>应急处置与设施预警</li>
         <li><span aria-hidden="true">◆</span>语音智能交互</li>
       </ul>
       <div class="human-state">

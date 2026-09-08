@@ -75,6 +75,10 @@ roadagent:
   dispatch:
     # 生成状态超过该时间后允许重试，避免服务中断留下永久卡住的工单
     stale-generating-seconds: ${ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS:120}
+    # 对待处理且event_type为空的应急事件执行规则+模型分类
+    classification-enabled: ${ROADAGENT_EVENT_CLASSIFICATION_ENABLED:true}
+    classification-poll-seconds: ${ROADAGENT_EVENT_CLASSIFICATION_POLL_SECONDS:5}
+    classification-retry-seconds: ${ROADAGENT_EVENT_CLASSIFICATION_RETRY_SECONDS:30}
 
   # ===== Docker语音服务配置 =====
   speech:

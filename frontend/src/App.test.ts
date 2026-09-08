@@ -2,6 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchWorkflowInbox } from './api/workflowApi'
+import { fetchFacilityAlerts } from './api/facilityApi'
 import { fetchSpeechCapabilities } from './api/speechApi'
 import App from './App.vue'
 import { useEmergencyStore } from './stores/emergency'
@@ -25,6 +26,13 @@ vi.mock('./api/speechApi', () => ({
   fetchSpeechCapabilities: vi.fn(),
   synthesizeSpeech: vi.fn(),
   transcribeSpeech: vi.fn(),
+}))
+
+vi.mock('./api/facilityApi', () => ({
+  fetchFacilityAlerts: vi.fn(),
+  fetchFacilityHealthReport: vi.fn(),
+  fetchFacilityFocus: vi.fn(),
+  transitionFacilityAlert: vi.fn(),
 }))
 
 const workflowItem = {
@@ -59,6 +67,34 @@ describe('command dashboard shell', () => {
       ttsAvailable: true,
       maxRecordingSeconds: 60,
       maxAudioBytes: 10485760,
+    })
+    vi.mocked(fetchFacilityAlerts).mockResolvedValue({
+      items: [{
+        alertId: 42,
+        facilityName: '闽江大桥',
+        metricName: '主梁应变',
+        actualValue: 12.5,
+        thresholdMax: 10,
+        alarmLevel: 'EMERGENCY',
+        alarmLevelName: '紧急',
+        collectTime: '2026-09-08T01:59:30Z',
+        triggerTime: '2026-09-08T01:59:00Z',
+        status: 'PENDING',
+        statusName: '待确认',
+        thresholdAssessment: '超过上限',
+        sourceConsistent: true,
+      }],
+      page: 0,
+      size: 20,
+      total: 1,
+      counts: {
+        pending: 6,
+        confirmed: 1,
+        closed: 2,
+        activeWarning: 3,
+        activeSevere: 2,
+        activeEmergency: 2,
+      },
     })
   })
 
@@ -113,6 +149,25 @@ describe('command dashboard shell', () => {
     wrapper.unmount()
   })
 
+  it('opens facility warnings as the third function and shows pending abnormal facts', async () => {
+    const { wrapper } = mountApp()
+    await flushPromises()
+    await wrapper.get('.assistant-orb').trigger('click')
+
+    const tabs = wrapper.findAll('.agent-mode-tabs button')
+    expect(tabs).toHaveLength(3)
+    expect(tabs[2].text()).toContain('设施预警')
+    expect(tabs[2].text()).toContain('6')
+    await tabs[2].trigger('click')
+
+    expect(wrapper.get('.facility-warning-workspace').isVisible()).toBe(true)
+    expect(wrapper.get('.facility-alert-card').text()).toContain('闽江大桥')
+    expect(wrapper.get('.facility-alert-card').text()).toContain('主梁应变')
+    expect(wrapper.get('.facility-alert-card').text()).toContain('超过上限')
+
+    wrapper.unmount()
+  })
+
   it('introduces the agent and shows a concise capability list', async () => {
     const { wrapper } = mountApp()
     await wrapper.get('.assistant-orb').trigger('click')
@@ -120,8 +175,24 @@ describe('command dashboard shell', () => {
     expect(wrapper.get('.message-list').text()).toContain('我是路智通')
     expect(wrapper.get('.human-capabilities').text()).toContain('实时路况问询')
     expect(wrapper.get('.human-capabilities').text()).toContain('区域交通研判')
-    expect(wrapper.get('.human-capabilities').text()).toContain('应急工单辅助')
+    expect(wrapper.get('.human-capabilities').text()).toContain('应急处置与设施预警')
     expect(wrapper.get('.human-capabilities').text()).toContain('语音智能交互')
+
+    wrapper.unmount()
+  })
+
+  it('shows only four representative example questions', async () => {
+    const { wrapper } = mountApp()
+    await wrapper.get('.assistant-orb').trigger('click')
+
+    const examples = wrapper.findAll('.example-prompts button')
+    expect(examples).toHaveLength(4)
+    expect(examples.map((button) => button.text())).toEqual([
+      '福建省目前整体交通态势如何？',
+      'G104 北京—平潭当前通行情况如何？',
+      '福建省哪些国省道路段接近通行瓶颈？',
+      '福州的出行主要联系哪些城市？',
+    ])
 
     wrapper.unmount()
   })
