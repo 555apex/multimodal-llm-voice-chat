@@ -39,6 +39,8 @@ class MysqlEmergencyResourceRepositoryTest {
                     resource_name VARCHAR(100) NOT NULL,
                     city_code VARCHAR(6) NOT NULL,
                     city_name VARCHAR(20) NOT NULL,
+                    longitude DECIMAL(10,6),
+                    latitude DECIMAL(9,6),
                     unit VARCHAR(20) NOT NULL,
                     capability VARCHAR(500) NOT NULL,
                     applicable_event_types CLOB NOT NULL,
@@ -94,6 +96,7 @@ class MysqlEmergencyResourceRepositoryTest {
     @Test
     void shouldFilterInactiveResourcesAndUseOptimisticInventoryUpdates() {
         assertEquals(1, resources.listActiveForPlanning("DT01").size());
+        assertEquals(119.2965, resources.cityCenters().get("350100").longitude(), 0.000001);
         var locked = resources.lockByTypeCodes(Set.of("ROAD_RESCUE_TEAM"));
         assertEquals(1, locked.size());
         var original = locked.get(0);
@@ -128,12 +131,12 @@ class MysqlEmergencyResourceRepositoryTest {
         jdbc.update("""
                 INSERT INTO w_emergency_resource (
                     resource_id, resource_type_code, resource_type_name, resource_name,
-                    city_code, city_name, unit, capability, applicable_event_types,
+                    city_code, city_name, longitude, latitude, unit, capability, applicable_event_types,
                     total_quantity, available_quantity, reserved_quantity,
                     dispatched_quantity, minimum_reserve_quantity, resource_status,
                     lock_version, del_flag, update_time
                 ) VALUES (?, 'ROAD_RESCUE_TEAM', '公路抢险队伍', '福州抢险资源池',
-                          '350100', '福州', '组', '道路抢通', ?,
+                          '350100', '福州', 119.296500, 26.074500, '组', '道路抢通', ?,
                           5, 5, 0, 0, 1, ?, 0, ?, CURRENT_TIMESTAMP)
                 """, resourceId, eventTypes, status, delFlag);
     }

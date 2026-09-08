@@ -4,15 +4,17 @@ import { storeToRefs } from 'pinia'
 import ChatMessage from './ChatMessage.vue'
 import DigitalHumanPanel from './DigitalHumanPanel.vue'
 import EmergencyAlertCard from './EmergencyAlertCard.vue'
+import FacilityWarningPanel from './FacilityWarningPanel.vue'
 import WorkflowHistoryPanel from './WorkflowHistoryPanel.vue'
 import VoiceInputButton from './VoiceInputButton.vue'
 import { useAgentStore } from '../stores/agent'
 import { useEmergencyStore } from '../stores/emergency'
+import { useFacilityStore } from '../stores/facility'
 import { useSpeechStore } from '../stores/speech'
 import { useDigitalHumanSignal } from '../composables/useDigitalHumanSignal'
 import type { WorkflowStage } from '../types/dispatch'
 
-type AgentTab = 'chat' | 'emergency'
+type AgentTab = 'chat' | 'emergency' | 'facilityWarning'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
@@ -31,6 +33,8 @@ const {
   queryStatus: emergencyQueryStatus,
   errorMessage: emergencyError,
 } = storeToRefs(emergencyStore)
+const facilityStore = useFacilityStore()
+const { counts: facilityCounts } = storeToRefs(facilityStore)
 const speechStore = useSpeechStore()
 const {
   capabilities: speechCapabilities,
@@ -49,17 +53,9 @@ const recording = ref(false)
 
 const examples = [
   '福建省目前整体交通态势如何？',
-  '福建省哪些国省道路段处于拥堵异常状态？',
-  '宁德市到福州市的交通情况如何？',
   'G104 北京—平潭当前通行情况如何？',
-  '福建省各国省道通行能力利用率如何？',
-  '福建省有哪些瓶颈路线？',
-  'G104当前实际通行能力如何？',
-  '福建省哪些卡口承担较大的交通压力？',
-  '福州和厦门的区域交通压力分布如何？',
-  '福建省哪些城市和国省道日均流量较大？',
-  '福州市的交通运输特征如何？',
-  '厦门市24小时分车型出行规律如何？',
+  '福建省哪些国省道路段接近通行瓶颈？',
+  '福州的出行主要联系哪些城市？',
 ]
 
 const lastAssistantMessage = computed(() => [...messages.value].reverse()
@@ -74,6 +70,7 @@ const digitalHumanSignal = useDigitalHumanSignal({
 })
 
 const pendingCount = computed(() => totalPending.value)
+const facilityPendingCount = computed(() => facilityCounts.value.pending)
 
 const progressText = computed(() => {
   if (!toolProgress.value) return stage.value?.label ?? 'Agent正在处理'
@@ -190,6 +187,19 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
           {{ pendingCount > 99 ? '99+' : pendingCount }}
         </i>
       </button>
+      <button
+        type="button"
+        :class="{ active: activeTab === 'facilityWarning' }"
+        :aria-selected="activeTab === 'facilityWarning'"
+        role="tab"
+        @click="selectTab('facilityWarning')"
+      >
+        <span aria-hidden="true">⌁</span>设施预警
+        <i v-if="facilityPendingCount" class="emergency-tab-badge facility-tab-badge"
+          :aria-label="`${facilityPendingCount} 条待确认设施告警`">
+          {{ facilityPendingCount > 99 ? '99+' : facilityPendingCount }}
+        </i>
+      </button>
     </nav>
 
     <div class="drawer-content">
@@ -274,6 +284,18 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
           </div>
         </div>
 
+        <p v-if="emergencyCounts.pendingClassification" class="classification-status-banner">
+          <span>待自动识别 {{ emergencyCounts.pendingClassification }} 条
+            <template v-if="emergencyCounts.classificationFailed">
+              · 其中 {{ emergencyCounts.classificationFailed }} 条上次识别失败
+            </template>
+          </span>
+          <button v-if="emergencyCounts.classificationFailed" type="button"
+            :disabled="emergencyActionBusy" @click="emergencyStore.retryClassification">
+            立即重试一条
+          </button>
+        </p>
+
         <div class="emergency-workspace-scroll">
           <EmergencyAlertCard
             v-if="emergencyViewMode === 'inbox' && emergencyItem"
@@ -284,6 +306,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             @generate="emergencyStore.generate"
             @no-dispatch="emergencyStore.markNoDispatch"
             @level1="emergencyStore.decideLevel1"
+            @correct-type="emergencyStore.correctEventType"
             @review="emergencyStore.review"
             @command="emergencyStore.decideCommand"
           />
@@ -309,6 +332,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             <button type="button" @click="emergencyStore.refresh">重新查询</button>
           </div>
         </div>
+      </section>
+      <section v-show="activeTab === 'facilityWarning'" class="facility-warning-workspace" role="tabpanel">
+        <FacilityWarningPanel />
       </section>
     </div>
   </aside>

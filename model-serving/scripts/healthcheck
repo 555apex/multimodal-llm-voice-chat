@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SERVICE="${1:-}"
+TIMEOUT="${2:-1200}"
+case "$SERVICE" in
+  qwen) URL="http://127.0.0.1:8001" ;;
+  gpt) URL="http://100.119.145.78:8002" ;;
+  webui) URL="http://100.119.145.78:12000" ;;
+  *) echo "usage: $0 [qwen|gpt|webui] [timeout-seconds]" >&2; exit 2 ;;
+esac
+
+deadline=$((SECONDS + TIMEOUT))
+while (( SECONDS < deadline )); do
+  if curl --fail --silent --show-error --max-time 5 "$URL/health" >/dev/null 2>&1; then
+    if [[ "$SERVICE" == "webui" ]]; then
+      echo "Open WebUI healthy: $URL"
+    else
+      curl --fail --silent --show-error --max-time 10 "$URL/v1/models"
+      echo
+    fi
+    exit 0
+  fi
+  sleep 10
+done
+echo "$SERVICE did not become healthy within ${TIMEOUT}s" >&2
+exit 1

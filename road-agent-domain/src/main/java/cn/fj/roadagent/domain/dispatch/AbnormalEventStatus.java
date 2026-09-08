@@ -1,6 +1,6 @@
 package cn.fj.roadagent.domain.dispatch;
 
-/** 异常事件的最终处置状态，对应 w_abnormal_event.event_status。 */
+/** 旧版事件终态兼容枚举；w_lw_incident迁移后不再直接映射贴源表字段。 */
 public enum AbnormalEventStatus {
     PENDING(0),
     DISPATCH_APPROVED(1),

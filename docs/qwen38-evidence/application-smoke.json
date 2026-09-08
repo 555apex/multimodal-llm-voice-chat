@@ -1,0 +1,110 @@
+{
+  "road_agent": {
+    "speech_capabilities": {
+      "asrAvailable": true,
+      "ttsAvailable": true,
+      "asrModel": "small",
+      "ttsVoice": "Serena",
+      "maxRecordingSeconds": 60,
+      "maxAudioBytes": 10485760
+    },
+    "tts_bytes": 32301,
+    "tts_queue": {
+      "requests": 2,
+      "bytes": [
+        51597,
+        53613
+      ],
+      "seconds": 4.89
+    },
+    "tts_long_text_status": 400,
+    "traffic": [
+      {
+        "queryType": "PROVINCE_OVERVIEW",
+        "source": "MYSQL",
+        "rows": {
+          "routeSummaries": 45,
+          "segments": 0
+        },
+        "summaryCharacters": 227
+      },
+      {
+        "queryType": "CAPACITY_OVERVIEW",
+        "source": "MYSQL",
+        "rows": {
+          "capacityRows": 47
+        },
+        "summaryCharacters": 172
+      },
+      {
+        "queryType": "REGIONAL_TRAFFIC_OVERVIEW",
+        "source": "MYSQL",
+        "rows": {
+          "regionalPairRows": 5,
+          "regionalChannelRows": 10
+        },
+        "summaryCharacters": 209
+      },
+      {
+        "queryType": "VEHICLE_PATTERN_OVERVIEW",
+        "source": "MYSQL",
+        "rows": {
+          "vehicleStructureRows": 3,
+          "vehicleTimeFeatureRows": 3,
+          "vehicleDayTypeRows": 3
+        },
+        "summaryCharacters": 224
+      }
+    ],
+    "workflow": {
+      "LEVEL_1": {
+        "hasItem": true,
+        "counts": {
+          "level1": 39,
+          "level2": 0,
+          "level3": 0,
+          "pendingClassification": 0,
+          "classificationFailed": 0
+        }
+      },
+      "LEVEL_2": {
+        "hasItem": false,
+        "counts": {
+          "level1": 39,
+          "level2": 0,
+          "level3": 0,
+          "pendingClassification": 0,
+          "classificationFailed": 0
+        }
+      },
+      "LEVEL_3": {
+        "hasItem": false,
+        "counts": {
+          "level1": 39,
+          "level2": 0,
+          "level3": 0,
+          "pendingClassification": 0,
+          "classificationFailed": 0
+        }
+      },
+      "history": {
+        "items": 0,
+        "total": 0
+      }
+    },
+    "agent_sse_events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "stage.changed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "run.completed"
+    ]
+  }
+}

@@ -2,6 +2,7 @@ package cn.fj.roadagent.application.port;
 
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.WorkflowStage;
+import cn.fj.roadagent.domain.dispatch.UnclassifiedEmergencyEvent;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -31,4 +32,28 @@ public interface AbnormalEventPort {
     boolean markDispatchApproved(String eventId, Instant updateTime);
 
     boolean markNoDispatch(String eventId, String reason, Instant updateTime);
+
+    default Optional<UnclassifiedEmergencyEvent> findNextUnclassified(Instant retryBefore) {
+        return Optional.empty();
+    }
+
+    default Optional<UnclassifiedEmergencyEvent> findUnclassifiedById(String eventId) {
+        return Optional.empty();
+    }
+
+    default long countUnclassified() {
+        return 0;
+    }
+
+    default long countClassificationFailures() {
+        return 0;
+    }
+
+    default boolean assignEventTypeIfAbsent(String eventId, String eventType) {
+        return false;
+    }
+
+    default boolean correctEventType(String eventId, String expectedType, String nextType) {
+        return false;
+    }
 }

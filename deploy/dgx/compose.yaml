@@ -14,14 +14,16 @@ services:
       args:
         JAVA_BUILD_IMAGE: ${JAVA_BUILD_IMAGE:-eclipse-temurin:17-jdk-jammy}
         JAVA_RUNTIME_IMAGE: ${JAVA_RUNTIME_IMAGE:-eclipse-temurin:17-jre-jammy}
-    image: road-agent-dgx-backend:local
+    image: ${ROADAGENT_BACKEND_IMAGE:-road-agent-dgx-backend:local}
     container_name: road-agent-dgx-backend
     env_file: deploy/dgx/.env
     environment:
-      ROADAGENT_MODEL_ENDPOINT: http://qwen:8000/v1/chat/completions
-      ROADAGENT_MODEL_NAME: qwen3.6-35b-a3b-nvfp4
+      ROADAGENT_MODEL_ENDPOINT: ${ROADAGENT_MODEL_ENDPOINT:-http://qwen:8000/v1/chat/completions}
+      ROADAGENT_MODEL_NAME: ${ROADAGENT_MODEL_NAME:?Set ROADAGENT_MODEL_NAME in deploy/dgx/.env}
       ROADAGENT_MODEL_AUTH_ENABLED: "false"
       ROADAGENT_MODEL_ENABLE_THINKING: "false"
+      ROADAGENT_EVENT_CLASSIFICATION_ENABLED: "false"
+      ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS: "600"
       ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS:-5}
       ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS:-30}
       ROADAGENT_SPEECH_ENABLED: "true"
@@ -48,7 +50,7 @@ services:
       target: runtime
       args:
         SPEECH_BASE_IMAGE: ${SPEECH_BASE_IMAGE:-nvcr.io/nvidia/pytorch@sha256:d724ba5b68075cd3b96eefbc510a45d36e60dd16fd70b217708625f1f4b37bc1}
-    image: road-agent-dgx-speech:local
+    image: ${ROADAGENT_SPEECH_IMAGE:-road-agent-dgx-speech:local}
     container_name: road-agent-dgx-speech
     gpus: all
     ipc: host
@@ -101,7 +103,7 @@ services:
       args:
         NODE_BUILD_IMAGE: ${NODE_BUILD_IMAGE:-node:22-bookworm-slim}
         NGINX_IMAGE: ${NGINX_IMAGE:-nginxinc/nginx-unprivileged:1.29-alpine}
-    image: road-agent-dgx-frontend:local
+    image: ${ROADAGENT_FRONTEND_IMAGE:-road-agent-dgx-frontend:local}
     container_name: road-agent-dgx-frontend
     depends_on:
       backend:

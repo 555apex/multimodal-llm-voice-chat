@@ -1,0 +1,12 @@
+name: model-serving
+title: DGX Spark local model serving
+owner: whtc
+host: spark-8a8d
+tailscale_ipv4: 100.119.145.78
+model_root: /home/whtc/models
+profiles:
+  default: daily
+  available:
+    - daily
+    - deep-reasoning
+

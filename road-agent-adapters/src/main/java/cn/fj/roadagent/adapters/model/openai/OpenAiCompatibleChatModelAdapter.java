@@ -205,6 +205,8 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
 
         try {
             HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
+                    // DGX's vLLM ASGI server does not accept the JDK's cleartext h2c upgrade.
+                    .version(HttpClient.Version.HTTP_1_1)
                     .timeout(requestTimeout)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)));

@@ -77,7 +77,7 @@ if [ -d "`$previous" ]; then
   fi
 fi
 rm -f "`$archive"
-chmod +x "`$remote/deploy/dgx/dgx-stack" "`$remote/deploy/dgx/db-maintenance" "`$remote/deploy/dgx/mysql-client-entrypoint" "`$remote/deploy/dgx/download-speech-models" "`$remote/deploy/dgx/smoke.py"
+chmod +x "`$remote/deploy/dgx/dgx-stack" "`$remote/deploy/dgx/db-maintenance" "`$remote/deploy/dgx/public-db-access" "`$remote/deploy/dgx/mysql-client-entrypoint" "`$remote/deploy/dgx/download-speech-models" "`$remote/deploy/dgx/smoke.py"
 if [ -f "`$remote/deploy/dgx/.env" ]; then chmod 600 "`$remote/deploy/dgx/.env"; fi
 if [ -f "`$remote/deploy/dgx/.env.db-admin" ]; then chmod 600 "`$remote/deploy/dgx/.env.db-admin"; fi
 "@

@@ -33,7 +33,7 @@ services:
       SPEECH_TTS_PITCH: ${SPEECH_TTS_PITCH:-+0Hz}
       SPEECH_MAX_TTS_CHARACTERS: ${SPEECH_MAX_TTS_CHARACTERS:-500}
     volumes:
-      - ${SPEECH_MODEL_ROOT:-./speech-service/models}:/models:ro
+      - ${SPEECH_MODEL_ROOT:-/home/whtc/models}:/models:ro
     restart: unless-stopped
 
   speech-tests:

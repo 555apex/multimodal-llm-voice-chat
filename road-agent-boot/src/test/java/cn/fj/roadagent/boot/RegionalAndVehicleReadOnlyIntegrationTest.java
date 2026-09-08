@@ -40,6 +40,9 @@ class RegionalAndVehicleReadOnlyIntegrationTest {
         assertEquals(regional.hubs().size(), new HashSet<>(regional.hubs().stream()
                 .map(hub -> hub.checkpointNo()).toList()).size());
         assertTrue(regional.hubs().stream().allMatch(hub -> hub.dailyAverageFlow() >= 0));
+        assertTrue(regional.hubs().stream().flatMap(hub -> java.util.stream.Stream.of(
+                hub.cityARegionCode(), hub.cityBRegionCode())).distinct().count() >= 3,
+                "共享数据至少应形成三个城市的跨市联系网络");
 
         var fuzhou = vehicleTravelPatternPort.latestForCity("福州").orElseThrow();
         var xiamen = vehicleTravelPatternPort.latestForCity("厦门").orElseThrow();
@@ -56,9 +59,9 @@ class RegionalAndVehicleReadOnlyIntegrationTest {
                 TrafficQueryType.REGIONAL_TRAFFIC_OVERVIEW, null, null, null, null,
                 List.of(), null, "readonly-it"
         ));
-        assertTrue(regional.hubRows().size() <= 20);
-        assertTrue(regional.regionRows().size() <= 5);
-        assertTrue(regional.routeRows().size() <= 10);
+        assertTrue(regional.pairRows().size() <= 5);
+        assertTrue(regional.channelRows().size() <= 10);
+        assertTrue(regional.totalPairCount() >= 2);
 
         VehiclePatternService vehicleService = new VehiclePatternService(vehicleTravelPatternPort, null);
         var vehicle = vehicleService.collectFacts(new HighwayTrafficQuery(

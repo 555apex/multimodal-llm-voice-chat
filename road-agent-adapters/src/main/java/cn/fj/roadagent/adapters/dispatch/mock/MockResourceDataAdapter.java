@@ -3,9 +3,11 @@ package cn.fj.roadagent.adapters.dispatch.mock;
 import cn.fj.roadagent.application.dispatch.ResourceQuery;
 import cn.fj.roadagent.application.port.ResourceDataPort;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
+import cn.fj.roadagent.domain.dispatch.GeoPoint;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 /** 没有甲方资源接口前，用可控台账打通调度流程。 */
@@ -42,6 +44,11 @@ public final class MockResourceDataAdapter implements ResourceDataPort {
     @Override
     public List<EmergencyResource> lockByResourceIds(Set<String> resourceIds) {
         return resources.stream().filter(item -> resourceIds.contains(item.resourceId())).toList();
+    }
+
+    @Override
+    public Map<String, GeoPoint> cityCenters() {
+        return Map.of("000000", new GeoPoint(119.2965, 26.0745));
     }
 
     @Override

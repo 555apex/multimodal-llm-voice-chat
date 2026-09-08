@@ -1,0 +1,3669 @@
+{
+  "required_seconds": 1800,
+  "elapsed_seconds": 1800.02,
+  "complete": true,
+  "passed": true,
+  "samples": [
+    {
+      "utc": "2026-09-08T11:34:50.742167+00:00",
+      "elapsed_seconds": 0.02,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54474888,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:35:20.784250+00:00",
+      "elapsed_seconds": 30.06,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54462604,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:35:50.828203+00:00",
+      "elapsed_seconds": 60.1,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54465084,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:36:20.856417+00:00",
+      "elapsed_seconds": 90.13,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54473672,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:36:50.892277+00:00",
+      "elapsed_seconds": 120.17,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54465156,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:37:20.923302+00:00",
+      "elapsed_seconds": 150.2,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54468788,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:37:50.962599+00:00",
+      "elapsed_seconds": 180.24,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54469432,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:38:20.999675+00:00",
+      "elapsed_seconds": 210.27,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54478404,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:38:51.035795+00:00",
+      "elapsed_seconds": 240.31,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54475292,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:39:21.076361+00:00",
+      "elapsed_seconds": 270.35,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54471396,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:39:51.104654+00:00",
+      "elapsed_seconds": 300.38,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54484332,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:40:21.134407+00:00",
+      "elapsed_seconds": 330.41,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54455568,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:40:51.166525+00:00",
+      "elapsed_seconds": 360.44,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54473292,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:41:21.205559+00:00",
+      "elapsed_seconds": 390.48,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54467948,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:41:51.242016+00:00",
+      "elapsed_seconds": 420.52,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54469916,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:42:21.272350+00:00",
+      "elapsed_seconds": 450.55,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54462356,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:42:51.302046+00:00",
+      "elapsed_seconds": 480.58,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54456904,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:43:21.331711+00:00",
+      "elapsed_seconds": 510.6,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54448536,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:43:51.370737+00:00",
+      "elapsed_seconds": 540.64,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54449512,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:44:21.408372+00:00",
+      "elapsed_seconds": 570.68,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 54457580,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:44:51.432264+00:00",
+      "elapsed_seconds": 600.71,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53180512,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:45:21.470634+00:00",
+      "elapsed_seconds": 630.74,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52994300,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:45:51.502200+00:00",
+      "elapsed_seconds": 660.78,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53001344,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:46:21.533183+00:00",
+      "elapsed_seconds": 690.81,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53014532,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:46:51.565889+00:00",
+      "elapsed_seconds": 720.84,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52988280,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:47:21.602790+00:00",
+      "elapsed_seconds": 750.88,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53014988,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:47:51.648828+00:00",
+      "elapsed_seconds": 780.92,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53011852,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:48:21.686209+00:00",
+      "elapsed_seconds": 810.96,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53008384,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:48:51.725131+00:00",
+      "elapsed_seconds": 841.0,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 53000388,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:49:21.757399+00:00",
+      "elapsed_seconds": 871.03,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52539104,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:49:51.787655+00:00",
+      "elapsed_seconds": 901.06,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52601436,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:50:21.821597+00:00",
+      "elapsed_seconds": 931.09,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52590080,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:50:51.854312+00:00",
+      "elapsed_seconds": 961.13,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52606972,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:51:21.888520+00:00",
+      "elapsed_seconds": 991.16,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52591260,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:51:51.932273+00:00",
+      "elapsed_seconds": 1021.21,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52593260,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:52:21.970048+00:00",
+      "elapsed_seconds": 1051.24,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52599300,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:52:52.001164+00:00",
+      "elapsed_seconds": 1081.27,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52576724,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:53:22.033378+00:00",
+      "elapsed_seconds": 1111.31,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52578768,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:53:52.061728+00:00",
+      "elapsed_seconds": 1141.33,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52577316,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:54:22.092975+00:00",
+      "elapsed_seconds": 1171.37,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52566264,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:54:52.126462+00:00",
+      "elapsed_seconds": 1201.4,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52577672,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:55:22.160286+00:00",
+      "elapsed_seconds": 1231.43,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52564136,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:55:52.195310+00:00",
+      "elapsed_seconds": 1261.47,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52119580,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:56:22.225743+00:00",
+      "elapsed_seconds": 1291.5,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52109460,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:56:52.254682+00:00",
+      "elapsed_seconds": 1321.53,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52124516,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:57:22.274721+00:00",
+      "elapsed_seconds": 1351.55,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52138268,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:57:52.293786+00:00",
+      "elapsed_seconds": 1381.57,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52118244,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:58:22.310912+00:00",
+      "elapsed_seconds": 1411.58,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52105016,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:58:52.344670+00:00",
+      "elapsed_seconds": 1441.62,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52115612,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:59:22.364366+00:00",
+      "elapsed_seconds": 1471.64,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 52028080,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T11:59:52.384840+00:00",
+      "elapsed_seconds": 1501.66,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51331752,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:00:22.400803+00:00",
+      "elapsed_seconds": 1531.67,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51335436,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:00:52.419217+00:00",
+      "elapsed_seconds": 1561.69,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51336596,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:01:22.433078+00:00",
+      "elapsed_seconds": 1591.71,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51304112,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:01:52.452468+00:00",
+      "elapsed_seconds": 1621.73,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51316928,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:02:22.467091+00:00",
+      "elapsed_seconds": 1651.74,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51313044,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:02:52.484214+00:00",
+      "elapsed_seconds": 1681.76,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51323804,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:03:22.502285+00:00",
+      "elapsed_seconds": 1711.78,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51317076,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:03:52.516690+00:00",
+      "elapsed_seconds": 1741.79,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51311636,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:04:22.536801+00:00",
+      "elapsed_seconds": 1771.81,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51327180,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    },
+    {
+      "utc": "2026-09-08T12:04:50.744473+00:00",
+      "elapsed_seconds": 1800.02,
+      "memory": {
+        "MemTotal_KiB": 127600528,
+        "MemAvailable_KiB": 51320116,
+        "SwapTotal_KiB": 16777212,
+        "SwapFree_KiB": 16777212
+      },
+      "containers": {
+        "model-serving-qwen": {
+          "id": "d53143e7998abc3cc4df4288acce1895457a657a154f855dbae8f1f703070d5a",
+          "started": "2026-09-08T11:24:04.632797998Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-backend": {
+          "id": "18144323a42a8c933e879fcdb226b2b84bf4ab6cd7e62dfda4b213a1e4b21dfa",
+          "started": "2026-09-08T11:32:23.509486912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-backend": {
+          "id": "4777ac8eaadf6da0cc1719a8426a7bbd1d01d7537cb9db0440368908a526ba25",
+          "started": "2026-09-08T11:32:23.506930097Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-frontend": {
+          "id": "04bfd27c1bfc14a29b810fde29042c16a7b159291ac542943ebe5359d1d0ccac",
+          "started": "2026-09-08T10:11:32.122954672Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-public-frontend": {
+          "id": "190e584409aea1da2a56af68168880d9738c778bbe86a158631e474703c974ff",
+          "started": "2026-09-08T10:11:32.120790752Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        },
+        "road-agent-dgx-speech": {
+          "id": "723d8d8a3be98699b97d9d775563f8f8f91a7f4253040d15cfa4d917bdf852c0",
+          "started": "2026-09-08T10:11:32.180118912Z",
+          "running": true,
+          "health": "healthy",
+          "restarts": 0,
+          "oom": false
+        }
+      }
+    }
+  ],
+  "failures": []
+}

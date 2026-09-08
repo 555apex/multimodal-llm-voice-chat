@@ -1,0 +1,44 @@
+{
+  "recorded_at": "2026-09-08T15:43:26.878663+00:00",
+  "model": "qwen3.8-27b-fp8",
+  "source_log": "/home/whtc/workspace/projects/model-serving/artifacts/qwen38-20260908/full-smoke.log",
+  "source_log_sha256": "dbf9dcc58e963322cc06a6624265651ef91bc79185aac19e1d6e58a7e0e249bc",
+  "progress_lines": [
+    "business JSON batches: 5/20",
+    "business JSON batches: 10/20",
+    "business JSON batches: 15/20",
+    "business JSON batches: 20/20",
+    "sequential JSON requests: 10/100",
+    "sequential JSON requests: 20/100",
+    "sequential JSON requests: 30/100",
+    "sequential JSON requests: 40/100",
+    "sequential JSON requests: 50/100",
+    "sequential JSON requests: 60/100",
+    "sequential JSON requests: 70/100",
+    "sequential JSON requests: 80/100",
+    "sequential JSON requests: 90/100",
+    "sequential JSON requests: 100/100"
+  ],
+  "structured_requests_passed": 100,
+  "business_batches_passed": 20,
+  "business_categories": [
+    "traffic_intent",
+    "traffic_summary",
+    "resource_requirements",
+    "dispatch_plan"
+  ],
+  "business_batch_note": "Resource requirements and dispatch plan were validated from the same response; three requests per batch.",
+  "ordinary_and_sse_passed": true,
+  "evidence_note": "Model phase completed before a stale regional DTO assertion failed in application phase. The updated application-only rerun passed; no timing or original JSON report is reconstructed.",
+  "application_rerun_report": "application-smoke.json",
+  "stability": {
+    "elapsed_seconds": 1800.02,
+    "samples": 61,
+    "passed": true,
+    "failures": 0,
+    "first_utc": "2026-09-08T11:34:50.742167+00:00",
+    "last_utc": "2026-09-08T12:04:50.744473+00:00",
+    "min_available_GiB": 48.92741394042969,
+    "last_available_GiB": 48.94267654418945
+  }
+}

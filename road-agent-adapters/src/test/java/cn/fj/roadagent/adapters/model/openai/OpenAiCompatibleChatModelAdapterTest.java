@@ -60,9 +60,11 @@ class OpenAiCompatibleChatModelAdapterTest {
     @Test
     void shouldSendOptionalThinkingFlagWithoutBearerHeader() {
         AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> upgrade = new AtomicReference<>();
         AtomicReference<String> requestBody = new AtomicReference<>();
         server.createContext("/chat/completions", exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            upgrade.set(exchange.getRequestHeaders().getFirst("Upgrade"));
             requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             sendJson(exchange, """
                     {"choices":[{"message":{"content":"严格JSON模式已启用。"}}]}
@@ -74,6 +76,7 @@ class OpenAiCompatibleChatModelAdapterTest {
 
         assertEquals("严格JSON模式已启用。", response.content());
         assertEquals(null, authorization.get());
+        assertEquals(null, upgrade.get());
         assertTrue(requestBody.get().contains("\"chat_template_kwargs\":{\"enable_thinking\":false}"));
     }
 

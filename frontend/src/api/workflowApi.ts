@@ -120,3 +120,28 @@ export async function releaseWorkflowResources(
   )
   return parseResponse<EmergencyWorkflowItem>(response, '已调度资源归还失败')
 }
+
+export async function correctWorkflowEventType(
+  workflowId: string,
+  eventType: string,
+  reason: string,
+  expectedWorkflowVersion: number,
+): Promise<EmergencyWorkflowItem> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/emergency-workflows/${encodeURIComponent(workflowId)}/event-type-corrections`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: actionBody(expectedWorkflowVersion, { eventType, reason }),
+    },
+  )
+  return parseResponse<EmergencyWorkflowItem>(response, '事件类型更正失败')
+}
+
+export async function retryNextEventClassification(): Promise<boolean> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/emergency-events/classification-retries/next`,
+    { method: 'POST' },
+  )
+  return parseResponse<boolean>(response, '事件类型识别重试失败')
+}

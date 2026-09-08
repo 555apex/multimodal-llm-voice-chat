@@ -21,6 +21,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class TrafficControllerTest {
 
     @Test
+    void acceptsThreeCityOdRequestAndSerializesTendencyMatrix() throws Exception {
+        QueryHighwayTrafficUseCase useCase = query -> {
+            org.junit.jupiter.api.Assertions.assertEquals(3, query.selectedCities().size());
+            var facts = new cn.fj.roadagent.application.traffic.OdTrafficFacts(
+                    query.queryType(), "城市目的地联系倾向矩阵",
+                    List.of(new cn.fj.roadagent.application.traffic.SelectedRegionResultItem("350100", "福州市"),
+                            new cn.fj.roadagent.application.traffic.SelectedRegionResultItem("350200", "厦门市"),
+                            new cn.fj.roadagent.application.traffic.SelectedRegionResultItem("350500", "泉州市")),
+                    List.of(), List.of(new cn.fj.roadagent.application.traffic.OdMatrixRowResultItem(
+                            "350100", "福州市", List.of(
+                            new cn.fj.roadagent.application.traffic.OdMatrixCellResultItem("350100", "福州市", null, null),
+                            new cn.fj.roadagent.application.traffic.OdMatrixCellResultItem("350200", "厦门市", 1200.5, 0.3),
+                            new cn.fj.roadagent.application.traffic.OdMatrixCellResultItem("350500", "泉州市", null, null)))),
+                    Instant.parse("2026-09-03T04:00:00Z"), List.of());
+            return HighwayTrafficResult.fromOdFacts(facts, "已完成所选城市的目的地联系倾向分析。", query.traceId());
+        };
+        var mvc = MockMvcBuilders.standaloneSetup(new TrafficController(useCase))
+                .setControllerAdvice(new GlobalExceptionHandler()).addFilter(new TraceIdFilter()).build();
+        mvc.perform(post("/api/v1/traffic/queries").contentType("application/json")
+                .content("{\"queryType\":\"OD_CONNECTION_MATRIX\",\"selectedCities\":[\"福州\",\"厦门\",\"泉州\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.odMatrixRows[0].analysisCityName").value("福州市"))
+                .andExpect(jsonPath("$.data.odMatrixRows[0].cells[1].weeklyConnectionStrength").value(1200.5))
+                .andExpect(jsonPath("$.data.odMatrixRows[0].cells[1].tendencyRatio").value(0.3))
+                .andExpect(jsonPath("$.data.segments").isEmpty());
+    }
+
+    @Test
     void acceptsTrafficContractAndReturnsUnifiedMysqlResult() throws Exception {
         QueryHighwayTrafficUseCase useCase = query -> new HighwayTrafficResult(
                 TrafficQueryType.PROVINCE_OVERVIEW, "福建省国省道整体交通态势",

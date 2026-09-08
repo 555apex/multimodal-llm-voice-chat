@@ -42,11 +42,12 @@ class MysqlEmergencyWorkflowRepositoryTest {
                 CREATE TABLE w_emergency_dispatch_workflow (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     workflow_id VARCHAR(40) NOT NULL UNIQUE,
-                    event_id BIGINT NOT NULL UNIQUE,
+                    event_id VARCHAR(64) NOT NULL UNIQUE,
                     current_stage TINYINT,
                     workflow_status TINYINT NOT NULL,
                     plan_id VARCHAR(40) UNIQUE,
                     plan_version INT NOT NULL,
+                    terminal_reason VARCHAR(500),
                     lock_version BIGINT NOT NULL,
                     stage_entered_at TIMESTAMP NOT NULL,
                     create_time TIMESTAMP NOT NULL,

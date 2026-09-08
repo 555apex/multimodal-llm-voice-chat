@@ -61,9 +61,6 @@ roadagent:
     # DeepSeek需要Bearer密钥；无鉴权的内网服务器模型可设为false
     auth-enabled: ${ROADAGENT_MODEL_AUTH_ENABLED:true}
 
-    # 可选：ROADAGENT_MODEL_ENABLE_THINKING 会直接绑定到配置对象。
-    # 未设置时请求体保持原样；DGX Qwen 部署显式设为 false，确保结构化JSON稳定。
-
     # 模型请求超时时间，单位：秒。流式回答比普通API耗时更长
     timeout-seconds: ${ROADAGENT_MODEL_TIMEOUT_SECONDS:60}
 
@@ -78,6 +75,10 @@ roadagent:
   dispatch:
     # 生成状态超过该时间后允许重试，避免服务中断留下永久卡住的工单
     stale-generating-seconds: ${ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS:120}
+    # 对待处理且event_type为空的应急事件执行规则+模型分类
+    classification-enabled: ${ROADAGENT_EVENT_CLASSIFICATION_ENABLED:true}
+    classification-poll-seconds: ${ROADAGENT_EVENT_CLASSIFICATION_POLL_SECONDS:5}
+    classification-retry-seconds: ${ROADAGENT_EVENT_CLASSIFICATION_RETRY_SECONDS:30}
 
   # ===== Docker语音服务配置 =====
   speech:

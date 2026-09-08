@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: 福建应急交通Agent API
-  version: 0.9.0
-  description: 对话式道路交通查询、福建九市库存资源调度、三级上报与通告、Docker语音服务接口
+  version: 0.11.0
+  description: 对话式道路交通查询、设施健康预警、福建九市库存资源调度、三级上报与通告、Docker语音服务接口
 servers:
   - url: http://localhost:8080
 paths:
@@ -102,7 +102,7 @@ paths:
               $ref: '#/components/schemas/SpeechSynthesisRequest'
       responses:
         '200':
-          description: DGX本地Qwen3-TTS合成的音频；响应禁止缓存
+          description: Edge-TTS合成的音频；响应禁止缓存
           content:
             audio/mpeg:
               schema:
@@ -180,6 +180,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/emergency-events/{eventId}/classification-retries:
+    post:
+      summary: 立即重试一条分类失败的应急事件
+      operationId: retryEmergencyEventClassification
+      parameters:
+        - $ref: '#/components/parameters/EventId'
+      responses:
+        '200': { description: 重试完成 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /api/v1/emergency-events/classification-retries/next:
+    post:
+      summary: 忽略自动退避时间并立即重试最早的一条待分类事件
+      operationId: retryNextEmergencyEventClassification
+      responses:
+        '200':
+          description: 是否处理了一条待分类事件
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BooleanApiResponse' }
 
   /api/v1/dispatches/{planId}:
     get:
@@ -307,6 +328,27 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /api/v1/emergency-workflows/{workflowId}/event-type-corrections:
+    post:
+      summary: 一级人工更正事件类型并生成新版方案
+      description: 仅限一级待上报阶段；旧版资源会释放，分类、工单和动作流水保留完整记录。
+      operationId: correctEmergencyEventType
+      parameters:
+        - $ref: '#/components/parameters/WorkflowId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EventTypeCorrectionRequest' }
+      responses:
+        '200':
+          description: 已生成新版方案的完整工作流
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EmergencyWorkflowApiResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /api/v1/emergency-workflows/{workflowId}/command-decisions:
     post:
       summary: 三级省级决策退回或批准并形成通告
@@ -397,10 +439,96 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/v1/facility-alerts:
+    get:
+      summary: 分页查询设施异常预警清单
+      description: 只读w_realtime_abnormal中由上游阈值逻辑产生的异常快照。
+      operationId: queryFacilityAlerts
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/FacilityAlertStatus' }
+        - in: query
+          name: alarmLevel
+          schema: { $ref: '#/components/schemas/FacilityAlarmLevel' }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: 预警分页、各状态数量与活动告警等级数量
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityAlertPageApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/facility-alerts/health-report:
+    get:
+      summary: 生成基础设施健康状态报告
+      description: 基于待确认和处理中记录由Java确定性汇总，不调用大模型。
+      operationId: getFacilityHealthReport
+      responses:
+        '200':
+          description: 整体健康状态、等级数量和逐设施状态
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityHealthReportApiResponse' }
+
+  /api/v1/facility-alerts/focus:
+    get:
+      summary: 查询重点关注基础设施
+      operationId: getFacilityFocus
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        '200':
+          description: 按最高风险、活动告警数和最早触发时间排序
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityFocusApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/facility-alerts/{alertId}/status-transitions:
+    post:
+      summary: 确认或结束一条设施预警
+      description: |
+        仅允许PENDING→CONFIRMED→CLOSED。结束时resolutionType必须为
+        RESOLVED或IGNORED；服务端使用expectedStatus条件更新，并用最新处理备注覆盖remark。
+      operationId: transitionFacilityAlert
+      parameters:
+        - in: path
+          name: alertId
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityAlertTransitionRequest' }
+      responses:
+        '200':
+          description: 更新后的预警快照
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FacilityAlertApiResponse' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
   /api/v1/traffic/queries:
     post:
       summary: 使用结构化参数查询MySQL交通业务数据
-      description: 支持国省干线路况与通行能力、区域卡口/城市/路线交通压力，以及福州或厦门车型出行特征。两城市区域分析使用两市卡口并集，不表示OD流量。模型轻微格式偏差会修复或按结构化事实安全规范化；模型服务不可用或连续返回不可解析结构时整次请求失败。
+      description: 支持路线目录、国省干线路况与通行能力、跨区域城市对/路线联系、福州或厦门车型出行特征，以及城市目的地联系倾向与矩阵。模型轻微格式偏差会修复或按结构化事实安全规范化；模型服务不可用时按具体业务的失败或确定性降级规则处理。
       operationId: queryHighwayTraffic
       parameters:
         - $ref: '#/components/parameters/TraceId'
@@ -455,10 +583,11 @@ components:
       in: path
       name: eventId
       required: true
-      description: 以字符串传输的w_abnormal_event.id，避免JavaScript整数精度丢失
+      description: w_lw_incident.c_no，按URL路径编码后传输
       schema:
         type: string
-        pattern: '^\d+$'
+        minLength: 1
+        maxLength: 64
 
   responses:
     BadRequest:
@@ -524,7 +653,7 @@ components:
       properties:
         queryType:
           type: string
-          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON]
+          enum: [PROVINCE_OVERVIEW, ROUTE_CATALOG, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, REGIONAL_PAIR_PRESSURE, REGIONAL_KEY_CHANNELS, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON, OD_DESTINATION_TENDENCY, OD_CONNECTION_MATRIX]
         originCity:
           type: [string, 'null']
           maxLength: 20
@@ -539,13 +668,16 @@ components:
           maxLength: 100
         selectedCities:
           type: array
-          maxItems: 2
+          maxItems: 9
           items: { type: string, maxLength: 20 }
-          description: 区域交通压力筛选城市；为空时统计全省，一至两个城市时统计所选城市卡口并集
+          description: REGIONAL_*要求3至9个福建地级市，按路网起终点筛选跨市路线；为空默认九市。OD_DESTINATION_TENDENCY要求且仅允许1市；OD_CONNECTION_MATRIX要求2至9市，为空时默认福建九市。车型特征支持福州或厦门单城市
         analysisCity:
           type: [string, 'null']
           maxLength: 20
           description: 车型出行特征查询城市，本期为福州市或厦门市
+        includeTrend:
+          type: [boolean, 'null']
+          description: 是否在普通路况摘要中附加未来1至2小时定性趋势；容量、压力和车型查询忽略此字段
 
     TrafficStatus:
       type: integer
@@ -611,35 +743,33 @@ components:
         regionCode: { type: string }
         regionName: { type: string }
 
-    TransportHubRow:
+    RegionalPairRow:
       type: object
-      required: [checkpointNo, routeCode, routeName, averageSpeedKmh, dailyAverageFlow]
+      required: [cityARegionCode, cityAName, cityBRegionCode, cityBName, routeCount, checkpointCount, weeklyTotalFlow, dailyAverageFlow, averageSpeedKmh]
       properties:
-        checkpointNo: { type: string }
-        routeCode: { type: string }
-        routeName: { type: string }
+        cityARegionCode: { type: string }
+        cityAName: { type: string }
+        cityBRegionCode: { type: string }
+        cityBName: { type: string }
+        routeCount: { type: integer, minimum: 1 }
+        checkpointCount: { type: integer, minimum: 1 }
+        weeklyTotalFlow: { type: integer, format: int64, minimum: 0 }
+        dailyAverageFlow: { type: integer, format: int64, minimum: 0 }
         averageSpeedKmh: { type: number, minimum: 0 }
-        dailyAverageFlow: { type: integer, minimum: 0, description: 辆/日 }
 
-    RegionPressureRow:
+    RegionalChannelRow:
       type: object
-      required: [regionCode, regionName, activeHubCount, totalDailyFlow, hubShareRatio, interpretation]
+      required: [cityARegionCode, cityAName, cityBRegionCode, cityBName, routeCode, routeName, checkpointCount, weeklyTotalFlow, dailyAverageFlow, averageSpeedKmh]
       properties:
-        regionCode: { type: string }
-        regionName: { type: string }
-        activeHubCount: { type: integer, minimum: 0, description: daily_avg_flow大于100的卡口数 }
-        totalDailyFlow: { type: integer, minimum: 0 }
-        hubShareRatio: { type: number, minimum: 0, maximum: 1, description: 城市活跃卡口数除以当前查询范围全部卡口数 }
-        interpretation: { type: string }
-
-    RoutePressureRow:
-      type: object
-      required: [routeCode, routeName, totalDailyFlow, checkpointCount, averageSpeedKmh]
-      properties:
+        cityARegionCode: { type: string }
+        cityAName: { type: string }
+        cityBRegionCode: { type: string }
+        cityBName: { type: string }
         routeCode: { type: string }
         routeName: { type: string }
-        totalDailyFlow: { type: integer, minimum: 0 }
-        checkpointCount: { type: integer, minimum: 0 }
+        checkpointCount: { type: integer, minimum: 1 }
+        weeklyTotalFlow: { type: integer, format: int64, minimum: 0 }
+        dailyAverageFlow: { type: integer, format: int64, minimum: 0 }
         averageSpeedKmh: { type: number, minimum: 0 }
 
     VehicleStructureRow:
@@ -681,17 +811,48 @@ components:
         bus: { type: integer, minimum: 0 }
         truck: { type: integer, minimum: 0 }
 
+    OdDestinationTendencyRow:
+      type: object
+      required: [analysisRegionCode, analysisCityName, destinationRegionCode, destinationCityName, routeCount, weeklyConnectionStrength, tendencyRatio]
+      properties:
+        analysisRegionCode: { type: string }
+        analysisCityName: { type: string }
+        destinationRegionCode: { type: string }
+        destinationCityName: { type: string }
+        routeCount: { type: integer, minimum: 1, description: 连接城市对的跨市路线数 }
+        weeklyConnectionStrength: { type: number, minimum: 0, description: 各路线卡口7日流量均值之和 }
+        tendencyRatio: { type: number, minimum: 0, maximum: 1, description: 该城市对联系强度占分析城市全省跨市联系强度的比例 }
+
+    OdMatrixCell:
+      type: object
+      required: [destinationRegionCode, destinationCityName, weeklyConnectionStrength, tendencyRatio]
+      properties:
+        destinationRegionCode: { type: string }
+        destinationCityName: { type: string }
+        weeklyConnectionStrength: { type: [number, 'null'], minimum: 0 }
+        tendencyRatio: { type: [number, 'null'], minimum: 0, maximum: 1 }
+
+    OdMatrixRow:
+      type: object
+      required: [analysisRegionCode, analysisCityName, cells]
+      properties:
+        analysisRegionCode: { type: string }
+        analysisCityName: { type: string }
+        cells:
+          type: array
+          items: { $ref: '#/components/schemas/OdMatrixCell' }
+
     TrafficQueryResult:
       type: object
-      required: [queryType, title, summary, routeSummaries, segments, capacityRows, selectedRegions, hubRows, regionPressureRows, routePressureRows, vehicleStructureRows, vehicleTimeFeatureRows, vehicleDayTypeRows, hourlyVehicleSeries, totalSegmentCount, displayedSegmentCount, truncated, source, acquiredAt, warnings, traceId]
+      required: [queryType, title, summary, routeSummaries, segments, capacityRows, selectedRegions, regionalPairRows, regionalChannelRows, totalRegionalPairCount, totalRegionalChannelCount, vehicleStructureRows, vehicleTimeFeatureRows, vehicleDayTypeRows, hourlyVehicleSeries, odDestinationRows, odMatrixRows, totalSegmentCount, displayedSegmentCount, truncated, source, acquiredAt, warnings, traceId]
       properties:
         queryType:
           type: string
-          enum: [PROVINCE_OVERVIEW, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, CHECKPOINT_PRESSURE, CITY_PRESSURE, ROUTE_PRESSURE, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON]
+          enum: [PROVINCE_OVERVIEW, ROUTE_CATALOG, PROVINCE_ABNORMAL, CITY_PAIR, ROUTE_DETAIL, CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL, REGIONAL_TRAFFIC_OVERVIEW, REGIONAL_PAIR_PRESSURE, REGIONAL_KEY_CHANNELS, VEHICLE_PATTERN_OVERVIEW, VEHICLE_STRUCTURE, VEHICLE_HOURLY_PATTERN, VEHICLE_DAY_TYPE_COMPARISON, OD_DESTINATION_TENDENCY, OD_CONNECTION_MATRIX]
         title: { type: string }
         summary:
           type: string
-          description: 路况查询通常为3至4句当前态势摘要加1句未来1至2小时定性趋势，容量查询通常为3至5句研判；服务允许少量句数、标点和同义写法差异。趋势属于基于当前路况事实与模型常识的启发式研判，不是精确交通预测模型
+          description: 普通路况默认只返回当前态势摘要；includeTrend=true时再附加未来1至2小时定性趋势。容量查询通常为3至5句研判。趋势是基于当前事实的启发式研判，不是精确预测模型
         routeSummaries:
           type: array
           items: { $ref: '#/components/schemas/RouteTrafficSummary' }
@@ -704,18 +865,16 @@ components:
         selectedRegions:
           type: array
           items: { $ref: '#/components/schemas/SelectedRegion' }
-        hubRows:
-          type: array
-          maxItems: 20
-          items: { $ref: '#/components/schemas/TransportHubRow' }
-        regionPressureRows:
+        regionalPairRows:
           type: array
           maxItems: 5
-          items: { $ref: '#/components/schemas/RegionPressureRow' }
-        routePressureRows:
+          items: { $ref: '#/components/schemas/RegionalPairRow' }
+        regionalChannelRows:
           type: array
           maxItems: 10
-          items: { $ref: '#/components/schemas/RoutePressureRow' }
+          items: { $ref: '#/components/schemas/RegionalChannelRow' }
+        totalRegionalPairCount: { type: integer, minimum: 0 }
+        totalRegionalChannelCount: { type: integer, minimum: 0 }
         analysisCity: { type: [string, 'null'] }
         vehicleStructureRows:
           type: array
@@ -730,6 +889,14 @@ components:
           type: array
           maxItems: 24
           items: { $ref: '#/components/schemas/HourlyVehicleFlow' }
+        odDestinationRows:
+          type: array
+          description: 单城市目的地联系倾向，按倾向比例降序
+          items: { $ref: '#/components/schemas/OdDestinationTendencyRow' }
+        odMatrixRows:
+          type: array
+          description: 两市、多市或全省目的地联系倾向矩阵；无直接跨市路线的单元格返回null
+          items: { $ref: '#/components/schemas/OdMatrixRow' }
         totalSegmentCount:
           type: integer
           minimum: 0
@@ -846,13 +1013,24 @@ components:
         expectedWorkflowVersion: { type: integer, minimum: 0 }
         idempotencyKey: { type: string, minLength: 1, maxLength: 100 }
 
+    EventTypeCorrectionRequest:
+      type: object
+      required: [eventType, reason, expectedWorkflowVersion, idempotencyKey]
+      properties:
+        eventType:
+          type: string
+          enum: [DT01, DT02, DT03, DT04, DT05, ET101, ET102, ET103, ET104, ET105, ET106, ET107, ET108, ET109, ET110, ET112]
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        expectedWorkflowVersion: { type: integer, minimum: 0 }
+        idempotencyKey: { type: string, minLength: 1, maxLength: 100 }
+
     EmergencyEvent:
       type: object
       required: [eventId, customId, eventType, description]
       properties:
         eventId:
           type: string
-          description: 以字符串传输的数据库BIGINT主键
+          description: w_lw_incident.c_no，不使用贴源表自增id
         customId: { type: string }
         occurrenceTime:
           type: [string, 'null']
@@ -868,6 +1046,11 @@ components:
         cityName:
           type: [string, 'null']
           description: 事件归属的市级调度范围
+        sourceName: { type: [string, 'null'], description: 事件来源 }
+        sourceOrgName: { type: [string, 'null'], description: 来源所属单位 }
+        place: { type: [string, 'null'], description: 甲方记录的发生地点 }
+        routeNo: { type: [string, 'null'] }
+        routeName: { type: [string, 'null'] }
 
     SuggestedResource:
       type: object
@@ -961,7 +1144,36 @@ components:
         updatedAt: { type: string, format: date-time }
         rejectionReason: { type: [string, 'null'] }
         errorMessage: { type: [string, 'null'] }
+        responsePlanId: { type: [string, 'null'], description: 生成工单所使用的已发布预案ID }
+        responsePlanVersion: { type: [integer, 'null'], minimum: 1 }
+        responsePlanName: { type: [string, 'null'] }
         approvalRequired: { type: boolean }
+
+    ResponsePlanResourceBaseline:
+      type: object
+      required: [resourceTypeCode, quantity, purpose, mode]
+      properties:
+        resourceTypeCode: { type: string }
+        quantity: { type: integer, minimum: 1 }
+        purpose: { type: string }
+        mode: { type: string, enum: [BASE, CONDITIONAL] }
+
+    EmergencyResponsePlanSnapshot:
+      type: object
+      required: [planId, eventType, eventTypeName, version, requiredFacts, rescuePlanTemplate, resourceBaseline, contentHash]
+      properties:
+        planId: { type: string }
+        eventType: { type: string }
+        eventTypeName: { type: string }
+        version: { type: integer, minimum: 1 }
+        requiredFacts:
+          type: array
+          items: { type: string }
+        rescuePlanTemplate: { type: string }
+        resourceBaseline:
+          type: array
+          items: { $ref: '#/components/schemas/ResponsePlanResourceBaseline' }
+        contentHash: { type: string, minLength: 64, maxLength: 64 }
 
     EmergencyAlert:
       type: object
@@ -1027,6 +1239,10 @@ components:
         professionalOpinion: { type: string }
         commandOpinion: { type: [string, 'null'] }
         publishedAt: { type: string, format: date-time }
+        responsePlan:
+          oneOf:
+            - $ref: '#/components/schemas/EmergencyResponsePlanSnapshot'
+            - type: 'null'
 
     CommandDecision:
       type: object
@@ -1056,7 +1272,7 @@ components:
         workflowId: { type: string }
         actionType:
           type: string
-          enum: [GENERATION_STARTED, GENERATION_COMPLETED, GENERATION_FAILED, GENERATION_RETRIED, LEVEL_1_SUBMITTED, LEVEL_1_RETURNED, LEVEL_2_PASSED, LEVEL_2_RETURNED, LEVEL_3_RETURNED, LEVEL_3_PUBLISHED, RESOURCES_RELEASED, NO_DISPATCH]
+          enum: [GENERATION_STARTED, GENERATION_COMPLETED, GENERATION_FAILED, GENERATION_RETRIED, EVENT_TYPE_CORRECTED, LEVEL_1_SUBMITTED, LEVEL_1_RETURNED, LEVEL_2_PASSED, LEVEL_2_RETURNED, LEVEL_3_RETURNED, LEVEL_3_PUBLISHED, RESOURCES_RELEASED, NO_DISPATCH]
         fromStage:
           oneOf:
             - $ref: '#/components/schemas/WorkflowStage'
@@ -1088,6 +1304,7 @@ components:
             - type: 'null'
         workflowStatus: { $ref: '#/components/schemas/WorkflowStatus' }
         workflowVersion: { type: integer, minimum: 0 }
+        terminalReason: { type: [string, 'null'], description: 无需调度等终止决定原因 }
         event: { $ref: '#/components/schemas/EmergencyEvent' }
         currentPlan:
           oneOf:
@@ -1110,11 +1327,13 @@ components:
 
     WorkflowCounts:
       type: object
-      required: [level1, level2, level3]
+      required: [level1, level2, level3, pendingClassification, classificationFailed]
       properties:
         level1: { type: integer, minimum: 0 }
         level2: { type: integer, minimum: 0 }
         level3: { type: integer, minimum: 0 }
+        pendingClassification: { type: integer, minimum: 0 }
+        classificationFailed: { type: integer, minimum: 0 }
 
     WorkflowInbox:
       type: object
@@ -1136,6 +1355,168 @@ components:
         page: { type: integer, minimum: 0 }
         size: { type: integer, minimum: 1 }
         total: { type: integer, minimum: 0 }
+
+    FacilityAlertStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, CLOSED]
+      description: 待确认、处理中、已结束（已消除或已忽略）
+
+    FacilityAlarmLevel:
+      type: string
+      enum: [WARNING, SEVERE, EMERGENCY]
+
+    FacilityHealthState:
+      type: string
+      enum: [NO_ACTIVE_ALERT, ATTENTION, ABNORMAL, DANGER]
+
+    FacilityAlert:
+      type: object
+      required: [alertId, facilityName, metricName, alarmLevel, alarmLevelName, collectTime, triggerTime, status, statusName, thresholdAssessment, sourceConsistent]
+      properties:
+        alertId: { type: integer, format: int64 }
+        facilityName: { type: string }
+        metricName: { type: string }
+        actualValue: { type: [number, 'null'] }
+        actualStringValue: { type: [string, 'null'] }
+        thresholdMin: { type: [number, 'null'] }
+        thresholdMax: { type: [number, 'null'] }
+        alarmLevel: { $ref: '#/components/schemas/FacilityAlarmLevel' }
+        alarmLevelName: { type: string }
+        collectTime: { type: string, format: date-time }
+        triggerTime: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/FacilityAlertStatus' }
+        statusName: { type: string }
+        remark: { type: [string, 'null'] }
+        thresholdAssessment: { type: string }
+        sourceConsistent:
+          type: boolean
+          description: 实际数值与表内阈值快照是否一致；false时页面提示核验源数据
+
+    FacilityAlertCounts:
+      type: object
+      required: [pending, confirmed, closed, activeWarning, activeSevere, activeEmergency]
+      properties:
+        pending: { type: integer, minimum: 0 }
+        confirmed: { type: integer, minimum: 0 }
+        closed: { type: integer, minimum: 0 }
+        activeWarning: { type: integer, minimum: 0 }
+        activeSevere: { type: integer, minimum: 0 }
+        activeEmergency: { type: integer, minimum: 0 }
+        dataAsOf: { type: [string, 'null'], format: date-time }
+
+    FacilityAlertPage:
+      type: object
+      required: [items, page, size, total, counts]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/FacilityAlert' }
+        page: { type: integer, minimum: 0 }
+        size: { type: integer, minimum: 1 }
+        total: { type: integer, minimum: 0 }
+        counts: { $ref: '#/components/schemas/FacilityAlertCounts' }
+
+    FacilityFocusItem:
+      type: object
+      required: [facilityName, healthState, healthStateName, highestAlarmLevel, highestAlarmLevelName, activeAlertCount, pendingCount, confirmedCount, metricNames, oldestTriggerTime, latestCollectTime, focusReason]
+      properties:
+        facilityName: { type: string }
+        healthState: { $ref: '#/components/schemas/FacilityHealthState' }
+        healthStateName: { type: string }
+        highestAlarmLevel: { $ref: '#/components/schemas/FacilityAlarmLevel' }
+        highestAlarmLevelName: { type: string }
+        activeAlertCount: { type: integer, minimum: 1 }
+        pendingCount: { type: integer, minimum: 0 }
+        confirmedCount: { type: integer, minimum: 0 }
+        metricNames:
+          type: array
+          items: { type: string }
+        oldestTriggerTime: { type: string, format: date-time }
+        latestCollectTime: { type: string, format: date-time }
+        focusReason: { type: string }
+
+    FacilityHealthReport:
+      type: object
+      required: [generatedAt, activeAlertCount, affectedFacilityCount, warningCount, severeCount, emergencyCount, pendingCount, confirmedCount, overallHealth, overallHealthName, summary, facilities]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        dataAsOf: { type: [string, 'null'], format: date-time }
+        activeAlertCount: { type: integer, minimum: 0 }
+        affectedFacilityCount: { type: integer, minimum: 0 }
+        warningCount: { type: integer, minimum: 0 }
+        severeCount: { type: integer, minimum: 0 }
+        emergencyCount: { type: integer, minimum: 0 }
+        pendingCount: { type: integer, minimum: 0 }
+        confirmedCount: { type: integer, minimum: 0 }
+        overallHealth: { $ref: '#/components/schemas/FacilityHealthState' }
+        overallHealthName: { type: string }
+        summary: { type: string }
+        facilities:
+          type: array
+          items: { $ref: '#/components/schemas/FacilityFocusItem' }
+
+    FacilityAlertTransitionRequest:
+      type: object
+      required: [expectedStatus, targetStatus, remark]
+      properties:
+        expectedStatus: { $ref: '#/components/schemas/FacilityAlertStatus' }
+        targetStatus: { $ref: '#/components/schemas/FacilityAlertStatus' }
+        resolutionType:
+          type: [string, 'null']
+          enum: [RESOLVED, IGNORED, null]
+        remark: { type: string, minLength: 1, maxLength: 200 }
+
+    FacilityAlertPageApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/FacilityAlertPage' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    FacilityHealthReportApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/FacilityHealthReport' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    FacilityFocusApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/FacilityFocusItem' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    FacilityAlertApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { $ref: '#/components/schemas/FacilityAlert' }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
+
+    BooleanApiResponse:
+      type: object
+      required: [code, message, data, traceId, timestamp]
+      properties:
+        code: { const: OK }
+        message: { type: string }
+        data: { type: boolean }
+        traceId: { type: string }
+        timestamp: { type: string, format: date-time }
 
     TrafficQueryApiResponse:
       type: object

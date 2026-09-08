@@ -14,6 +14,11 @@ export interface EmergencyEvent {
   description: string
   cityCode?: string
   cityName?: string
+  sourceName?: string
+  sourceOrgName?: string
+  place?: string
+  routeNo?: string
+  routeName?: string
 }
 
 export interface SuggestedResource {
@@ -70,6 +75,9 @@ export interface DispatchPlan {
   updatedAt: string
   rejectionReason?: string
   errorMessage?: string
+  responsePlanId?: string
+  responsePlanVersion?: number
+  responsePlanName?: string
   approvalRequired?: boolean
 }
 
@@ -127,6 +135,13 @@ export interface NoticeSnapshot {
   professionalOpinion: string
   commandOpinion?: string
   publishedAt: string
+  responsePlan?: {
+    planId: string
+    eventType: string
+    eventTypeName: string
+    version: number
+    contentHash: string
+  }
 }
 
 export interface CommandDecisionRecord {
@@ -162,6 +177,7 @@ export interface EmergencyWorkflowItem {
   currentStage?: WorkflowStage | null
   workflowStatus: WorkflowStatus
   workflowVersion: number
+  terminalReason?: string
   event: EmergencyEvent
   currentPlan?: DispatchPlan
   professionalReview?: ProfessionalReview
@@ -174,6 +190,8 @@ export interface WorkflowCounts {
   level1: number
   level2: number
   level3: number
+  pendingClassification?: number
+  classificationFailed?: number
 }
 
 export interface WorkflowInbox {

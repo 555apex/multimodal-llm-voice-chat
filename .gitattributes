@@ -1,2 +1,11 @@
+# Preserve the upstream Windows wrapper bytes without a second CRLF conversion.
 /mvnw text eol=lf
-/mvnw.cmd text eol=crlf
+mvnw.cmd -text
+/deploy/dgx/dgx-stack text eol=lf
+/deploy/dgx/db-maintenance text eol=lf
+/deploy/dgx/download-speech-models text eol=lf
+/deploy/dgx/mysql-client-entrypoint text eol=lf
+/deploy/dgx/public-db-access text eol=lf
+/deploy/dgx/*.py text eol=lf
+/model-serving/scripts/* text eol=lf
+*.py text eol=lf

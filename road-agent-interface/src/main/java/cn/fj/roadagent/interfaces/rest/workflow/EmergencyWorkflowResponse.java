@@ -16,6 +16,7 @@ public record EmergencyWorkflowResponse(
         WorkflowStage currentStage,
         WorkflowStatus workflowStatus,
         long workflowVersion,
+        String terminalReason,
         EmergencyEventResponse event,
         DispatchResponse currentPlan,
         ProfessionalReview professionalReview,
@@ -30,6 +31,7 @@ public record EmergencyWorkflowResponse(
                 view.workflow() == null
                         ? WorkflowStatus.WAITING_GENERATION : view.workflow().status(),
                 view.workflow() == null ? 0 : view.workflow().lockVersion(),
+                view.workflow() == null ? null : view.workflow().terminalReason(),
                 EmergencyEventResponse.from(view.event()),
                 view.currentPlan() == null ? null : DispatchResponse.from(view.currentPlan()),
                 view.professionalReview(), view.commandDecision(), view.timeline(),

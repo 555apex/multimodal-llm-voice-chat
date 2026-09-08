@@ -2,6 +2,8 @@ package cn.fj.roadagent.core.dispatch;
 
 import cn.fj.roadagent.application.dispatch.CommandDecisionCommand;
 import cn.fj.roadagent.application.dispatch.CommandDecisionUseCase;
+import cn.fj.roadagent.application.dispatch.CorrectEventTypeCommand;
+import cn.fj.roadagent.application.dispatch.CorrectEventTypeUseCase;
 import cn.fj.roadagent.application.dispatch.DispatchApprovalCommand;
 import cn.fj.roadagent.application.dispatch.DispatchApprovalUseCase;
 import cn.fj.roadagent.application.dispatch.DispatchQueryUseCase;
@@ -32,6 +34,8 @@ import cn.fj.roadagent.application.port.ResourceAllocationPort;
 import cn.fj.roadagent.application.port.ResourceDataPort;
 import cn.fj.roadagent.application.port.DispatchRepository;
 import cn.fj.roadagent.application.port.EmergencyWorkflowRepository;
+import cn.fj.roadagent.application.port.EventClassificationLogPort;
+import cn.fj.roadagent.application.port.EmergencyResponsePlanPort;
 import cn.fj.roadagent.application.port.UnitOfWork;
 import cn.fj.roadagent.domain.dispatch.ApprovalDecision;
 import cn.fj.roadagent.domain.dispatch.CommandDecision;
@@ -40,7 +44,14 @@ import cn.fj.roadagent.domain.dispatch.DispatchPlan;
 import cn.fj.roadagent.domain.dispatch.DispatchStatus;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.EmergencyWorkflow;
+import cn.fj.roadagent.domain.dispatch.EmergencyEventType;
+import cn.fj.roadagent.domain.dispatch.EventClassificationAttempt;
+import cn.fj.roadagent.domain.dispatch.EventClassificationMethod;
+import cn.fj.roadagent.domain.dispatch.EventClassificationStatus;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
+import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlan;
+import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlanSnapshot;
+import cn.fj.roadagent.domain.dispatch.GeoPoint;
 import cn.fj.roadagent.domain.dispatch.NoticeSnapshot;
 import cn.fj.roadagent.domain.dispatch.ProfessionalReview;
 import cn.fj.roadagent.domain.dispatch.ReviewStatus;
@@ -48,6 +59,8 @@ import cn.fj.roadagent.domain.dispatch.ResourceAllocation;
 import cn.fj.roadagent.domain.dispatch.ResourceAllocationStatus;
 import cn.fj.roadagent.domain.dispatch.ResourceFeasibility;
 import cn.fj.roadagent.domain.dispatch.ResourceRequirement;
+import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceBaseline;
+import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceMode;
 import cn.fj.roadagent.domain.dispatch.WorkflowAction;
 import cn.fj.roadagent.domain.dispatch.WorkflowActionType;
 import cn.fj.roadagent.domain.dispatch.WorkflowStage;
@@ -76,7 +89,8 @@ public final class DispatchApplicationService implements
         ProfessionalReviewUseCase,
         CommandDecisionUseCase,
         QueryEmergencyWorkflowUseCase,
-        ReleaseResourcesUseCase {
+        ReleaseResourcesUseCase,
+        CorrectEventTypeUseCase {
 
     private final AbnormalEventPort eventPort;
     private final DispatchRepository dispatchRepository;
@@ -84,7 +98,10 @@ public final class DispatchApplicationService implements
     private final ChatModelPort chatModelPort;
     private final ResourceDataPort resourceDataPort;
     private final ResourceAllocationPort resourceAllocationPort;
+    private final EventClassificationLogPort classificationLogPort;
+    private final EmergencyResponsePlanPort responsePlanPort;
     private final EmergencyResourceAllocator resourceAllocator;
+    private final ResponsePlanRenderer responsePlanRenderer = new ResponsePlanRenderer();
     private final UnitOfWork unitOfWork;
     private final Clock clock;
     private final Duration staleGeneratingAfter;
@@ -101,16 +118,74 @@ public final class DispatchApplicationService implements
             Clock clock,
             Duration staleGeneratingAfter
     ) {
+        this(eventPort, dispatchRepository, workflowRepository, chatModelPort, resourceDataPort,
+                resourceAllocationPort, resourceAllocator, noOpClassificationLog(),
+                legacyResponsePlans(), unitOfWork,
+                clock, staleGeneratingAfter);
+    }
+
+    public DispatchApplicationService(
+            AbnormalEventPort eventPort,
+            DispatchRepository dispatchRepository,
+            EmergencyWorkflowRepository workflowRepository,
+            ChatModelPort chatModelPort,
+            ResourceDataPort resourceDataPort,
+            ResourceAllocationPort resourceAllocationPort,
+            EmergencyResourceAllocator resourceAllocator,
+            EventClassificationLogPort classificationLogPort,
+            UnitOfWork unitOfWork,
+            Clock clock,
+            Duration staleGeneratingAfter
+    ) {
+        this(eventPort, dispatchRepository, workflowRepository, chatModelPort, resourceDataPort,
+                resourceAllocationPort, resourceAllocator, classificationLogPort,
+                legacyResponsePlans(), unitOfWork, clock, staleGeneratingAfter);
+    }
+
+    public DispatchApplicationService(
+            AbnormalEventPort eventPort,
+            DispatchRepository dispatchRepository,
+            EmergencyWorkflowRepository workflowRepository,
+            ChatModelPort chatModelPort,
+            ResourceDataPort resourceDataPort,
+            ResourceAllocationPort resourceAllocationPort,
+            EmergencyResourceAllocator resourceAllocator,
+            EventClassificationLogPort classificationLogPort,
+            EmergencyResponsePlanPort responsePlanPort,
+            UnitOfWork unitOfWork,
+            Clock clock,
+            Duration staleGeneratingAfter
+    ) {
         this.eventPort = eventPort;
         this.dispatchRepository = dispatchRepository;
         this.workflowRepository = workflowRepository;
         this.chatModelPort = chatModelPort;
         this.resourceDataPort = resourceDataPort;
         this.resourceAllocationPort = resourceAllocationPort;
+        this.classificationLogPort = classificationLogPort;
+        this.responsePlanPort = responsePlanPort;
         this.resourceAllocator = resourceAllocator;
         this.unitOfWork = unitOfWork;
         this.clock = clock;
         this.staleGeneratingAfter = staleGeneratingAfter;
+    }
+
+    private static EmergencyResponsePlanPort legacyResponsePlans() {
+        return eventType -> Optional.of(new EmergencyResponsePlan(
+                "LEGACY-TEST-" + eventType, eventType, eventType, 1,
+                List.of("模型救援方案"), "【模型救援方案】",
+                List.of(new ResponsePlanResourceBaseline(
+                        "LEGACY", 1, "兼容旧测试", ResponsePlanResourceMode.CONDITIONAL)),
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ));
+    }
+
+    private static EventClassificationLogPort noOpClassificationLog() {
+        return new EventClassificationLogPort() {
+            @Override public int nextAttemptNumber(String eventId) { return 1; }
+            @Override public boolean insert(EventClassificationAttempt attempt) { return true; }
+            @Override public long countLatestFailuresForPendingEvents() { return 0; }
+        };
     }
 
     @Override
@@ -134,7 +209,9 @@ public final class DispatchApplicationService implements
         WorkflowCounts counts = new WorkflowCounts(
                 eventPort.countPendingForStage(WorkflowStage.LEVEL_1),
                 eventPort.countPendingForStage(WorkflowStage.LEVEL_2),
-                eventPort.countPendingForStage(WorkflowStage.LEVEL_3)
+                eventPort.countPendingForStage(WorkflowStage.LEVEL_3),
+                eventPort.countUnclassified(),
+                eventPort.countClassificationFailures()
         );
         EmergencyWorkflowView item = eventPort.findNextPendingForStage(stage)
                 .map(this::viewForEvent)
@@ -177,6 +254,8 @@ public final class DispatchApplicationService implements
     public DispatchPlan generate(String eventId) {
         EmergencyEvent event = requirePendingEvent(eventId);
         requireStructuredCity(event);
+        EmergencyResponsePlanSnapshot responsePlan = requireActiveResponsePlan(
+                event.eventType()).snapshot();
         Optional<EmergencyWorkflow> existingWorkflow =
                 workflowRepository.findWorkflowByEventId(eventId);
         existingWorkflow.ifPresent(this::requireLevel1Workflow);
@@ -231,7 +310,8 @@ public final class DispatchApplicationService implements
             Instant now = clock.instant();
             String workflowId = "WF-" + UUID.randomUUID();
             String planId = "DP-" + UUID.randomUUID();
-            DispatchPlan created = DispatchPlan.generating(planId, lockedEvent, 1L, now);
+            DispatchPlan created = DispatchPlan.generating(
+                    planId, lockedEvent, 1L, now, responsePlan);
             EmergencyWorkflow workflow = EmergencyWorkflow.generating(
                     workflowId, lockedEvent.eventId(), planId, 1L, now
             );
@@ -337,6 +417,66 @@ public final class DispatchApplicationService implements
                     command.comment(), command.idempotencyKey(), now
             ));
         });
+        return getWorkflow(command.workflowId());
+    }
+
+    @Override
+    public EmergencyWorkflowView correctEventType(CorrectEventTypeCommand command) {
+        if (command == null) throw new IllegalArgumentException("事件类型更正请求不能为空");
+        String nextType = EmergencyEventType.require(command.eventType()).name();
+        String reason = requireLength(command.reason(), "类型更正原因", 500);
+        requireIdempotency(command.idempotencyKey());
+        if (duplicateAction(command.workflowId(), command.idempotencyKey()).isPresent()) {
+            return getWorkflow(command.workflowId());
+        }
+        RevisionClaim claim = unitOfWork.required(() -> {
+            EmergencyWorkflow current = lockWorkflow(command.workflowId());
+            requireExpectedWorkflowVersion(current, command.expectedWorkflowVersion());
+            ensureIdempotencyAvailable(current.workflowId(), command.idempotencyKey());
+            if (current.currentStage() != WorkflowStage.LEVEL_1
+                    || current.status() != WorkflowStatus.WAITING_LEVEL_1_SUBMISSION) {
+                throw conflict("WORKFLOW_STAGE_CONFLICT", "只能在一级待上报阶段更正事件类型");
+            }
+            DispatchPlan plan = requireCurrentWaitingPlan(current);
+            String previousType = plan.event().eventType();
+            if (previousType.equals(nextType)) {
+                throw new IllegalArgumentException("新事件类型不能与当前类型相同");
+            }
+            Instant now = clock.instant();
+            releaseReservedResources(current, plan, reason, now);
+            DispatchPlan rejected = plan.reject("事件类型更正：" + reason, now);
+            if (!dispatchRepository.updateRejected(rejected)) {
+                throw conflict("DISPATCH_STATE_CONFLICT", "方案状态已变化，请刷新后重试");
+            }
+            if (!eventPort.correctEventType(current.eventId(), previousType, nextType)) {
+                throw conflict("EVENT_TYPE_CONFLICT", "事件类型已被其他操作修改");
+            }
+            EmergencyEvent correctedEvent = withType(plan.event(), nextType);
+            DispatchPlan revision = rejected.nextRevision(
+                    correctedEvent, now, requireActiveResponsePlan(nextType).snapshot());
+            if (!dispatchRepository.insert(revision)) {
+                throw conflict("DISPATCH_VERSION_CONFLICT", "更正后的方案版本已存在");
+            }
+            EmergencyWorkflow revising = current.beginRevision(revision.version(), now);
+            updateWorkflow(revising, current.lockVersion());
+            int attempt = classificationLogPort.nextAttemptNumber(current.eventId());
+            if (!classificationLogPort.insert(new EventClassificationAttempt(
+                    "CL-" + UUID.randomUUID(), current.eventId(), attempt,
+                    EventClassificationMethod.MANUAL, EventClassificationStatus.MANUALLY_CORRECTED,
+                    nextType, 1.0, previousType + " -> " + nextType + "；" + reason,
+                    null, null, command.idempotencyKey(), now))) {
+                throw conflict("CLASSIFICATION_LOG_CONFLICT", "事件类型更正留痕写入失败");
+            }
+            insertAction(action(
+                    current, WorkflowActionType.EVENT_TYPE_CORRECTED,
+                    WorkflowStage.LEVEL_1, WorkflowStage.LEVEL_1,
+                    current.status(), revising.status(),
+                    previousType + " -> " + nextType + "；" + reason,
+                    command.idempotencyKey(), now));
+            return new RevisionClaim(rejected, revision, revising);
+        });
+        generateContent(claim.nextPlan(), claim.rejectedPlan(),
+                "事件类型已更正为" + nextType + "：" + reason, claim.workflow());
         return getWorkflow(command.workflowId());
     }
 
@@ -533,7 +673,7 @@ public final class DispatchApplicationService implements
             }
             Instant now = clock.instant();
             EmergencyWorkflow workflow = EmergencyWorkflow.noDispatch(
-                    "WF-" + UUID.randomUUID(), event.eventId(), now
+                    "WF-" + UUID.randomUUID(), event.eventId(), reason, now
             );
             if (!workflowRepository.insertWorkflow(workflow)) {
                 throw conflict("WORKFLOW_CREATE_CONFLICT", "工作流已由其他请求创建");
@@ -560,7 +700,10 @@ public final class DispatchApplicationService implements
             if (latest.status() == DispatchStatus.GENERATING && !isStale(latest)) {
                 return new GenerationClaim(latest, locked, false);
             }
-            DispatchPlan retry = latest.retry(clock.instant());
+            EmergencyResponsePlanSnapshot retryPlan = latest.responsePlan() == null
+                    ? requireActiveResponsePlan(latest.event().eventType()).snapshot()
+                    : latest.responsePlan();
+            DispatchPlan retry = latest.retry(clock.instant(), retryPlan);
             if (!dispatchRepository.restartGeneration(
                     retry, clock.instant().minus(staleGeneratingAfter)
             )) {
@@ -663,17 +806,23 @@ public final class DispatchApplicationService implements
         }
         DispatchPlanProposal proposal;
         List<ResourceRequirement> requirements;
-        String rescuePlan;
+        EmergencyResponsePlanSnapshot responsePlan = generating.responsePlan() == null
+                ? requireActiveResponsePlan(generating.event().eventType()).snapshot()
+                : generating.responsePlan();
+        DispatchPlan generatingWithPlan = generating.responsePlan() == null
+                ? generating.withResponsePlan(responsePlan) : generating;
+        String supplementalAdvice;
         try {
             proposal = chatModelPort.generateStructured(
-                    proposalRequest(generating.event(), previous, feedback, catalog),
+                    proposalRequest(generating.event(), previous, feedback, catalog, responsePlan),
                     DispatchPlanProposal.class
             );
             if (proposal == null) {
                 throw new IllegalArgumentException("模型返回的工单内容为空");
             }
-            requirements = enrichRequirements(proposal, catalog);
-            rescuePlan = requireLength(proposal.rescuePlanText(), "模型救援方案", 10000);
+            requirements = enrichRequirements(proposal, catalog, responsePlan);
+            supplementalAdvice = optionalLength(
+                    proposal.supplementalAdviceText(), "模型补充建议", 1500);
         } catch (IllegalArgumentException exception) {
             ExternalServiceException wrapped = new ExternalServiceException(
                     "CHAT_MODEL", "MODEL_INVALID_OUTPUT",
@@ -690,24 +839,31 @@ public final class DispatchApplicationService implements
             return unitOfWork.required(() -> {
                 EmergencyWorkflow locked = lockWorkflow(workflow.workflowId());
                 if (!locked.planId().equals(generating.planId())
-                        || locked.planVersion() != generating.version()) {
+                        || locked.planVersion() != generating.version()
+                        || locked.lockVersion() != workflow.lockVersion()
+                        || (locked.status() != WorkflowStatus.GENERATING
+                            && locked.status() != WorkflowStatus.REVISING)) {
                     throw conflict("DISPATCH_VERSION_CONFLICT", "返工期间方案版本已变化");
                 }
                 Set<String> typeCodes = requirements.stream()
                         .map(ResourceRequirement::resourceTypeCode)
                         .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
                 List<EmergencyResource> resources = resourceDataPort.lockByTypeCodes(typeCodes);
+                Map<String, GeoPoint> cityCenters = resourceDataPort.cityCenters();
                 Instant now = clock.instant();
                 ResourceAllocationResult result = resourceAllocator.allocate(
-                        generating.event(), requirements, resources, locked.workflowId(),
+                        generating.event(), requirements, resources, cityCenters, locked.workflowId(),
                         generating.planId(), generating.version(), now
                 );
                 persistReservations(result);
                 List<AllocatedResource> allocations = result.allocations().stream()
                         .map(ResourceAllocation::resource).toList();
-                DispatchPlan completed = generating.generated(
+                String rescuePlan = responsePlanRenderer.render(
+                        responsePlan, generating.event(), proposal.templateVariables(),
+                        supplementalAdvice);
+                DispatchPlan completed = generatingWithPlan.generated(
                         requirements, allocations, result.shortages(),
-                        rescuePlanWithFacts(rescuePlan, allocations, result.shortages()), now
+                        rescuePlan, now
                 );
                 if (!dispatchRepository.updateGenerated(completed)) {
                     throw conflict("DISPATCH_STATE_CONFLICT", "工单生成状态已变化，请刷新后重试");
@@ -744,7 +900,10 @@ public final class DispatchApplicationService implements
             unitOfWork.required(() -> {
                 EmergencyWorkflow locked = lockWorkflow(workflow.workflowId());
                 if (!locked.planId().equals(generating.planId())
-                        || locked.planVersion() != generating.version()) {
+                        || locked.planVersion() != generating.version()
+                        || locked.lockVersion() != workflow.lockVersion()
+                        || (locked.status() != WorkflowStatus.GENERATING
+                            && locked.status() != WorkflowStatus.REVISING)) {
                     return;
                 }
                 Instant now = clock.instant();
@@ -962,7 +1121,8 @@ public final class DispatchApplicationService implements
                 plan.resourceRequirements(), plan.allocatedResources(),
                 plan.resourceShortages(), plan.rescuePlan(), review.eventSeverity(),
                 review.impactAssessment(), review.coordinationRequirements(),
-                review.reviewOpinion(), optionalLength(commandOpinion, "省级批示", 500), now
+                review.reviewOpinion(), optionalLength(commandOpinion, "省级批示", 500), now,
+                plan.responsePlan()
         );
     }
 
@@ -970,17 +1130,22 @@ public final class DispatchApplicationService implements
             EmergencyEvent event,
             DispatchPlan previous,
             String feedback,
-            List<EmergencyResource> catalog
+            List<EmergencyResource> catalog,
+            EmergencyResponsePlanSnapshot responsePlan
     ) {
         String system = """
-                你是福建公路应急调度需求分析器。资源数据库是唯一可信来源。
-                必须输出严格JSON对象，仅包含resourceRequirements和rescuePlan。
+                你是福建公路应急预案填充与资源需求分析器。数据库预案和资源库是唯一可信来源。
+                必须输出严格JSON对象，仅包含templateVariables、resourceRequirements和supplementalAdvice。
+                templateVariables是对象，键必须逐字选自用户提供的待填项；事实不明时填“待核实”，不得臆测。
+                每个待填项是模板一对【】之间的完整文本，可能包含分号、顿号、斜线和句号，必须完整复制，禁止拆分、缩写或改写。
+                “应核实现场事实”仅用于理解上下文，不能将其中的单条事实名称作为templateVariables的键。
+                可以省略任何不确定的填充项（系统会显示“待核实”）；不能确定键名时返回空对象templateVariables:{}，不要猜测键名。
                 resourceRequirements是数组，每项仅包含resourceTypeCode、quantity、purpose。
-                resourceTypeCode必须逐字选自用户提供的资源类型白名单，不得创造其他类型。
+                resourceTypeCode必须逐字选自预案资源基线，不得创造其他类型。BASE项不得删除，CONDITIONAL项只在现场事实满足条件时选择。
                 quantity必须是大于0的整数。不得输出资源ID、资源名称、来源城市、距离、库存或到达时间。
                 即使当前库存可能不足，也只能提出白名单内资源的真实需求，缺口由系统计算。
-                rescuePlan必须是单个JSON字符串，禁止输出对象或数组；字符串内用中文自然段覆盖现场安全、交通组织、救援处置和信息报送，不得声称工单已经审批或下发。
-                输出格式示例：{"resourceRequirements":[{"resourceTypeCode":"ROAD_RESCUE_TEAM","quantity":1,"purpose":"现场抢通"}],"rescuePlan":"先设置警戒并疏导交通，再开展道路抢通，持续报送处置进展。"}
+                supplementalAdvice只写预案模板未覆盖且由事件事实支持的补充建议，没有则返回空字符串；不得重写或删改预案。
+                输出结构示例：{"templateVariables":{},"resourceRequirements":[],"supplementalAdvice":""}。实际资源需求仍须遵守上述预案基线规则。
                 """.strip();
         StringBuilder user = new StringBuilder("""
                 事件ID：%s
@@ -988,6 +1153,12 @@ public final class DispatchApplicationService implements
                 事件城市：%s（%s）
                 发生时间：%s
                 事件描述：%s
+                当前已发布预案：%s v%d（%s）
+                应核实现场事实：%s
+                预案待填项：%s
+                预案资源基线：%s
+                预案固定模板（只用于理解填充上下文，不得在输出中重写）：
+                %s
                 可选资源类型及当前城市库存摘要：
                 %s
                 """.formatted(
@@ -995,7 +1166,12 @@ public final class DispatchApplicationService implements
                 eventTypeName(event.eventType()), event.eventType(),
                 event.cityName(), event.cityCode(),
                 event.occurrenceTime() == null ? "未知" : event.occurrenceTime(),
-                event.description(), catalogPrompt(catalog)
+                event.description(), responsePlan.planId(), responsePlan.version(),
+                responsePlan.contentHash(),
+                responsePlan.requiredFacts(),
+                responsePlanRenderer.placeholders(responsePlan.rescuePlanTemplate()),
+                responsePlan.resourceBaseline(), responsePlan.rescuePlanTemplate(),
+                catalogPrompt(catalog)
         ));
         if (previous != null) {
             user.append("\n上一版资源需求：").append(previous.resourceRequirements());
@@ -1010,33 +1186,52 @@ public final class DispatchApplicationService implements
 
     private List<ResourceRequirement> enrichRequirements(
             DispatchPlanProposal proposal,
-            List<EmergencyResource> catalog
+            List<EmergencyResource> catalog,
+            EmergencyResponsePlanSnapshot responsePlan
     ) {
-        if (proposal.resourceRequirements().isEmpty()) {
-            throw new IllegalArgumentException("模型没有提出资源需求");
-        }
         Map<String, EmergencyResource> types = new LinkedHashMap<>();
         catalog.stream().sorted(java.util.Comparator.comparing(EmergencyResource::resourceId))
                 .forEach(item -> types.putIfAbsent(item.typeCode(), item));
-        Set<String> seen = new java.util.HashSet<>();
-        return proposal.resourceRequirements().stream().map(item -> {
+        Map<String, ResponsePlanResourceBaseline> baseline = responsePlan.resourceBaseline()
+                .stream().collect(java.util.stream.Collectors.toMap(
+                        ResponsePlanResourceBaseline::resourceTypeCode, item -> item,
+                        (left, right) -> left, LinkedHashMap::new));
+        Map<String, ResourceRequirement> requirements = new LinkedHashMap<>();
+        proposal.resourceRequirements().forEach(item -> {
             String code = requireLength(item.resourceTypeCode(), "资源类型编码", 40)
                     .toUpperCase(Locale.ROOT);
+            if (!baseline.containsKey(code) && !responsePlan.planId().startsWith("LEGACY-TEST-")) {
+                throw new IllegalArgumentException("模型使用了预案基线外的资源类型：" + code);
+            }
             EmergencyResource type = types.get(code);
             if (type == null) {
                 throw new IllegalArgumentException("模型使用了数据库不存在的资源类型：" + code);
             }
-            if (!seen.add(code)) {
+            if (requirements.containsKey(code)) {
                 throw new IllegalArgumentException("同一资源类型不能重复提出：" + code);
             }
             if (item.quantity() < 1 || item.quantity() > 999) {
                 throw new IllegalArgumentException("资源需求数量必须在1到999之间");
             }
-            return new ResourceRequirement(
+            requirements.put(code, new ResourceRequirement(
                     code, type.type(), item.quantity(), type.unit(),
                     requireLength(item.purpose(), "资源用途", 300)
-            );
-        }).toList();
+            ));
+        });
+        baseline.values().stream()
+                .filter(item -> item.mode() == ResponsePlanResourceMode.BASE)
+                .forEach(item -> {
+                    EmergencyResource type = types.get(item.resourceTypeCode());
+                    if (type == null) {
+                        throw new IllegalArgumentException(
+                                "预案基线资源在当前资源库不可用：" + item.resourceTypeCode());
+                    }
+                    requirements.putIfAbsent(item.resourceTypeCode(), new ResourceRequirement(
+                            item.resourceTypeCode(), type.type(), item.quantity(), type.unit(),
+                            item.purpose()));
+                });
+        if (requirements.isEmpty()) throw new IllegalArgumentException("预案未形成资源需求");
+        return List.copyOf(requirements.values());
     }
 
     private String catalogPrompt(List<EmergencyResource> catalog) {
@@ -1055,34 +1250,6 @@ public final class DispatchApplicationService implements
             result.append('\n');
         });
         return result.toString().strip();
-    }
-
-    private String rescuePlanWithFacts(
-            String modelPlan,
-            List<AllocatedResource> allocations,
-            List<cn.fj.roadagent.domain.dispatch.ResourceShortage> shortages
-    ) {
-        StringBuilder result = new StringBuilder(requireLength(modelPlan, "模型救援方案", 10000));
-        result.append("\n\n数据库资源调度安排：");
-        if (allocations.isEmpty()) {
-            result.append("当前未匹配到可调度资源。");
-        } else {
-            allocations.forEach(item -> result.append("\n- ")
-                    .append(item.dispatchScope() == cn.fj.roadagent.domain.dispatch.DispatchScope.LOCAL
-                            ? "同城调度" : "跨市增援")
-                    .append('：').append(item.sourceCityName()).append(item.resourceName())
-                    .append(' ').append(item.quantity()).append(item.unit())
-                    .append("，城市级估算距离").append(item.estimatedDistanceKm()).append("公里。"));
-        }
-        if (!shortages.isEmpty()) {
-            result.append("\n资源缺口：");
-            shortages.forEach(item -> result.append("\n- ").append(item.resourceTypeName())
-                    .append("需求").append(item.requiredQuantity()).append(item.unit())
-                    .append("，已匹配").append(item.allocatedQuantity()).append(item.unit())
-                    .append("，缺口").append(item.shortageQuantity()).append(item.unit()).append('。'));
-        }
-        result.append("\n上述距离仅用于城市级资源排序，不代表实际道路里程或到达时间。");
-        return result.toString();
     }
 
     private DispatchPlan previousVersion(DispatchPlan current) {
@@ -1185,11 +1352,16 @@ public final class DispatchApplicationService implements
     }
 
     private String eventTypeName(String code) {
-        return switch (code) {
-            case "DT01" -> "崩塌";
-            case "ET101" -> "拥堵";
-            default -> "异常事件";
-        };
+        return EmergencyEventType.fromCode(code)
+                .map(EmergencyEventType::displayName).orElse("异常事件");
+    }
+
+    private EmergencyEvent withType(EmergencyEvent event, String eventType) {
+        return new EmergencyEvent(
+                event.eventId(), event.customId(), event.occurrenceTime(), eventType,
+                event.description(), event.cityCode(), event.cityName(),
+                event.sourceName(), event.sourceOrgName(), event.place(),
+                event.routeNo(), event.routeName(), event.longitude(), event.latitude());
     }
 
     private String safeError(RuntimeException exception) {
@@ -1198,6 +1370,14 @@ public final class DispatchApplicationService implements
             return "模型生成失败";
         }
         return message.length() <= 500 ? message : message.substring(0, 500);
+    }
+
+    private EmergencyResponsePlan requireActiveResponsePlan(String eventType) {
+        return responsePlanPort.findActiveByEventType(eventType)
+                .orElseThrow(() -> new BusinessRuleException(
+                        "RESPONSE_PLAN_NOT_FOUND",
+                        "事件类型" + eventType + "没有已发布的应急预案"
+                ));
     }
 
     private String requireLength(String value, String label, int maxLength) {

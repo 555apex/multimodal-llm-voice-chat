@@ -3,6 +3,7 @@ package cn.fj.roadagent.domain.traffic;
 /** MySQL 国省干线交通与通行能力查询支持的业务范围。 */
 public enum TrafficQueryType {
     PROVINCE_OVERVIEW,
+    ROUTE_CATALOG,
     PROVINCE_ABNORMAL,
     CITY_PAIR,
     ROUTE_DETAIL,
@@ -10,13 +11,18 @@ public enum TrafficQueryType {
     CAPACITY_BOTTLENECKS,
     CAPACITY_ROUTE_DETAIL,
     REGIONAL_TRAFFIC_OVERVIEW,
-    CHECKPOINT_PRESSURE,
-    CITY_PRESSURE,
-    ROUTE_PRESSURE,
+    REGIONAL_PAIR_PRESSURE,
+    REGIONAL_KEY_CHANNELS,
     VEHICLE_PATTERN_OVERVIEW,
     VEHICLE_STRUCTURE,
     VEHICLE_HOURLY_PATTERN,
-    VEHICLE_DAY_TYPE_COMPARISON;
+    VEHICLE_DAY_TYPE_COMPARISON,
+    OD_DESTINATION_TENDENCY,
+    OD_CONNECTION_MATRIX;
+
+    public boolean odQuery() {
+        return this == OD_DESTINATION_TENDENCY || this == OD_CONNECTION_MATRIX;
+    }
 
     public boolean capacityQuery() {
         return this == CAPACITY_OVERVIEW
@@ -26,9 +32,8 @@ public enum TrafficQueryType {
 
     public boolean regionalTrafficQuery() {
         return this == REGIONAL_TRAFFIC_OVERVIEW
-                || this == CHECKPOINT_PRESSURE
-                || this == CITY_PRESSURE
-                || this == ROUTE_PRESSURE;
+                || this == REGIONAL_PAIR_PRESSURE
+                || this == REGIONAL_KEY_CHANNELS;
     }
 
     public boolean vehiclePatternQuery() {

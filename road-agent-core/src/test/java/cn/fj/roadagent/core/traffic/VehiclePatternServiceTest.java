@@ -40,6 +40,10 @@ class VehiclePatternServiceTest {
         assertEquals(0.75, facts.structureRows().get(0).shareRatio());
         assertEquals(750, facts.dayTypeRows().get(0).weekdayVolume());
         assertEquals(150, facts.dayTypeRows().get(0).weekendVolume());
+        assertEquals(22, facts.missingHourCount());
+        var result = cn.fj.roadagent.application.traffic.HighwayTrafficResult
+                .fromVehicleFacts(facts, "测试摘要", "trace");
+        assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("补0不代表实际无车")));
     }
 
     @Test

@@ -64,7 +64,8 @@ public final class VehiclePatternService {
                         || type == TrafficQueryType.VEHICLE_DAY_TYPE_COMPARISON ? allDayTypes : List.of(),
                 type == TrafficQueryType.VEHICLE_PATTERN_OVERVIEW || type == TrafficQueryType.VEHICLE_HOURLY_PATTERN
                         ? allHours : List.of(),
-                snapshot.acquiredAt()
+                snapshot.acquiredAt(),
+                missingHourCount(snapshot)
         );
     }
 
@@ -137,6 +138,15 @@ public final class VehiclePatternService {
         }).toList();
     }
 
+    private int missingHourCount(VehicleTravelPatternSnapshot snapshot) {
+        long distinctHours = snapshot.hourlyFlows().stream()
+                .filter(row -> row.hour().toLocalDate().equals(snapshot.dataDate()))
+                .map(row -> row.hour().getHour())
+                .distinct()
+                .count();
+        return 24 - (int) distinctHours;
+    }
+
     private List<VehicleStructureResultItem> structure(VehicleTravelPatternSnapshot snapshot) {
         long total = java.util.Arrays.stream(VehicleType.values()).mapToLong(snapshot::weeklyVolume).sum();
         return java.util.Arrays.stream(VehicleType.values()).map(type -> new VehicleStructureResultItem(
@@ -201,7 +211,8 @@ public final class VehiclePatternService {
                 你是福建省交通运输车型出行特征分析助手。只能根据用户消息中的结构化事实生成摘要。
                 必须输出严格JSON对象，且只能包含summary字段。summary必须是3至5句、80至600字的连贯中文。
                 先概括所选城市的车型结构或时间规律，再点出占比最高车型、峰值时段或工作日周末差异中与本次查询有关的重点，最后给出简洁监测建议。
-                工作日字段表示5天合计，周末字段表示2天合计，不得将二者改写成日均值；缺失小时已经由Java按0处理。
+                工作日字段表示5天合计，周末字段表示2天合计，不得将二者改写成日均值。
+                缺失小时在图表中由Java补0，补0仅表示源数据未提供，不代表该小时实际没有车辆。
                 必须直接采用结构化事实，不得重新计算、修正或补充数值，不推测事故、天气、道路原因，不输出数据异常分析，不讨论数据限制和系统实现，不使用Markdown。
                 """.strip();
         return new ModelRequest(prompt, serializeFacts(facts), List.of(), 0.1);
@@ -212,8 +223,9 @@ public final class VehiclePatternService {
         out.append("queryType=").append(facts.queryType()).append('\n');
         out.append("title=").append(facts.title()).append('\n');
         out.append("analysisCity=").append(facts.analysisCity()).append('\n');
-        out.append("acquiredAt=").append(facts.acquiredAt()).append('\n');
-        out.append("calculationPolicy=车型3类；24小时；工作日5天合计；周末2天合计；早高峰07至09；晚高峰17至19\n");
+        out.append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n');
+        out.append("calculationPolicy=车型3类；24小时；工作日5天合计；周末2天合计；早高峰07至09；晚高峰17至19；缺失小时补0不代表实际无车\n");
+        out.append("missingHourCount=").append(facts.missingHourCount()).append('\n');
         out.append("vehicleStructureRows:\n");
         facts.structureRows().forEach(row -> out.append("- ").append(row.vehicleTypeName())
                 .append("|周通行量=").append(row.weeklyVolume())

@@ -102,13 +102,9 @@ public class RoadAgentProperties {
             this.authEnabled = authEnabled;
         }
 
-        public Boolean getEnableThinking() {
-            return enableThinking;
-        }
+        public Boolean getEnableThinking() { return enableThinking; }
 
-        public void setEnableThinking(Boolean enableThinking) {
-            this.enableThinking = enableThinking;
-        }
+        public void setEnableThinking(Boolean value) { enableThinking = value; }
 
         public int getTimeoutSeconds() {
             return timeoutSeconds;
@@ -142,6 +138,9 @@ public class RoadAgentProperties {
 
     public static class Dispatch {
         private long staleGeneratingSeconds = 120;
+        private boolean classificationEnabled = true;
+        private long classificationPollSeconds = 5;
+        private long classificationRetrySeconds = 30;
 
         public long getStaleGeneratingSeconds() {
             return staleGeneratingSeconds;
@@ -149,6 +148,30 @@ public class RoadAgentProperties {
 
         public void setStaleGeneratingSeconds(long staleGeneratingSeconds) {
             this.staleGeneratingSeconds = staleGeneratingSeconds;
+        }
+
+        public boolean isClassificationEnabled() {
+            return classificationEnabled;
+        }
+
+        public void setClassificationEnabled(boolean classificationEnabled) {
+            this.classificationEnabled = classificationEnabled;
+        }
+
+        public long getClassificationPollSeconds() {
+            return classificationPollSeconds;
+        }
+
+        public void setClassificationPollSeconds(long classificationPollSeconds) {
+            this.classificationPollSeconds = classificationPollSeconds;
+        }
+
+        public long getClassificationRetrySeconds() {
+            return classificationRetrySeconds;
+        }
+
+        public void setClassificationRetrySeconds(long classificationRetrySeconds) {
+            this.classificationRetrySeconds = classificationRetrySeconds;
         }
     }
 

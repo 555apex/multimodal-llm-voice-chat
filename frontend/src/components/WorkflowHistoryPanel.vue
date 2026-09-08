@@ -42,6 +42,7 @@ function actionText(type: string) {
   const labels: Record<string, string> = {
     GENERATION_STARTED: '开始生成方案', GENERATION_COMPLETED: '方案生成完成',
     GENERATION_FAILED: '方案生成失败', GENERATION_RETRIED: '重新生成方案',
+    EVENT_TYPE_CORRECTED: '一级人工更正事件类型',
     LEVEL_1_SUBMITTED: '一级上报二级', LEVEL_1_RETURNED: '一级退回返工',
     LEVEL_2_PASSED: '二级复核通过', LEVEL_2_RETURNED: '二级退回一级',
     LEVEL_3_RETURNED: '省级退回一级', LEVEL_3_PUBLISHED: '省级批准并通告',
@@ -63,9 +64,16 @@ function actionText(type: string) {
         <span>{{ item.workflowStatus === 'PUBLISHED' ? '已通告' : '无需调度' }}</span>
       </header>
       <p>{{ item.event.description }}</p>
+      <p v-if="item.workflowStatus === 'NO_DISPATCH' && item.terminalReason" class="no-dispatch-reason">
+        无需调度原因：{{ item.terminalReason }}
+      </p>
       <section v-if="item.commandDecision?.noticeSnapshot" class="notice-snapshot">
         <strong>{{ item.commandDecision.noticeSnapshot.title }}</strong>
         <small>通告编号：{{ item.commandDecision.noticeSnapshot.noticeNumber }} · {{ formatTime(item.commandDecision.noticeSnapshot.publishedAt) }}</small>
+        <small v-if="item.commandDecision.noticeSnapshot.responsePlan">
+          执行预案：{{ item.commandDecision.noticeSnapshot.responsePlan.eventTypeName }} ·
+          {{ item.commandDecision.noticeSnapshot.responsePlan.planId }} v{{ item.commandDecision.noticeSnapshot.responsePlan.version }}
+        </small>
         <p>{{ rescuePlanForDisplay(item.commandDecision.noticeSnapshot.rescuePlan) }}</p>
         <div v-if="item.commandDecision.noticeSnapshot.allocatedResources?.length" class="notice-resource-summary">
           <strong>正式调度资源</strong>

@@ -1,0 +1,4 @@
+# The pinned DGX runtime already contains its verified ARM64/CUDA dependencies.
+ARG SPEECH_RUNTIME_IMAGE=road-agent-dgx-speech:local
+FROM ${SPEECH_RUNTIME_IMAGE}
+COPY --chown=speech:speech speech-service/app /app/app

@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE="$ROOT/docker/compose.yaml"
+
+# Qwen commands use the registry so dense FP8 and MoE NVFP4 keep separate flags.
+case "${1:-status}:${2:-}" in
+  verify:*|candidate:*|candidate-stop:*|smoke:*|config:*|webui-sync:*)
+    exec python3 "$ROOT/scripts/model_control.py" "$@" ;;
+  start:daily|switch:daily|start:qwen38|switch:qwen38|start:qwen36|switch:qwen36)
+    exec python3 "$ROOT/scripts/model_control.py" "$@" ;;
+esac
+
+compose() {
+  docker compose --project-directory "$ROOT" -f "$COMPOSE" "$@"
+}
+
+available_gib() {
+  awk '/MemAvailable:/ { printf "%.1f", $2 / 1024 / 1024 }' /proc/meminfo
+}
+
+require_model() {
+  local path="$1"
+  if [[ ! -f "$path/.deployment-manifest.json" ]]; then
+    echo "validated model snapshot not found: $path" >&2
+    exit 1
+  fi
+}
+
+require_harmony_vocab() {
+  local dir="$ROOT/assets/tiktoken"
+  local o200k_hash="446a9538cb6c348e3516120d7c08b09f57c36495e2acfffe59a5bf8b0cfb1a2d"
+  local cl100k_hash="223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7"
+  if ! printf '%s  %s\n%s  %s\n' \
+    "$o200k_hash" "$dir/o200k_base.tiktoken" \
+    "$cl100k_hash" "$dir/cl100k_base.tiktoken" | sha256sum --check --status; then
+    echo "GPT Harmony tokenizer assets are missing or invalid in $dir" >&2
+    exit 1
+  fi
+}
+
+start_webui() {
+  mkdir -p "$ROOT/artifacts/open-webui"
+  compose up -d open-webui
+  "$ROOT/scripts/healthcheck" webui 300
+}
+
+stop_heavy() {
+  compose --profile daily --profile deep-reasoning stop --timeout 120 qwen gpt >/dev/null 2>&1 || true
+  local deadline=$((SECONDS + 180))
+  while docker ps --format '{{.Names}}' | grep -Eq '^model-serving-(qwen|gpt-oss)$'; do
+    if (( SECONDS >= deadline )); then
+      echo "heavy model container did not stop within 180s" >&2
+      exit 1
+    fi
+    sleep 5
+  done
+  local free
+  free="$(available_gib)"
+  awk -v free="$free" 'BEGIN { if (free < 20) exit 1 }' || {
+    echo "only ${free} GiB MemAvailable after stop; refusing to load another model" >&2
+    exit 1
+  }
+  echo "heavy services stopped; MemAvailable=${free} GiB"
+}
+
+start_deep() {
+  require_model /home/whtc/models/OpenAI--gpt-oss-120b--MXFP4
+  require_harmony_vocab
+  stop_heavy
+  compose --profile deep-reasoning up -d gpt
+  "$ROOT/scripts/healthcheck" gpt 1800
+  start_webui
+}
+
+case "${1:-status}" in
+  status)
+    docker ps -a --filter name=model-serving --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+    free -h
+    ;;
+  start|switch)
+    case "${2:-}" in
+      deep-reasoning) start_deep ;;
+      *) echo "usage: $0 ${1} [daily|qwen38|qwen36|deep-reasoning]" >&2; exit 2 ;;
+    esac
+    ;;
+  stop) stop_heavy ;;
+  stop-all)
+    stop_heavy
+    compose stop --timeout 30 open-webui
+    ;;
+  webui)
+    case "${2:-status}" in
+      start) start_webui ;;
+      stop) compose stop --timeout 30 open-webui ;;
+      restart)
+        compose restart --timeout 30 open-webui
+        "$ROOT/scripts/healthcheck" webui 300
+        ;;
+      status) docker ps -a --filter name=model-serving-open-webui --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' ;;
+      logs) docker logs --tail 200 model-serving-open-webui ;;
+      *) echo "usage: $0 webui [start|stop|restart|status|logs]" >&2; exit 2 ;;
+    esac
+    ;;
+  logs)
+    case "${2:-}" in
+      qwen) docker logs --tail 200 model-serving-qwen ;;
+      gpt) docker logs --tail 200 model-serving-gpt-oss ;;
+      webui) docker logs --tail 200 model-serving-open-webui ;;
+      *) echo "usage: $0 logs [qwen|gpt|webui]" >&2; exit 2 ;;
+    esac
+    ;;
+  *)
+    echo "usage: $0 [status|start|switch|verify|candidate|candidate-stop|smoke|config|stop|stop-all|webui|logs]" >&2
+    exit 2
+    ;;
+esac

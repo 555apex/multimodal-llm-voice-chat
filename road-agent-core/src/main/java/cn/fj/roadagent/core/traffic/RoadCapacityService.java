@@ -3,6 +3,7 @@ package cn.fj.roadagent.core.traffic;
 import cn.fj.roadagent.application.exception.BusinessRuleException;
 import cn.fj.roadagent.application.model.ModelRequest;
 import cn.fj.roadagent.application.port.ChatModelPort;
+import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
 import cn.fj.roadagent.application.port.RoadCapacitySnapshotPort;
 import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
 import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
@@ -11,12 +12,14 @@ import cn.fj.roadagent.application.traffic.TrafficSummaryResponse;
 import cn.fj.roadagent.domain.traffic.CapacityLevel;
 import cn.fj.roadagent.domain.traffic.RoadCapacity;
 import cn.fj.roadagent.domain.traffic.RoadCapacitySnapshot;
+import cn.fj.roadagent.domain.traffic.HighwayRoute;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /** 使用数据库已计算结果完成路线通行能力评估，不在 Java 中重新计算指标。 */
@@ -28,10 +31,17 @@ public final class RoadCapacityService {
                     .thenComparing(RoadCapacity::routeCode);
 
     private final RoadCapacitySnapshotPort snapshotPort;
+    private final HighwayTrafficSnapshotPort trafficSnapshotPort;
     private final ChatModelPort chatModelPort;
 
     public RoadCapacityService(RoadCapacitySnapshotPort snapshotPort, ChatModelPort chatModelPort) {
+        this(snapshotPort, null, chatModelPort);
+    }
+
+    public RoadCapacityService(RoadCapacitySnapshotPort snapshotPort,
+            HighwayTrafficSnapshotPort trafficSnapshotPort, ChatModelPort chatModelPort) {
         this.snapshotPort = snapshotPort;
+        this.trafficSnapshotPort = trafficSnapshotPort;
         this.chatModelPort = chatModelPort;
     }
 
@@ -41,8 +51,8 @@ public final class RoadCapacityService {
         }
         RoadCapacitySnapshot snapshot = snapshotPort.current();
         return switch (query.queryType()) {
-            case CAPACITY_OVERVIEW -> overview(snapshot);
-            case CAPACITY_BOTTLENECKS -> bottlenecks(snapshot);
+            case CAPACITY_OVERVIEW -> overview(snapshot, query.originCity(), query.destinationCity());
+            case CAPACITY_BOTTLENECKS -> bottlenecks(snapshot, query.originCity(), query.destinationCity());
             case CAPACITY_ROUTE_DETAIL -> routeDetail(snapshot, query.routeCode(), query.routeName());
             default -> throw new BusinessRuleException("CAPACITY_QUERY_TYPE_INVALID", "该查询不属于通行能力评估");
         };
@@ -59,22 +69,60 @@ public final class RoadCapacityService {
         return HighwayTrafficResult.fromCapacityFacts(facts, summary, traceId);
     }
 
-    private RoadCapacityFacts overview(RoadCapacitySnapshot snapshot) {
-        List<RoadCapacity> all = snapshot.capacities().stream()
+    private RoadCapacityFacts overview(RoadCapacitySnapshot snapshot, String origin, String destination) {
+        List<RoadCapacity> all = cityPairScope(snapshot.capacities(), origin, destination).stream()
                 .sorted(Comparator.comparing(RoadCapacity::routeCode))
                 .toList();
-        return facts(TrafficQueryType.CAPACITY_OVERVIEW, "福建省国省道通行能力总览",
+        return facts(TrafficQueryType.CAPACITY_OVERVIEW, capacityTitle("国省道通行能力总览", origin, destination),
                 all, all.size(), false, snapshot, all);
     }
 
-    private RoadCapacityFacts bottlenecks(RoadCapacitySnapshot snapshot) {
-        List<RoadCapacity> all = snapshot.capacities().stream()
+    private RoadCapacityFacts bottlenecks(RoadCapacitySnapshot snapshot, String origin, String destination) {
+        List<RoadCapacity> scope = cityPairScope(snapshot.capacities(), origin, destination);
+        List<RoadCapacity> all = scope.stream()
                 .filter(capacity -> capacity.level() != CapacityLevel.NORMAL)
                 .sorted(BOTTLENECK_ORDER)
                 .toList();
-        return facts(TrafficQueryType.CAPACITY_BOTTLENECKS, "福建省瓶颈路线排行",
+        return facts(TrafficQueryType.CAPACITY_BOTTLENECKS, capacityTitle("瓶颈路线排行", origin, destination),
                 all.stream().limit(BOTTLENECK_LIMIT).toList(), all.size(),
-                all.size() > BOTTLENECK_LIMIT, snapshot, snapshot.capacities());
+                all.size() > BOTTLENECK_LIMIT, snapshot, scope);
+    }
+
+    private List<RoadCapacity> cityPairScope(List<RoadCapacity> capacities, String origin, String destination) {
+        if (isBlank(origin) && isBlank(destination)) return capacities;
+        if (isBlank(origin) || isBlank(destination)) {
+            throw new BusinessRuleException("CAPACITY_CITY_PAIR_REQUIRED", "请同时提供两个福建地级市");
+        }
+        if (trafficSnapshotPort == null) {
+            throw new BusinessRuleException("CAPACITY_CITY_PAIR_UNAVAILABLE", "当前无法按两市登记起终点筛选容量路线");
+        }
+        String start = normalizeCity(origin);
+        String end = normalizeCity(destination);
+        Set<String> routeCodes = trafficSnapshotPort.current().routes().stream()
+                .filter(route -> matchesCities(route, start, end))
+                .map(HighwayRoute::routeCode).collect(Collectors.toSet());
+        return capacities.stream().filter(row -> routeCodes.contains(row.routeCode())).toList();
+    }
+
+    private boolean matchesCities(HighwayRoute route, String origin, String destination) {
+        String start = normalizeCity(route.startPlace());
+        String end = normalizeCity(route.endPlace());
+        return start.equals(origin) && end.equals(destination)
+                || start.equals(destination) && end.equals(origin);
+    }
+
+    private String capacityTitle(String suffix, String origin, String destination) {
+        if (isBlank(origin) || isBlank(destination)) return "福建省" + suffix;
+        return origin.replace("市", "") + "市—" + destination.replace("市", "")
+                + "市登记起终点关联路线" + suffix;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    private String normalizeCity(String value) {
+        return value == null ? "" : value.trim().replace("福建省", "").replace("市", "");
     }
 
     private RoadCapacityFacts routeDetail(
@@ -157,7 +205,7 @@ public final class RoadCapacityService {
         StringBuilder value = new StringBuilder();
         value.append("queryType=").append(facts.queryType()).append('\n');
         value.append("title=").append(facts.title()).append('\n');
-        value.append("acquiredAt=").append(facts.acquiredAt()).append('\n');
+        value.append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n');
         value.append("totalCount=").append(facts.totalCount()).append('\n');
         value.append("displayedCount=").append(facts.rows().size()).append('\n');
         value.append("truncated=").append(facts.truncated()).append('\n');

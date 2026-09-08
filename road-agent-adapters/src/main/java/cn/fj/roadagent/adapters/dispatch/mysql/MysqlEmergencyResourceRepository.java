@@ -4,6 +4,7 @@ import cn.fj.roadagent.application.dispatch.ResourceQuery;
 import cn.fj.roadagent.application.port.ResourceDataPort;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
 import cn.fj.roadagent.domain.dispatch.EmergencyResourceStatus;
+import cn.fj.roadagent.domain.dispatch.GeoPoint;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 
@@ -20,7 +23,7 @@ import java.util.Set;
 public class MysqlEmergencyResourceRepository implements ResourceDataPort {
     private static final String COLUMNS = """
             SELECT resource_id, resource_type_code, resource_type_name, resource_name,
-                   city_code, city_name, unit, capability, applicable_event_types,
+                   city_code, city_name, longitude, latitude, unit, capability, applicable_event_types,
                    total_quantity, available_quantity, reserved_quantity,
                    dispatched_quantity, minimum_reserve_quantity,
                    resource_status, lock_version
@@ -73,6 +76,32 @@ public class MysqlEmergencyResourceRepository implements ResourceDataPort {
     }
 
     @Override
+    public Map<String, GeoPoint> cityCenters() {
+        String sql = """
+                SELECT city_code, MIN(longitude) AS longitude, MIN(latitude) AS latitude,
+                       COUNT(DISTINCT CONCAT(longitude, ',', latitude)) AS coordinate_count
+                FROM w_emergency_resource
+                """ + " WHERE " + ACTIVE + """
+                  AND longitude IS NOT NULL AND latitude IS NOT NULL
+                GROUP BY city_code
+                ORDER BY city_code
+                """;
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+        Map<String, GeoPoint> result = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            Number count = (Number) row.get("coordinate_count");
+            String cityCode = String.valueOf(row.get("city_code"));
+            if (count == null || count.intValue() != 1) {
+                throw new IllegalStateException("同一城市的资源坐标不一致：" + cityCode);
+            }
+            Number longitude = (Number) row.get("longitude");
+            Number latitude = (Number) row.get("latitude");
+            result.put(cityCode, new GeoPoint(longitude.doubleValue(), latitude.doubleValue()));
+        }
+        return Map.copyOf(result);
+    }
+
+    @Override
     public boolean updateInventory(EmergencyResource resource, long expectedLockVersion) {
         return jdbcTemplate.update(
                 """
@@ -106,13 +135,21 @@ public class MysqlEmergencyResourceRepository implements ResourceDataPort {
         return new EmergencyResource(
                 rows.getString("resource_id"), rows.getString("resource_type_code"),
                 rows.getString("resource_type_name"), rows.getString("resource_name"),
-                rows.getString("city_code"), rows.getString("city_name"), rows.getString("unit"),
+                rows.getString("city_code"), rows.getString("city_name"),
+                nullableDouble(rows, "longitude"), nullableDouble(rows, "latitude"),
+                rows.getString("unit"),
                 rows.getString("capability"), readEventTypes(rows.getString("applicable_event_types")),
                 rows.getInt("total_quantity"), rows.getInt("available_quantity"),
                 rows.getInt("reserved_quantity"), rows.getInt("dispatched_quantity"),
                 rows.getInt("minimum_reserve_quantity"),
                 fromStatus(rows.getInt("resource_status")), rows.getLong("lock_version")
         );
+    }
+
+    private Double nullableDouble(java.sql.ResultSet rows, String column)
+            throws java.sql.SQLException {
+        double value = rows.getDouble(column);
+        return rows.wasNull() ? null : value;
     }
 
     private List<String> readEventTypes(String json) {

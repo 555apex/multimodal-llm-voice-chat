@@ -1,0 +1,164 @@
+name: model-serving
+
+x-vllm-common: &vllm-common
+  image: ${VLLM_IMAGE:-docker.m.daocloud.io/vllm/vllm-openai@sha256:1c8e60a0841b333c700488cb029d3664807249da0c071e862191b00fe34b228c}
+  pull_policy: missing
+  gpus: all
+  ipc: host
+  ulimits:
+    memlock: -1
+    stack: 67108864
+  security_opt:
+    - no-new-privileges:true
+  environment:
+    HF_HUB_OFFLINE: "1"
+    HF_HUB_DISABLE_TELEMETRY: "1"
+    TRANSFORMERS_OFFLINE: "1"
+    TOKENIZERS_PARALLELISM: "true"
+    TIKTOKEN_ENCODINGS_BASE: /etc/encodings
+  stop_grace_period: 2m
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: 100m
+      max-file: "5"
+  healthcheck:
+    test:
+      - CMD
+      - python3
+      - -c
+      - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()"
+    interval: 30s
+    timeout: 10s
+    retries: 40
+    start_period: 10m
+
+services:
+  open-webui:
+    image: ${OPEN_WEBUI_IMAGE:-ghcr.io/open-webui/open-webui:v0.11.0}
+    pull_policy: missing
+    container_name: model-serving-open-webui
+    ports:
+      - "100.119.145.78:12000:8080"
+    volumes:
+      - /home/whtc/workspace/projects/model-serving/artifacts/open-webui:/app/backend/data
+    environment:
+      WEBUI_URL: http://spark-8a8d:12000
+      WEBUI_AUTH: "true"
+      ENABLE_SIGNUP: "true"
+      DEFAULT_USER_ROLE: pending
+      ENABLE_PERSISTENT_CONFIG: "true"
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_OPENAI_API: "true"
+      OPENAI_API_BASE_URLS: http://qwen:8000/v1;http://gpt:8000/v1
+      OPENAI_API_KEYS: unused;unused
+      OPENAI_API_CONFIGS: >-
+        {"0":{"enable":true,"model_ids":["qwen3.6-35b-a3b-nvfp4"],"connection_type":"external"},"1":{"enable":true,"model_ids":["gpt-oss-120b"],"connection_type":"external"}}
+      ENABLE_OPENAI_API_PASSTHROUGH: "false"
+      MODEL_ORDER_LIST: '["qwen3.6-35b-a3b-nvfp4","gpt-oss-120b"]'
+      DEFAULT_PINNED_MODELS: qwen3.6-35b-a3b-nvfp4,gpt-oss-120b
+      AIOHTTP_CLIENT_TIMEOUT: "1800"
+      AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT: "300"
+      AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST: "3"
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "5"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=5).read()"
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 2m
+
+  qwen:
+    <<: *vllm-common
+    container_name: model-serving-qwen
+    profiles: [daily]
+    entrypoint: [vllm, serve]
+    ports:
+      - "100.119.145.78:8001:8000"
+    volumes:
+      - /home/whtc/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4:/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4:ro
+      - /home/whtc/workspace/projects/model-serving/assets/tiktoken:/etc/encodings:ro
+    command:
+      - /models/NVIDIA--Qwen3.6-35B-A3B--NVFP4
+      - --served-model-name
+      - qwen3.6-35b-a3b-nvfp4
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --tensor-parallel-size
+      - "1"
+      - --trust-remote-code
+      - --kv-cache-dtype
+      - fp8
+      - --attention-backend
+      - flashinfer
+      - --moe-backend
+      - marlin
+      - --gpu-memory-utilization
+      - "0.40"
+      - --max-model-len
+      - "65536"
+      - --max-num-seqs
+      - "2"
+      - --max-num-batched-tokens
+      - "8192"
+      - --enable-chunked-prefill
+      - --async-scheduling
+      - --enable-prefix-caching
+      - --speculative-config
+      - '{"method":"mtp","num_speculative_tokens":3,"moe_backend":"triton"}'
+      - --load-format
+      - fastsafetensors
+      - --reasoning-parser
+      - qwen3
+      - --tool-call-parser
+      - qwen3_xml
+      - --enable-auto-tool-choice
+
+  gpt:
+    <<: *vllm-common
+    container_name: model-serving-gpt-oss
+    profiles: [deep-reasoning]
+    entrypoint: [vllm, serve]
+    ports:
+      - "100.119.145.78:8002:8000"
+    volumes:
+      - /home/whtc/models/OpenAI--gpt-oss-120b--MXFP4:/models/OpenAI--gpt-oss-120b--MXFP4:ro
+      - /home/whtc/workspace/projects/model-serving/assets/tiktoken:/etc/encodings:ro
+    command:
+      - /models/OpenAI--gpt-oss-120b--MXFP4
+      - --served-model-name
+      - gpt-oss-120b
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --tensor-parallel-size
+      - "1"
+      - --gpu-memory-utilization
+      - "0.80"
+      - --max-model-len
+      - "32768"
+      - --max-num-seqs
+      - "1"
+      - --max-num-batched-tokens
+      - "8192"
+      - --enable-chunked-prefill
+      - --async-scheduling
+      - --enable-prefix-caching
+      - --reasoning-parser
+      - openai_gptoss
+      - --tool-call-parser
+      - openai
+      - --enable-auto-tool-choice

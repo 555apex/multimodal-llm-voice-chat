@@ -2,6 +2,8 @@ package cn.fj.roadagent.interfaces.rest.workflow;
 
 import cn.fj.roadagent.application.dispatch.CommandDecisionCommand;
 import cn.fj.roadagent.application.dispatch.CommandDecisionUseCase;
+import cn.fj.roadagent.application.dispatch.CorrectEventTypeCommand;
+import cn.fj.roadagent.application.dispatch.CorrectEventTypeUseCase;
 import cn.fj.roadagent.application.dispatch.Level1DecisionCommand;
 import cn.fj.roadagent.application.dispatch.Level1DecisionUseCase;
 import cn.fj.roadagent.application.dispatch.ProfessionalReviewCommand;
@@ -15,6 +17,7 @@ import cn.fj.roadagent.interfaces.rest.common.ApiResponse;
 import cn.fj.roadagent.interfaces.rest.common.TraceIdFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,14 +35,17 @@ public final class EmergencyWorkflowController {
     private final CommandDecisionUseCase commandUseCase;
     private final QueryEmergencyWorkflowUseCase queryUseCase;
     private final ReleaseResourcesUseCase releaseResourcesUseCase;
+    private final CorrectEventTypeUseCase correctEventTypeUseCase;
 
+    @Autowired
     public EmergencyWorkflowController(
             QueryWorkflowInboxUseCase inboxUseCase,
             Level1DecisionUseCase level1UseCase,
             ProfessionalReviewUseCase reviewUseCase,
             CommandDecisionUseCase commandUseCase,
             QueryEmergencyWorkflowUseCase queryUseCase,
-            ReleaseResourcesUseCase releaseResourcesUseCase
+            ReleaseResourcesUseCase releaseResourcesUseCase,
+            CorrectEventTypeUseCase correctEventTypeUseCase
     ) {
         this.inboxUseCase = inboxUseCase;
         this.level1UseCase = level1UseCase;
@@ -47,6 +53,19 @@ public final class EmergencyWorkflowController {
         this.commandUseCase = commandUseCase;
         this.queryUseCase = queryUseCase;
         this.releaseResourcesUseCase = releaseResourcesUseCase;
+        this.correctEventTypeUseCase = correctEventTypeUseCase;
+    }
+
+    EmergencyWorkflowController(
+            QueryWorkflowInboxUseCase inboxUseCase,
+            Level1DecisionUseCase level1UseCase,
+            ProfessionalReviewUseCase reviewUseCase,
+            CommandDecisionUseCase commandUseCase,
+            QueryEmergencyWorkflowUseCase queryUseCase,
+            ReleaseResourcesUseCase releaseResourcesUseCase
+    ) {
+        this(inboxUseCase, level1UseCase, reviewUseCase, commandUseCase, queryUseCase,
+                releaseResourcesUseCase, command -> queryUseCase.getWorkflow(command.workflowId()));
     }
 
     @GetMapping("/inbox")
@@ -108,6 +127,18 @@ public final class EmergencyWorkflowController {
         var result = releaseResourcesUseCase.releaseResources(new ReleaseResourcesCommand(
                 workflowId, body.reason(), body.expectedWorkflowVersion(), body.idempotencyKey()
         ));
+        return ApiResponse.success(EmergencyWorkflowResponse.from(result), traceId(request));
+    }
+
+    @PostMapping("/{workflowId}/event-type-corrections")
+    public ApiResponse<EmergencyWorkflowResponse> correctEventType(
+            @PathVariable String workflowId,
+            @Valid @RequestBody EventTypeCorrectionRequest body,
+            HttpServletRequest request
+    ) {
+        var result = correctEventTypeUseCase.correctEventType(new CorrectEventTypeCommand(
+                workflowId, body.eventType(), body.reason(),
+                body.expectedWorkflowVersion(), body.idempotencyKey()));
         return ApiResponse.success(EmergencyWorkflowResponse.from(result), traceId(request));
     }
 

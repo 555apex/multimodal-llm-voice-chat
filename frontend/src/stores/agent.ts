@@ -7,7 +7,7 @@ import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
 
 const SESSION_KEY = 'roadagent-chat-session-v5'
-const WELCOME_MESSAGE = '您好，我是路智通，专注于福建省路网运行监测与应急处置。\n\n我可以研判福建普通国省干线交通态势和短时趋势，查询拥堵路段、指定路线状态、通行能力与瓶颈路线；也可以分析高流量卡口、城市和路线交通压力，以及福州、厦门的车型结构、24小时出行规律和工作日周末特征，同时支持应急调度辅助与语音交互。'
+const WELCOME_MESSAGE = '您好，我是路智通，专注于福建省路网运行监测、设施预警与应急处置。\n\n我可以研判福建普通国省干线交通态势和短时趋势，查询拥堵路段、指定路线状态、通行能力与瓶颈路线；也可以分析三市及以上的城市对交通联系压力与重要跨市路线、单城市目的地联系倾向和多城市联系矩阵，以及福州、厦门的车型结构、24小时出行规律和工作日周末特征，同时提供基础设施异常预警、应急调度辅助与语音交互。'
 
 interface StoredSession {
   conversationId: string
@@ -76,8 +76,13 @@ export const useAgentStore = defineStore('agent', {
           this.applyEvent(assistantMessage.id, event)
         })
       } catch (error) {
+        useSpeechStore().stop()
         const target = this.findMessage(assistantMessage.id)
         target.content = ''
+        target.traffic = undefined
+        target.trafficResults = undefined
+        target.dispatch = undefined
+        target.speechText = undefined
         target.status = 'failed'
         target.errorMessage = error instanceof Error ? error.message : '流式请求失败'
       } finally {
@@ -105,6 +110,7 @@ export const useAgentStore = defineStore('agent', {
           break
         case 'result.traffic':
           message.traffic = event.data as TrafficQueryResult
+          message.trafficResults = [...(message.trafficResults ?? []), message.traffic]
           break
         case 'result.dispatch':
           message.dispatch = event.data as DispatchPlan
@@ -118,10 +124,12 @@ export const useAgentStore = defineStore('agent', {
           }
           break
         case 'run.failed': {
+          useSpeechStore().stop()
           const failed = event.data as RunFailedData
           // 按约定丢弃模型已生成的半截内容，整次请求显示失败。
           message.content = ''
           message.traffic = undefined
+          message.trafficResults = undefined
           message.dispatch = undefined
           message.speechText = undefined
           message.status = 'failed'

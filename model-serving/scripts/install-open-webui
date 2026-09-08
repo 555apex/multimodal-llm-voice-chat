@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+COMPOSE="$ROOT/docker/compose.yaml"
+TAILSCALE_IP="100.119.145.78"
+
+compose() {
+  docker compose --project-directory "$ROOT" -f "$COMPOSE" "$@"
+}
+
+echo "[1/5] Checking the DGX host and project files"
+command -v docker >/dev/null || { echo "docker is not installed" >&2; exit 1; }
+docker compose version >/dev/null
+if ! ip -4 -o addr show | grep -Fq "$TAILSCALE_IP/"; then
+  echo "Tailscale address $TAILSCALE_IP is not present; refusing to publish the WebUI port" >&2
+  exit 1
+fi
+if [[ ! -f "$ROOT/.env" ]]; then
+  cp "$ROOT/.env.example" "$ROOT/.env"
+  chmod 600 "$ROOT/.env"
+  echo "Created $ROOT/.env from .env.example"
+fi
+mkdir -p "$ROOT/artifacts/open-webui"
+chmod 700 "$ROOT/artifacts/open-webui"
+compose config --quiet
+
+echo "[2/5] Pulling the pinned Open WebUI image"
+compose pull open-webui
+
+echo "[3/5] Starting Open WebUI"
+compose up -d open-webui
+
+echo "[4/5] Waiting for Open WebUI health"
+"$ROOT/scripts/healthcheck" webui 300
+
+echo "[5/5] Checking the two declared model routes"
+compose exec -T open-webui python3 -c 'import json, os; c=json.loads(os.environ["OPENAI_API_CONFIGS"]); print("Declared models: " + ", ".join(c[str(i)]["model_ids"][0] for i in range(2)))'
+
+echo
+echo "Open WebUI installation completed."
+echo "URL: http://spark-8a8d:12000"
+echo "Next: create the first administrator account, then run scripts/model-stack switch daily"

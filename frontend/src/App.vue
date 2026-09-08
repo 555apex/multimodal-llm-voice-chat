@@ -3,10 +3,12 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import AgentDrawer from './components/AgentDrawer.vue'
 import CommandDashboard from './components/CommandDashboard.vue'
 import { useEmergencyStore } from './stores/emergency'
+import { useFacilityStore } from './stores/facility'
 import { useSpeechStore } from './stores/speech'
 
 const agentOpen = ref(false)
 const emergencyStore = useEmergencyStore()
+const facilityStore = useFacilityStore()
 const speechStore = useSpeechStore()
 
 function toggleAgent() {
@@ -19,11 +21,13 @@ function closeAgent() {
 
 onMounted(() => {
   emergencyStore.startPolling()
+  facilityStore.startPolling()
   void speechStore.loadCapabilities()
 })
 
 onUnmounted(() => {
   emergencyStore.stopPolling()
+  facilityStore.stopPolling()
   speechStore.stop()
 })
 </script>

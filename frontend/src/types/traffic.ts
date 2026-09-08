@@ -1,5 +1,6 @@
 export type TrafficQueryType =
   | 'PROVINCE_OVERVIEW'
+  | 'ROUTE_CATALOG'
   | 'PROVINCE_ABNORMAL'
   | 'CITY_PAIR'
   | 'ROUTE_DETAIL'
@@ -7,13 +8,14 @@ export type TrafficQueryType =
   | 'CAPACITY_BOTTLENECKS'
   | 'CAPACITY_ROUTE_DETAIL'
   | 'REGIONAL_TRAFFIC_OVERVIEW'
-  | 'CHECKPOINT_PRESSURE'
-  | 'CITY_PRESSURE'
-  | 'ROUTE_PRESSURE'
+  | 'REGIONAL_PAIR_PRESSURE'
+  | 'REGIONAL_KEY_CHANNELS'
   | 'VEHICLE_PATTERN_OVERVIEW'
   | 'VEHICLE_STRUCTURE'
   | 'VEHICLE_HOURLY_PATTERN'
   | 'VEHICLE_DAY_TYPE_COMPARISON'
+  | 'OD_DESTINATION_TENDENCY'
+  | 'OD_CONNECTION_MATRIX'
 
 export type TrafficStatus = 10 | 20 | 30 | 40 | 50
 export type CapacityLevel = 'NORMAL' | 'BOTTLENECK' | 'SEVERE_BOTTLENECK'
@@ -26,6 +28,7 @@ export interface TrafficQueryPayload {
   routeName?: string
   selectedCities?: string[]
   analysisCity?: string
+  includeTrend?: boolean
 }
 
 export interface RouteTrafficSummary {
@@ -62,29 +65,16 @@ export interface SelectedRegion {
   regionName: string
 }
 
-export interface TransportHubRow {
-  checkpointNo: string
-  routeCode: string
-  routeName: string
-  averageSpeedKmh: number
-  dailyAverageFlow: number
+export interface RegionalPairRow {
+  cityARegionCode: string; cityAName: string; cityBRegionCode: string; cityBName: string
+  routeCount: number; checkpointCount: number; weeklyTotalFlow: number
+  dailyAverageFlow: number; averageSpeedKmh: number
 }
 
-export interface RegionPressureRow {
-  regionCode: string
-  regionName: string
-  activeHubCount: number
-  totalDailyFlow: number
-  hubShareRatio: number
-  interpretation: string
-}
-
-export interface RoutePressureRow {
-  routeCode: string
-  routeName: string
-  totalDailyFlow: number
-  checkpointCount: number
-  averageSpeedKmh: number
+export interface RegionalChannelRow {
+  cityARegionCode: string; cityAName: string; cityBRegionCode: string; cityBName: string
+  routeCode: string; routeName: string; checkpointCount: number; weeklyTotalFlow: number
+  dailyAverageFlow: number; averageSpeedKmh: number
 }
 
 export type VehicleType = 'CAR' | 'BUS' | 'TRUCK'
@@ -128,14 +118,17 @@ export interface TrafficQueryResult {
   segments: TrafficSegment[]
   capacityRows: RoadCapacityRow[]
   selectedRegions?: SelectedRegion[]
-  hubRows?: TransportHubRow[]
-  regionPressureRows?: RegionPressureRow[]
-  routePressureRows?: RoutePressureRow[]
+  regionalPairRows?: RegionalPairRow[]
+  regionalChannelRows?: RegionalChannelRow[]
+  totalRegionalPairCount?: number
+  totalRegionalChannelCount?: number
   analysisCity?: string
   vehicleStructureRows?: VehicleStructureRow[]
   vehicleTimeFeatureRows?: VehicleTimeFeatureRow[]
   vehicleDayTypeRows?: VehicleDayTypeRow[]
   hourlyVehicleSeries?: HourlyVehicleFlow[]
+  odDestinationRows?: OdDestinationTendencyRow[]
+  odMatrixRows?: OdMatrixRow[]
   totalSegmentCount: number
   displayedSegmentCount: number
   truncated: boolean
@@ -143,6 +136,29 @@ export interface TrafficQueryResult {
   acquiredAt: string
   warnings: string[]
   traceId: string
+}
+
+export interface OdDestinationTendencyRow {
+  analysisRegionCode: string
+  analysisCityName: string
+  destinationRegionCode: string
+  destinationCityName: string
+  routeCount: number
+  weeklyConnectionStrength: number
+  tendencyRatio: number
+}
+
+export interface OdMatrixCell {
+  destinationRegionCode: string
+  destinationCityName: string
+  weeklyConnectionStrength?: number
+  tendencyRatio?: number
+}
+
+export interface OdMatrixRow {
+  analysisRegionCode: string
+  analysisCityName: string
+  cells: OdMatrixCell[]
 }
 
 export interface ApiResponse<T> {

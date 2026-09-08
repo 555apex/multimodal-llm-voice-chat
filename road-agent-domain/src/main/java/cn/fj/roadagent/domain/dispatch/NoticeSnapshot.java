@@ -20,7 +20,8 @@ public record NoticeSnapshot(
         String coordinationRequirements,
         String professionalOpinion,
         String commandOpinion,
-        Instant publishedAt
+        Instant publishedAt,
+        EmergencyResponsePlanSnapshot responsePlan
 ) {
     public NoticeSnapshot {
         noticeNumber = requireText(noticeNumber, "通告编号不能为空");
@@ -41,6 +42,23 @@ public record NoticeSnapshot(
         professionalOpinion = requireText(professionalOpinion, "专业意见不能为空");
         commandOpinion = normalize(commandOpinion);
         publishedAt = Objects.requireNonNull(publishedAt, "通告时间不能为空");
+    }
+
+    /** 兼容没有预案快照的历史通告。 */
+    public NoticeSnapshot(
+            String noticeNumber, String title, EmergencyEvent event,
+            String planId, long planVersion,
+            List<ResourceRequirement> resourceRequirements,
+            List<AllocatedResource> allocatedResources,
+            List<ResourceShortage> resourceShortages,
+            String rescuePlan, EventSeverity eventSeverity, String impactAssessment,
+            String coordinationRequirements, String professionalOpinion,
+            String commandOpinion, Instant publishedAt
+    ) {
+        this(noticeNumber, title, event, planId, planVersion, resourceRequirements,
+                allocatedResources, resourceShortages, rescuePlan, eventSeverity,
+                impactAssessment, coordinationRequirements, professionalOpinion,
+                commandOpinion, publishedAt, null);
     }
 
     /** 兼容旧测试构造。 */
@@ -67,7 +85,7 @@ public record NoticeSnapshot(
                                 DispatchScope.LOCAL))
                         .toList(),
                 List.of(), rescuePlan, eventSeverity, impactAssessment,
-                coordinationRequirements, professionalOpinion, commandOpinion, publishedAt);
+                coordinationRequirements, professionalOpinion, commandOpinion, publishedAt, null);
     }
 
     public List<SuggestedResource> suggestedResources() {

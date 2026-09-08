@@ -3,8 +3,6 @@ package cn.fj.roadagent.interfaces.rest.common;
 import cn.fj.roadagent.application.exception.ExternalServiceException;
 import cn.fj.roadagent.application.exception.BusinessRuleException;
 import jakarta.servlet.http.HttpServletRequest;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -14,7 +12,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public final class GlobalExceptionHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(
@@ -58,7 +55,8 @@ public final class GlobalExceptionHandler {
         HttpStatus status;
         if ("DISPATCH_NOT_FOUND".equals(exception.errorCode())
                 || "EVENT_NOT_FOUND".equals(exception.errorCode())
-                || "WORKFLOW_NOT_FOUND".equals(exception.errorCode())) {
+                || "WORKFLOW_NOT_FOUND".equals(exception.errorCode())
+                || "FACILITY_ALERT_NOT_FOUND".equals(exception.errorCode())) {
             status = HttpStatus.NOT_FOUND;
         } else if (exception.errorCode().startsWith("TRAFFIC_")
                 || "AREA_QUERY_TOO_LARGE".equals(exception.errorCode())) {
@@ -86,7 +84,6 @@ public final class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
-        LOGGER.error("Unhandled request failure traceId={}", traceId(request), exception);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
                 ApiResponse.error("INTERNAL_ERROR", "系统处理请求时发生异常", traceId(request))
         );

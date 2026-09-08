@@ -25,11 +25,15 @@ const emit = defineEmits<{
         :speech-text="message.speechText"
       />
 
-      <TrafficResultPanel
-        v-if="message.traffic"
-        :result="message.traffic"
-        compact
-      />
+      <template v-if="message.trafficResults?.length">
+        <TrafficResultPanel
+          v-for="result in message.trafficResults"
+          :key="`${result.traceId}-${result.analysisCity ?? result.title}`"
+          :result="result"
+          compact
+        />
+      </template>
+      <TrafficResultPanel v-else-if="message.traffic" :result="message.traffic" compact />
       <DispatchPlanCard
         v-if="message.dispatch"
         :plan="message.dispatch"

@@ -1,0 +1,75 @@
+services:
+  public-backend:
+    profiles: [public]
+    image: ${ROADAGENT_BACKEND_IMAGE:-road-agent-dgx-backend:local}
+    container_name: road-agent-dgx-public-backend
+    env_file:
+      - ./deploy/dgx/.env
+      - ${ROADAGENT_PUBLIC_DB_ACCESS_FILE:-/home/whtc/.config/road-agent/public-original-db.env}
+    environment:
+      ROADAGENT_MODEL_ENDPOINT: ${ROADAGENT_MODEL_ENDPOINT:-http://qwen:8000/v1/chat/completions}
+      ROADAGENT_MODEL_NAME: ${ROADAGENT_MODEL_NAME:?Set ROADAGENT_MODEL_NAME in deploy/dgx/.env}
+      ROADAGENT_MODEL_AUTH_ENABLED: "false"
+      ROADAGENT_MODEL_ENABLE_THINKING: "false"
+      ROADAGENT_EVENT_CLASSIFICATION_ENABLED: "true"
+      ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS: "600"
+      ROADAGENT_MODEL_TIMEOUT_SECONDS: ${ROADAGENT_PUBLIC_MODEL_TIMEOUT_SECONDS:-180}
+      ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS:-5}
+      ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS:-30}
+      ROADAGENT_SPEECH_ENABLED: "true"
+      ROADAGENT_SPEECH_SERVICE_URL: http://speech-service:8091
+    depends_on:
+      speech-service:
+        condition: service_healthy
+    networks:
+      - public-frontend-private
+      - speech-private
+      - dgx-ai
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/api/v1/speech/capabilities"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  public-frontend:
+    profiles: [public]
+    image: ${ROADAGENT_FRONTEND_IMAGE:-road-agent-dgx-frontend:local}
+    container_name: road-agent-dgx-public-frontend
+    depends_on:
+      public-backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:18081:8080"
+    volumes:
+      - ./deploy/dgx/nginx.public.conf:/etc/nginx/conf.d/default.conf:ro
+      - ${ROADAGENT_PUBLIC_AUTH_FILE:-/home/whtc/.config/road-agent/public.htpasswd}:/etc/nginx/auth/public.htpasswd:ro
+    networks:
+      - public-frontend-private
+      - frontend-ingress
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: 100m
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+networks:
+  public-frontend-private:
+    internal: true

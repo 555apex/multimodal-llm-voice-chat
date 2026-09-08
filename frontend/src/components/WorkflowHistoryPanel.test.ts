@@ -84,4 +84,24 @@ describe('WorkflowHistoryPanel', () => {
       'WF-1', 4, '现场处置完成，资源归队',
     ])
   })
+
+  it('shows the saved no-dispatch reason and type-correction audit label', () => {
+    const noDispatch: WorkflowHistoryPage = {
+      ...history,
+      items: [{
+        ...history.items[0],
+        workflowStatus: 'NO_DISPATCH',
+        terminalReason: '现场已恢复通行，无需调集资源',
+        commandDecision: undefined,
+        timeline: [{
+          ...history.items[0].timeline[0],
+          actionType: 'EVENT_TYPE_CORRECTED',
+          comment: '由拥堵更正为交通事故',
+        }],
+      }],
+    }
+    const wrapper = mount(WorkflowHistoryPanel, { props: { history: noDispatch, busy: false } })
+    expect(wrapper.text()).toContain('无需调度原因：现场已恢复通行，无需调集资源')
+    expect(wrapper.text()).toContain('一级人工更正事件类型')
+  })
 })

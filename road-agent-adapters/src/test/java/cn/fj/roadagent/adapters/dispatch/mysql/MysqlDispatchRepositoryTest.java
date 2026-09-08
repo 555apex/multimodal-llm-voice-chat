@@ -3,6 +3,9 @@ package cn.fj.roadagent.adapters.dispatch.mysql;
 import cn.fj.roadagent.domain.dispatch.DispatchPlan;
 import cn.fj.roadagent.domain.dispatch.DispatchStatus;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlanSnapshot;
+import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceBaseline;
+import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceMode;
 import cn.fj.roadagent.domain.dispatch.SuggestedResource;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,27 +34,19 @@ class MysqlDispatchRepositoryTest {
         jdbc = new JdbcTemplate(dataSource);
         jdbc.execute("DROP ALL OBJECTS");
         jdbc.execute("""
-                CREATE TABLE w_abnormal_event (
-                    id BIGINT PRIMARY KEY,
-                    custom_id VARCHAR(64),
-                    occurrence_time TIMESTAMP,
-                    event_type VARCHAR(16),
-                    description VARCHAR(255),
-                    event_city_code VARCHAR(12),
-                    event_city_name VARCHAR(32)
-                )
-                """);
-        jdbc.execute("""
                 CREATE TABLE w_emergency_dispatch_order (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     plan_id VARCHAR(40) NOT NULL,
-                    event_id BIGINT NOT NULL,
+                    event_id VARCHAR(64) NOT NULL,
                     version INT NOT NULL,
                     event_snapshot CLOB,
                     resource_requirements CLOB,
                     resource_list CLOB,
                     resource_shortages CLOB,
                     rescue_plan CLOB,
+                    response_plan_id VARCHAR(40),
+                    response_plan_version INT,
+                    response_plan_snapshot CLOB,
                     order_status TINYINT NOT NULL,
                     rejection_reason VARCHAR(500),
                     error_message VARCHAR(500),
@@ -72,23 +67,19 @@ class MysqlDispatchRepositoryTest {
                 "9007199254740993", "EVT-ORIGINAL", NOW.minusSeconds(60),
                 "DT01", "原始现场描述"
         );
-        jdbc.update(
-                "INSERT INTO w_abnormal_event (id, custom_id, occurrence_time, event_type, description) VALUES (?, ?, ?, ?, ?)",
-                Long.parseLong(event.eventId()), event.customId(),
-                Timestamp.from(event.occurrenceTime()), event.eventType(), event.description()
-        );
-        DispatchPlan generating = DispatchPlan.generating("DP-1", event, 1L, NOW);
+        EmergencyResponsePlanSnapshot responsePlan = new EmergencyResponsePlanSnapshot(
+                "ERP-DT01", "DT01", "崩塌（落石）", 1, List.of("覆盖车道"),
+                "处置【现场情况】", List.of(new ResponsePlanResourceBaseline(
+                        "ROAD_RESCUE_TEAM", 1, "抢通", ResponsePlanResourceMode.BASE)),
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        DispatchPlan generating = DispatchPlan.generating("DP-1", event, 1L, NOW, responsePlan);
         assertTrue(repository.insert(generating));
-
-        jdbc.update(
-                "UPDATE w_abnormal_event SET custom_id = ?, description = ? WHERE id = ?",
-                "EVT-CHANGED", "事件源后来被修改", Long.parseLong(event.eventId())
-        );
 
         DispatchPlan restored = repository.findLatestByPlanId("DP-1").orElseThrow();
         assertEquals("EVT-ORIGINAL", restored.event().customId());
         assertEquals("原始现场描述", restored.event().description());
         assertEquals("9007199254740993", restored.event().eventId());
+        assertEquals("ERP-DT01", restored.responsePlan().planId());
 
         DispatchPlan generated = generating.generated(
                 List.of(new SuggestedResource(

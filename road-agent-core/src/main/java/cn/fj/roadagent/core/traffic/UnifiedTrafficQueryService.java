@@ -11,6 +11,7 @@ public final class UnifiedTrafficQueryService implements QueryHighwayTrafficUseC
     private final RoadCapacityService capacityService;
     private final RegionalTrafficService regionalTrafficService;
     private final VehiclePatternService vehiclePatternService;
+    private final OdTrafficService odTrafficService;
 
     public UnifiedTrafficQueryService(
             HighwayTrafficService trafficService,
@@ -18,10 +19,17 @@ public final class UnifiedTrafficQueryService implements QueryHighwayTrafficUseC
             RegionalTrafficService regionalTrafficService,
             VehiclePatternService vehiclePatternService
     ) {
+        this(trafficService, capacityService, regionalTrafficService, vehiclePatternService, null);
+    }
+
+    public UnifiedTrafficQueryService(HighwayTrafficService trafficService, RoadCapacityService capacityService,
+            RegionalTrafficService regionalTrafficService, VehiclePatternService vehiclePatternService,
+            OdTrafficService odTrafficService) {
         this.trafficService = trafficService;
         this.capacityService = capacityService;
         this.regionalTrafficService = regionalTrafficService;
         this.vehiclePatternService = vehiclePatternService;
+        this.odTrafficService = odTrafficService;
     }
 
     @Override
@@ -29,6 +37,7 @@ public final class UnifiedTrafficQueryService implements QueryHighwayTrafficUseC
         if (query == null || query.queryType() == null) {
             throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_REQUIRED", "请说明要查询的交通范围");
         }
+        if (query.queryType().odQuery()) return odTrafficService.query(query);
         if (query.queryType().capacityQuery()) return capacityService.query(query);
         if (query.queryType().regionalTrafficQuery()) return regionalTrafficService.query(query);
         if (query.queryType().vehiclePatternQuery()) return vehiclePatternService.query(query);

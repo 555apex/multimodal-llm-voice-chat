@@ -16,6 +16,18 @@ const base: Omit<TrafficQueryResult, 'queryType' | 'title' | 'routeSummaries' | 
 }
 
 describe('TrafficResultPanel MySQL highway modes', () => {
+  it('shows missing-hour semantics even in compact chat results', () => {
+    const result: TrafficQueryResult = {
+      ...base, queryType: 'VEHICLE_HOURLY_PATTERN', title: '福州市24小时规律',
+      routeSummaries: [], segments: [],
+      warnings: ['有22个小时源数据缺失，图表按项目规则补0；补0不代表实际无车。'],
+    }
+    const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
+
+    expect(wrapper.text()).toContain('补0不代表实际无车')
+    expect(wrapper.find('.traffic-summary').exists()).toBe(false)
+  })
+
   it('shows the qualitative trend only through the existing summary and adds no forecast column', () => {
     const result: TrafficQueryResult = {
       ...base,
@@ -160,51 +172,48 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     expect(wrapper.text()).not.toContain('条路段')
   })
 
-  it('uses actual displayed counts for regional headings below each ranking limit', () => {
+  it('renders city-pair and route-level regional connection dimensions only', () => {
     const result: TrafficQueryResult = {
       ...base,
-      queryType: 'REGIONAL_TRAFFIC_OVERVIEW', title: '福州市、厦门市区域交通压力综合分析',
+      queryType: 'REGIONAL_TRAFFIC_OVERVIEW', title: '福州市、宁德市、南平市跨区域交通联系综合分析',
       routeSummaries: [], segments: [],
-      hubRows: [{ checkpointNo: 'FJ001', routeCode: 'G104', routeName: '北京-平潭', averageSpeedKmh: 35.2, dailyAverageFlow: 676 }],
-      regionPressureRows: [
-        { regionCode: '350100', regionName: '福州市', activeHubCount: 23, totalDailyFlow: 4651, hubShareRatio: 0.056, interpretation: '福州市当前交通流量压力值得持续关注。' },
-        { regionCode: '350200', regionName: '厦门市', activeHubCount: 18, totalDailyFlow: 4100, hubShareRatio: 0.044, interpretation: '厦门市当前交通流量压力值得持续关注。' },
-      ],
-      routePressureRows: [{ routeCode: 'G104', routeName: '北京-平潭', totalDailyFlow: 3200, checkpointCount: 12, averageSpeedKmh: 28.125 }],
+      regionalPairRows: [{ cityARegionCode: '350100', cityAName: '福州市', cityBRegionCode: '350900', cityBName: '宁德市', routeCount: 2, checkpointCount: 12, weeklyTotalFlow: 22400, dailyAverageFlow: 3200, averageSpeedKmh: 28.125 }],
+      regionalChannelRows: [{ cityARegionCode: '350100', cityAName: '福州市', cityBRegionCode: '350900', cityBName: '宁德市', routeCode: 'G104', routeName: '北京-平潭', checkpointCount: 8, weeklyTotalFlow: 14000, dailyAverageFlow: 2000, averageSpeedKmh: 30.1 }],
       selectedRegions: [
         { regionCode: '350100', regionName: '福州市' },
-        { regionCode: '350200', regionName: '厦门市' },
+        { regionCode: '350900', regionName: '宁德市' },
+        { regionCode: '350700', regionName: '南平市' },
       ],
     }
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
-    expect(wrapper.text()).toContain('高流量卡口枢纽（1个卡口）')
-    expect(wrapper.text()).toContain('城市交通压力（2个城市）')
-    expect(wrapper.text()).toContain('重点路线交通压力（1条路线）')
-    expect(wrapper.text()).not.toContain('Top5')
-    expect(wrapper.text()).toContain('676 辆/日')
-    expect(wrapper.text()).toContain('5.60%')
+    expect(wrapper.text()).toContain('城市对交通联系压力（1个城市对）')
+    expect(wrapper.text()).toContain('重要跨市路线通道（1条路线）')
+    expect(wrapper.text()).toContain('福州市—宁德市')
+    expect(wrapper.text()).toContain('22,400 辆')
+    expect(wrapper.text()).toContain('3,200 辆/日')
     expect(wrapper.text()).toContain('28.13 km/h')
+    expect(wrapper.text()).not.toContain('卡口数')
+    expect(wrapper.text()).not.toContain('路线名称')
+    expect(wrapper.text()).not.toContain('测试卡口')
   })
 
-  it('keeps Top5 wording only when more than five cities are in scope', () => {
-    const selectedRegions = Array.from({ length: 6 }, (_, index) => ({
-      regionCode: `350${index + 1}00`, regionName: `测试市${index + 1}`,
+  it('uses Top5 wording when five city-pair rows are displayed', () => {
+    const rows = Array.from({ length: 5 }, (_, index) => ({
+      cityARegionCode: `350${index}00`, cityAName: `甲市${index}`, cityBRegionCode: `351${index}00`, cityBName: `乙市${index}`,
+      routeCount: 1, checkpointCount: 2, weeklyTotalFlow: 5000 - index * 100,
+      dailyAverageFlow: 700 - index, averageSpeedKmh: 40,
     }))
     const result: TrafficQueryResult = {
       ...base,
-      queryType: 'CITY_PRESSURE', title: '福建省城市交通压力',
-      routeSummaries: [], segments: [], selectedRegions,
-      regionPressureRows: selectedRegions.slice(0, 5).map((region, index) => ({
-        ...region, activeHubCount: 10 - index, totalDailyFlow: 5000 - index * 100,
-        hubShareRatio: 0.1, interpretation: `${region.regionName}当前交通压力值得持续关注。`,
-      })),
-      totalSegmentCount: 6, displayedSegmentCount: 5, truncated: true,
+      queryType: 'REGIONAL_PAIR_PRESSURE', title: '福建省九市城市对交通联系压力',
+      routeSummaries: [], segments: [], regionalPairRows: rows,
+      totalSegmentCount: 12, displayedSegmentCount: 5, truncated: true,
     }
 
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
-    expect(wrapper.text()).toContain('城市交通压力 Top5')
+    expect(wrapper.text()).toContain('城市对交通联系压力 Top5')
   })
 
   it('renders vehicle overview tables and all three chart templates', async () => {

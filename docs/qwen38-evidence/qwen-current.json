@@ -1,0 +1,8 @@
+{
+  "model": "qwen3.8-27b-fp8",
+  "ordinary": true,
+  "structured_iterations": 3,
+  "concurrency": 2,
+  "sse": true,
+  "seconds": 6.35
+}

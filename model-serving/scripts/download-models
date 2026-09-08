@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}"
+MODEL_ROOT="/home/whtc/models"
+
+download_qwen36() {
+  python3 "$ROOT/scripts/model_control.py" download qwen36 "$@"
+}
+
+download_qwen38() {
+  python3 "$ROOT/scripts/model_control.py" download qwen38 "$@"
+}
+
+download_gpt() {
+  python3 "$ROOT/scripts/download_snapshot.py" \
+    --endpoint "$ENDPOINT" \
+    --repo openai/gpt-oss-120b \
+    --revision b5c939de8f754692c1647ca79fbf85e8c1e70f8a \
+    --target "$MODEL_ROOT/OpenAI--gpt-oss-120b--MXFP4" \
+    --exclude-prefix metal/ \
+    --exclude-prefix original/ \
+    --workers 3 \
+    "$@"
+}
+
+case "${1:-all}" in
+  qwen|qwen38) download_qwen38 ;;
+  qwen36) download_qwen36 ;;
+  gpt) download_gpt ;;
+  all)
+    download_qwen38
+    download_gpt
+    ;;
+  plan)
+    download_qwen38 --dry-run
+    download_gpt --dry-run
+    ;;
+  *)
+    echo "usage: $0 [plan|qwen|qwen38|qwen36|gpt|all]" >&2
+    exit 2
+    ;;
+esac

@@ -44,7 +44,7 @@ public class MysqlResourceAllocationRepository implements ResourceAllocationPort
                         create_time, update_time
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    allocation.allocationId(), allocation.workflowId(), parseEventId(allocation.eventId()),
+                    allocation.allocationId(), allocation.workflowId(), allocation.eventId(),
                     allocation.planId(), allocation.planVersion(), resource.resourceId(),
                     resource.resourceTypeCode(), resource.resourceTypeName(), resource.resourceName(),
                     resource.sourceCityCode(), resource.sourceCityName(), resource.quantity(),
@@ -65,7 +65,7 @@ public class MysqlResourceAllocationRepository implements ResourceAllocationPort
                 COLUMNS + " WHERE plan_id = ? AND plan_version = ? ORDER BY id",
                 (rows, rowNumber) -> new ResourceAllocation(
                         rows.getString("allocation_id"), rows.getString("workflow_id"),
-                        Long.toString(rows.getLong("event_id")), rows.getString("plan_id"),
+                        rows.getString("event_id"), rows.getString("plan_id"),
                         rows.getLong("plan_version"),
                         new AllocatedResource(
                                 rows.getString("resource_id"), rows.getString("resource_type_code"),
@@ -115,11 +115,6 @@ public class MysqlResourceAllocationRepository implements ResourceAllocationPort
             case 2 -> ResourceAllocationStatus.RELEASED;
             default -> throw new IllegalStateException("资源占用状态无效：" + value);
         };
-    }
-
-    private long parseEventId(String value) {
-        try { return Long.parseLong(value); }
-        catch (NumberFormatException exception) { throw new IllegalArgumentException("事件ID格式不正确"); }
     }
 
     private Timestamp timestamp(Instant value) {

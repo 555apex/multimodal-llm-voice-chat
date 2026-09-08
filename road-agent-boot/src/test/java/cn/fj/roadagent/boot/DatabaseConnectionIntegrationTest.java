@@ -52,10 +52,10 @@ class DatabaseConnectionIntegrationTest {
         Integer completeEventCount = jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*)
-                FROM w_abnormal_event
-                WHERE id IS NOT NULL
+                FROM w_lw_incident
+                WHERE c_no IS NOT NULL
                   AND event_type IS NOT NULL
-                  AND description IS NOT NULL
+                  AND content IS NOT NULL
                 """,
                 Integer.class
         );
@@ -63,34 +63,34 @@ class DatabaseConnectionIntegrationTest {
     }
 
     @Test
-    void shouldReturnOldestPendingEventWithBigIdAsString() {
+    void shouldReturnOldestPendingIncidentWithCNoAsString() {
         var event = abnormalEventRepository.findNextPending().orElseThrow();
         String expectedId = jdbcTemplate.queryForObject(
                 """
-                SELECT CAST(e.id AS CHAR)
-                FROM w_abnormal_event e
-                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.id
-                WHERE e.event_status = 0
-                  AND (e.del_flag IS NULL OR e.del_flag IN ('N', '0'))
+                SELECT e.c_no
+                FROM w_lw_incident e
+                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.c_no
+                WHERE e.c_type = '4' AND e.status = '1' AND e.completed = 0
+                  AND e.deleted = 0 AND e.event_type IS NOT NULL AND e.event_type <> ''
                   AND (w.workflow_id IS NULL OR (
                       w.current_stage = 1 AND w.workflow_status IN (0, 1, 2, 5, 6)
                   ))
-                ORDER BY e.occurrence_time IS NULL, e.occurrence_time ASC,
-                         w.stage_entered_at ASC, e.id ASC
+                ORDER BY e.guard_time IS NULL, e.guard_time ASC,
+                         w.stage_entered_at ASC, e.c_no ASC
                 LIMIT 1
                 """,
                 String.class
         );
 
         assertEquals(expectedId, event.eventId());
-        assertTrue(event.eventId().length() > 15);
+        assertTrue(!event.eventId().isBlank());
         Long expectedCount = jdbcTemplate.queryForObject(
                 """
                 SELECT COUNT(*)
-                FROM w_abnormal_event e
-                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.id
-                WHERE e.event_status = 0
-                  AND (e.del_flag IS NULL OR e.del_flag IN ('N', '0'))
+                FROM w_lw_incident e
+                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.c_no
+                WHERE e.c_type = '4' AND e.status = '1' AND e.completed = 0
+                  AND e.deleted = 0 AND e.event_type IS NOT NULL AND e.event_type <> ''
                   AND (w.workflow_id IS NULL OR (
                       w.current_stage = 1 AND w.workflow_status IN (0, 1, 2, 5, 6)
                   ))

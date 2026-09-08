@@ -10,5 +10,9 @@ speech-service/models
 tmp
 *.log
 .env
+**/.env
+**/.env.*
+**/.releases
+**/outputs
 config/api-test.env
 config/api-test.ps1

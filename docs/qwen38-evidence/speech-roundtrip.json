@@ -1,0 +1,24 @@
+{
+  "fixture": "语音测试：福州市普通国省道路段通行平稳，请注意行车安全。",
+  "mp3_bytes": 78381,
+  "ffmpeg_decode": {
+    "decoded_pcm_bytes": 208896,
+    "duration_seconds": 6.528
+  },
+  "roundtrip": {
+    "speech_capabilities": {
+      "asrAvailable": true,
+      "ttsAvailable": true,
+      "asrModel": "small",
+      "ttsVoice": "Serena",
+      "maxRecordingSeconds": 60,
+      "maxAudioBytes": 10485760
+    },
+    "asr": {
+      "text": "语音测试，福州市普通国省道路段通行平稳，请注意行车安全",
+      "language": "zh",
+      "durationMs": 6528
+    }
+  },
+  "speech_networks_internal": true
+}

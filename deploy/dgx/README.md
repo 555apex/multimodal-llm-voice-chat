@@ -1,5 +1,9 @@
 # Road Agent DGX Spark 部署
 
+> 2026-09-08 合并版本：本次升级和回滚以 `docs/DGX_MERGE_20260908.md` 为准。
+> 下方保留的首次部署、初始化和公网账号创建步骤不应用于现有生产库；本次只做已核验的增量授权与演示流程重置。
+> 内网分类轮询关闭，公网分类轮询开启；两个后端共享业务数据库。模型声明见 `configs/models.yaml`。
+
 目标主机为 `spark-8a8d`（ARM64 / NVIDIA GB10），项目目录为
 `/home/whtc/workspace/projects/road-agent-dgx`。
 
@@ -123,3 +127,48 @@ deploy/dgx/dgx-stack down
 `down` 只停止 Road Agent Backend、Frontend 和 Speech，不停止 Qwen/Open WebUI，不删除模型，也不修改 MySQL。
 
 Tailscale Serve 获管理员授权后可执行 `dgx-stack serve`，关闭使用 `dgx-stack serve-off`；授权前继续使用 SSH 隧道。
+
+## 7. 公网完整功能测试环境
+
+公网 Backend 直接使用原数据库地址，但改用自动生成的受限账号 `roadagent_public_app`：7 张交通表仅有 `SELECT`，8 张应急业务表仅有 `SELECT/INSERT/UPDATE/DELETE`。受限凭据写入项目外的 `/home/whtc/.config/road-agent/public-original-db.env`；数据库端口不向宿主机或公网发布。
+
+启用前已备份全部 8 张可写应急业务表，备份及 SHA-256 校验清单位于：
+
+```text
+/home/whtc/workspace/backups/road-agent-db/public-shared-db-before-enable-20260904
+```
+
+先在 DGX 的交互式终端设置固定登录账号和密码：
+
+```bash
+cd /home/whtc/workspace/projects/road-agent-dgx
+deploy/dgx/dgx-stack public-auth-set
+```
+
+密码不会明文保存，只有密码哈希写入：
+
+```text
+/home/whtc/.config/road-agent/public.htpasswd
+```
+
+随后启用公网环境：
+
+```bash
+deploy/dgx/dgx-stack public-on
+deploy/dgx/dgx-stack public-status
+deploy/dgx/dgx-stack public-db-access-verify
+```
+
+公网 HTTPS 地址固定为：
+
+```text
+https://spark-8a8d.taile1b178.ts.net/
+```
+
+停用公网入口但保留账号哈希和原数据库备份：
+
+```bash
+deploy/dgx/dgx-stack public-off
+```
+
+完整操作与安全说明见项目根目录 `Road_Agent_DGX公网测试使用文档.md`。

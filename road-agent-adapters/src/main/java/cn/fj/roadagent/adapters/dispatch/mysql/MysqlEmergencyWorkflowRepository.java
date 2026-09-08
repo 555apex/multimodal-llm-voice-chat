@@ -30,7 +30,7 @@ import java.util.Optional;
 public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowRepository {
     private static final String WORKFLOW_COLUMNS = """
             SELECT workflow_id, event_id, current_stage, workflow_status,
-                   plan_id, plan_version, lock_version, stage_entered_at,
+                   plan_id, plan_version, terminal_reason, lock_version, stage_entered_at,
                    create_time, update_time
             FROM w_emergency_dispatch_workflow
             """;
@@ -75,13 +75,13 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
                     """
                     INSERT INTO w_emergency_dispatch_workflow (
                         workflow_id, event_id, current_stage, workflow_status,
-                        plan_id, plan_version, lock_version, stage_entered_at,
+                        plan_id, plan_version, terminal_reason, lock_version, stage_entered_at,
                         create_time, update_time
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
-                    workflow.workflowId(), parseEventId(workflow.eventId()),
+                    workflow.workflowId(), workflow.eventId(),
                     stageValue(workflow.currentStage()), statusValue(workflow.status()),
-                    workflow.planId(), workflow.planVersion(), workflow.lockVersion(),
+                    workflow.planId(), workflow.planVersion(), workflow.terminalReason(), workflow.lockVersion(),
                     Timestamp.from(workflow.stageEnteredAt()),
                     Timestamp.from(workflow.createdAt()), Timestamp.from(workflow.updatedAt())
             ) == 1;
@@ -102,7 +102,7 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
     public Optional<EmergencyWorkflow> findWorkflowByEventId(String eventId) {
         return first(jdbcTemplate.query(
                 WORKFLOW_COLUMNS + " WHERE event_id = ? LIMIT 1",
-                workflowMapper, parseEventId(eventId)
+                workflowMapper, eventId
         ));
     }
 
@@ -128,12 +128,12 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
                 """
                 UPDATE w_emergency_dispatch_workflow
                 SET current_stage = ?, workflow_status = ?, plan_id = ?,
-                    plan_version = ?, lock_version = ?, stage_entered_at = ?,
+                    plan_version = ?, terminal_reason = ?, lock_version = ?, stage_entered_at = ?,
                     update_time = ?
                 WHERE workflow_id = ? AND lock_version = ?
                 """,
                 stageValue(workflow.currentStage()), statusValue(workflow.status()),
-                workflow.planId(), workflow.planVersion(), workflow.lockVersion(),
+                workflow.planId(), workflow.planVersion(), workflow.terminalReason(), workflow.lockVersion(),
                 Timestamp.from(workflow.stageEnteredAt()), Timestamp.from(workflow.updatedAt()),
                 workflow.workflowId(), expectedLockVersion
         ) == 1;
@@ -314,9 +314,9 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
 
     private EmergencyWorkflow mapWorkflow(ResultSet rs, int row) throws SQLException {
         return new EmergencyWorkflow(
-                rs.getString("workflow_id"), Long.toString(rs.getLong("event_id")),
+                rs.getString("workflow_id"), rs.getString("event_id"),
                 stage(rs, "current_stage"), workflowStatus(rs.getInt("workflow_status")),
-                rs.getString("plan_id"), rs.getLong("plan_version"),
+                rs.getString("plan_id"), rs.getLong("plan_version"), rs.getString("terminal_reason"),
                 rs.getLong("lock_version"), instant(rs, "stage_entered_at"),
                 instant(rs, "create_time"), instant(rs, "update_time")
         );
@@ -381,7 +381,7 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
     private int actorStageValue(WorkflowAction action) {
         return switch (action.actionType()) {
             case GENERATION_STARTED, GENERATION_COMPLETED, GENERATION_FAILED,
-                    GENERATION_RETRIED, LEVEL_1_SUBMITTED, LEVEL_1_RETURNED,
+                    GENERATION_RETRIED, EVENT_TYPE_CORRECTED, LEVEL_1_SUBMITTED, LEVEL_1_RETURNED,
                     NO_DISPATCH -> 1;
             case LEVEL_2_PASSED, LEVEL_2_RETURNED -> 2;
             case LEVEL_3_RETURNED, LEVEL_3_PUBLISHED, RESOURCES_RELEASED -> 3;
@@ -491,14 +491,6 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
     private Instant instant(ResultSet rs, String column) throws SQLException {
         Timestamp timestamp = rs.getTimestamp(column);
         return timestamp == null ? null : timestamp.toInstant();
-    }
-
-    private long parseEventId(String eventId) {
-        try {
-            return Long.parseLong(eventId);
-        } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("事件ID格式不正确");
-        }
     }
 
     private <T> Optional<T> first(List<T> values) {

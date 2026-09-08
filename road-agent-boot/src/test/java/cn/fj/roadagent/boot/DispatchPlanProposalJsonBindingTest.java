@@ -9,6 +9,24 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class DispatchPlanProposalJsonBindingTest {
 
     @Test
+    void shouldBindPublishedPlanVariablesAndSupplementalAdvice() throws Exception {
+        DispatchPlanProposal proposal = new ObjectMapper().readValue("""
+                {
+                  "templateVariables": {"封控范围": "事发点前后各500米"},
+                  "resourceRequirements": [{
+                    "resourceTypeCode": "ROAD_RESCUE_TEAM",
+                    "quantity": 2,
+                    "purpose": "负责现场抢通"
+                  }],
+                  "supplementalAdvice": "持续关注降雨变化。"
+                }
+                """, DispatchPlanProposal.class);
+
+        assertEquals("事发点前后各500米", proposal.templateVariables().get("封控范围"));
+        assertEquals("持续关注降雨变化。", proposal.supplementalAdviceText());
+    }
+
+    @Test
     void shouldBindAndNormalizeSectionedRescuePlanReturnedByCompatibleModel() throws Exception {
         DispatchPlanProposal proposal = new ObjectMapper().readValue("""
                 {

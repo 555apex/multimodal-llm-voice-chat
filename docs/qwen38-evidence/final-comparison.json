@@ -1,0 +1,19 @@
+{
+  "business_files_unchanged": true,
+  "backend_images_unchanged": true,
+  "untouched_containers_unchanged": true,
+  "backend_models": {
+    "road-agent-dgx-backend": {
+      "ROADAGENT_MODEL_NAME": "qwen3.8-27b-fp8",
+      "ROADAGENT_MODEL_ENDPOINT": "http://qwen:8000/v1/chat/completions",
+      "ROADAGENT_MODEL_AUTH_ENABLED": "false",
+      "ROADAGENT_MODEL_ENABLE_THINKING": "false"
+    },
+    "road-agent-dgx-public-backend": {
+      "ROADAGENT_MODEL_NAME": "qwen3.8-27b-fp8",
+      "ROADAGENT_MODEL_ENDPOINT": "http://qwen:8000/v1/chat/completions",
+      "ROADAGENT_MODEL_AUTH_ENABLED": "false",
+      "ROADAGENT_MODEL_ENABLE_THINKING": "false"
+    }
+  }
+}

@@ -7,6 +7,8 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
 import mimetypes
+import os
+import sys
 from pathlib import Path
 import time
 import uuid
@@ -32,9 +34,29 @@ def request_json(url: str, payload: dict | None = None, timeout: int = 600) -> d
         ) from exception
 
 
-def qwen_payload(*, stream: bool = False, structured: bool = False) -> dict:
+def configured_model_name() -> str:
+    value = os.environ.get("ROADAGENT_MODEL_NAME")
+    env_file = Path(__file__).with_name(".env")
+    if not value and env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            if line.startswith("ROADAGENT_MODEL_NAME="):
+                value = line.split("=", 1)[1].strip().strip('"').strip("'")
+    if not value:
+        raise RuntimeError("set ROADAGENT_MODEL_NAME in deploy/dgx/.env or pass --model-name")
+    return value
+
+
+def model_content(result: dict) -> str:
+    message = result["choices"][0]["message"]
+    content = message.get("content") or ""
+    if "<think>" in content or message.get("reasoning_content") or message.get("reasoning"):
+        raise RuntimeError("unexpected thinking output for enable_thinking=false")
+    return content
+
+
+def qwen_payload(model_name: str, *, stream: bool = False, structured: bool = False) -> dict:
     payload = {
-        "model": "qwen3.6-35b-a3b-nvfp4",
+        "model": model_name,
         "messages": [
             {
                 "role": "user",
@@ -66,20 +88,20 @@ def synthesize_speech(app_base: str, text: str) -> bytes:
     return speech
 
 
-def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dict:
+def check_qwen(qwen_base: str, iterations: int, business_iterations: int, model_name: str) -> dict:
     models = request_json(f"{qwen_base}/models")
     ids = [item.get("id") for item in models.get("data", [])]
-    if "qwen3.6-35b-a3b-nvfp4" not in ids:
+    if model_name not in ids:
         raise RuntimeError(f"Qwen model is not advertised: {ids}")
 
     started = time.monotonic()
-    ordinary = request_json(f"{qwen_base}/chat/completions", qwen_payload())
-    ordinary_content = ordinary["choices"][0]["message"]["content"]
+    ordinary = request_json(f"{qwen_base}/chat/completions", qwen_payload(model_name))
+    ordinary_content = model_content(ordinary)
     if "204" not in ordinary_content:
         raise RuntimeError(f"unexpected ordinary answer: {ordinary_content}")
 
     agent_like_payload = {
-        "model": "qwen3.6-35b-a3b-nvfp4",
+        "model": model_name,
         "messages": [
             {
                 "role": "system",
@@ -102,7 +124,7 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
         "response_format": {"type": "json_object"},
     }
     dispatch_payload = {
-        "model": "qwen3.6-35b-a3b-nvfp4",
+        "model": model_name,
         "messages": [
             {
                 "role": "system",
@@ -130,7 +152,7 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
         "response_format": {"type": "json_object"},
     }
     traffic_summary_payload = {
-        "model": "qwen3.6-35b-a3b-nvfp4",
+        "model": model_name,
         "messages": [
             {
                 "role": "system",
@@ -154,9 +176,9 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
         "chat_template_kwargs": {"enable_thinking": False},
         "response_format": {"type": "json_object"},
     }
-    for _ in range(business_iterations):
+    for business_index in range(business_iterations):
         agent_like = request_json(f"{qwen_base}/chat/completions", agent_like_payload)
-        intent = json.loads(agent_like["choices"][0]["message"]["content"])
+        intent = json.loads(model_content(agent_like))
         if (
             intent.get("intent") != "TRAFFIC_QUERY"
             or intent.get("trafficScope") != "PROVINCE_OVERVIEW"
@@ -165,11 +187,11 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
         traffic_summary = request_json(
             f"{qwen_base}/chat/completions", traffic_summary_payload
         )
-        summary = json.loads(traffic_summary["choices"][0]["message"]["content"])
+        summary = json.loads(model_content(traffic_summary))
         if not summary.get("summary") or summary.get("trend") != "基本稳定":
             raise RuntimeError(f"invalid traffic summary response: {summary}")
         dispatch = request_json(f"{qwen_base}/chat/completions", dispatch_payload)
-        proposal = json.loads(dispatch["choices"][0]["message"]["content"])
+        proposal = json.loads(model_content(dispatch))
         requirements = proposal.get("resourceRequirements")
         if not requirements or not isinstance(proposal.get("rescuePlan"), str):
             raise RuntimeError(f"invalid dispatch proposal response: {proposal}")
@@ -179,17 +201,21 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
                 "TRAFFIC_CONTROL_EQUIPMENT",
             } or int(requirement.get("quantity", 0)) <= 0:
                 raise RuntimeError(f"invalid resource requirement: {requirement}")
+        if (business_index + 1) % 5 == 0:
+            print(f"business JSON batches: {business_index + 1}/{business_iterations}", file=sys.stderr, flush=True)
 
-    for _ in range(iterations):
-        result = request_json(f"{qwen_base}/chat/completions", qwen_payload(structured=True))
-        content = result["choices"][0]["message"]["content"]
+    for model_index in range(iterations):
+        result = request_json(f"{qwen_base}/chat/completions", qwen_payload(model_name, structured=True))
+        content = model_content(result)
         parsed = json.loads(content)
         if str(parsed.get("answer")) != "204":
             raise RuntimeError(f"unexpected structured answer: {content}")
+        if (model_index + 1) % 10 == 0:
+            print(f"sequential JSON requests: {model_index + 1}/{iterations}", file=sys.stderr, flush=True)
 
     request = urllib.request.Request(
         f"{qwen_base}/chat/completions",
-        data=json.dumps(qwen_payload(stream=True)).encode("utf-8"),
+        data=json.dumps(qwen_payload(model_name, stream=True)).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
@@ -208,7 +234,7 @@ def check_qwen(qwen_base: str, iterations: int, business_iterations: int) -> dic
     if not streamed:
         raise RuntimeError("Qwen SSE returned no content")
     return {
-        "model": "qwen3.6-35b-a3b-nvfp4",
+        "model": model_name,
         "ordinary_characters": len(ordinary_content),
         "traffic_intent_iterations": business_iterations,
         "traffic_summary_iterations": business_iterations,
@@ -311,11 +337,15 @@ def check_road_agent(
                 {"queryType": query_type, **fields},
             )
             traffic_data = traffic.get("data") or {}
+            if query_type == "REGIONAL_TRAFFIC_OVERVIEW" and "regionalPairRows" in traffic_data:
+                # Current DGX release returns city pairs/channels; older builds
+                # used hub/pressure rows. Validate the actual versioned contract.
+                expected_lists = ("regionalPairRows", "regionalChannelRows")
             if (
                 traffic_data.get("source") != "MYSQL"
                 or traffic_data.get("queryType") != query_type
                 or not traffic_data.get("summary")
-                or not any(isinstance(traffic_data.get(name), list) for name in expected_lists)
+                or not all(isinstance(traffic_data.get(name), list) for name in expected_lists)
             ):
                 raise RuntimeError(f"invalid MySQL traffic response: {traffic}")
             traffic_report.append(
@@ -389,7 +419,11 @@ def check_road_agent(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--qwen-base", default="http://100.119.145.78:8001/v1")
+    parser.add_argument("--qwen-base", default="http://127.0.0.1:8001/v1")
+    parser.add_argument("--model-name")
+    parser.add_argument("--model-only", action="store_true")
+    parser.add_argument("--app-only", action="store_true")
+    parser.add_argument("--report", type=Path)
     parser.add_argument("--app-base", default="http://127.0.0.1:18080")
     parser.add_argument("--model-iterations", type=int, default=3)
     parser.add_argument("--business-structured-iterations", type=int, default=1)
@@ -402,13 +436,21 @@ def main() -> None:
     parser.add_argument("--tts-concurrency", type=int, default=0)
     parser.add_argument("--test-speech-limits", action="store_true")
     args = parser.parse_args()
-    report = {
-        "qwen": check_qwen(
+    if args.model_only and args.app_only:
+        parser.error("--model-only and --app-only cannot be combined")
+    report = {}
+    if not args.app_only:
+        report["qwen"] = check_qwen(
             args.qwen_base.rstrip("/"),
             args.model_iterations,
             args.business_structured_iterations,
-        ),
-        "road_agent": check_road_agent(
+            args.model_name or configured_model_name(),
+        )
+        if args.report:
+            args.report.parent.mkdir(parents=True, exist_ok=True)
+            args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    if not args.model_only:
+        report["road_agent"] = check_road_agent(
             args.app_base.rstrip("/"),
             args.with_tts,
             args.audio,
@@ -418,8 +460,10 @@ def main() -> None:
             args.with_agent,
             args.tts_concurrency,
             args.test_speech_limits,
-        ),
-    }
+        )
+    if args.report:
+        args.report.parent.mkdir(parents=True, exist_ok=True)
+        args.report.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

@@ -5,13 +5,27 @@ export BUILDKIT_PROGRESS=plain
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$ROOT/../.." && pwd)"
 COMPOSE="$ROOT/compose.yaml"
+PUBLIC_COMPOSE="$ROOT/compose.public.yaml"
 ENV_FILE="$ROOT/.env"
 MODEL_STACK_DIR="${MODEL_STACK_DIR:-/home/whtc/workspace/projects/model-serving}"
 MODEL_ROOT="${MODEL_ROOT:-/home/whtc/models}"
-QWEN_HEALTH_URL="${QWEN_HEALTH_URL:-http://100.119.145.78:8001}"
+QWEN_HEALTH_URL="${QWEN_HEALTH_URL:-http://127.0.0.1:8001}"
+PUBLIC_CONFIG_DIR="${ROADAGENT_PUBLIC_CONFIG_DIR:-/home/whtc/.config/road-agent}"
+PUBLIC_AUTH_FILE="${ROADAGENT_PUBLIC_AUTH_FILE:-$PUBLIC_CONFIG_DIR/public.htpasswd}"
+PUBLIC_DB_ACCESS_FILE="${ROADAGENT_PUBLIC_DB_ACCESS_FILE:-$PUBLIC_CONFIG_DIR/public-original-db.env}"
+PUBLIC_ENABLED_FILE="$PUBLIC_CONFIG_DIR/public.enabled"
+PUBLIC_DB_ACCESS_TOOL="$ROOT/public-db-access"
+PUBLIC_LOCAL_URL="http://127.0.0.1:18081"
 
 compose() {
   docker compose --env-file "$ENV_FILE" --project-directory "$PROJECT_ROOT" -f "$COMPOSE" "$@"
+}
+
+public_compose() {
+  ROADAGENT_PUBLIC_AUTH_FILE="$PUBLIC_AUTH_FILE" \
+  ROADAGENT_PUBLIC_DB_ACCESS_FILE="$PUBLIC_DB_ACCESS_FILE" \
+    docker compose --env-file "$ENV_FILE" --project-directory "$PROJECT_ROOT" \
+      -f "$COMPOSE" -f "$PUBLIC_COMPOSE" "$@"
 }
 
 wait_http() {
@@ -67,6 +81,10 @@ require_runtime_files() {
   done
 }
 
+require_public_runtime_files() {
+  require_runtime_files
+}
+
 ensure_network() {
   if ! docker network inspect dgx-ai >/dev/null 2>&1; then
     docker network create dgx-ai >/dev/null
@@ -91,6 +109,99 @@ ensure_qwen() {
   wait_http "$QWEN_HEALTH_URL/health" 1200
 }
 
+start_base_stack() {
+  require_runtime_files
+  python3 "$ROOT/release_ops.py" guard-live
+  ensure_network
+  ensure_qwen
+  compose up -d
+  wait_http "http://127.0.0.1:18080/" 1200
+  wait_container_healthy road-agent-dgx-speech 1800
+}
+
+start_public_prerequisites() {
+  require_public_runtime_files
+  python3 "$ROOT/release_ops.py" guard-live
+  ensure_network
+  ensure_qwen
+  compose up -d speech-service
+  wait_container_healthy road-agent-dgx-speech 1800
+}
+
+require_public_auth() {
+  [[ -f "$PUBLIC_AUTH_FILE" ]] || {
+    echo "public login is not configured; run: deploy/dgx/dgx-stack public-auth-set" >&2
+    exit 1
+  }
+  [[ -s "$PUBLIC_AUTH_FILE" ]] || {
+    echo "public login file is empty: $PUBLIC_AUTH_FILE" >&2
+    exit 1
+  }
+}
+
+public_auth_set() {
+  command -v openssl >/dev/null 2>&1 || {
+    echo "openssl is required to create the public login" >&2
+    exit 1
+  }
+  [[ -t 0 ]] || {
+    echo "public-auth-set requires an interactive terminal; log in to the DGX with ssh -t" >&2
+    exit 1
+  }
+  local username password confirmation password_hash temporary_file
+  read -r -p "Public username: " username
+  [[ "$username" =~ ^[A-Za-z0-9._-]{3,64}$ ]] || {
+    echo "username must be 3-64 characters using letters, numbers, dot, underscore or hyphen" >&2
+    exit 1
+  }
+  read -r -s -p "Public password (at least 12 characters): " password
+  echo
+  read -r -s -p "Confirm public password: " confirmation
+  echo
+  [[ ${#password} -ge 12 ]] || { echo "password must contain at least 12 characters" >&2; exit 1; }
+  [[ "$password" == "$confirmation" ]] || { echo "password confirmation does not match" >&2; exit 1; }
+
+  mkdir -p "$PUBLIC_CONFIG_DIR"
+  chmod 700 "$PUBLIC_CONFIG_DIR"
+  password_hash="$(printf '%s' "$password" | openssl passwd -apr1 -stdin)"
+  temporary_file="$(mktemp "$PUBLIC_CONFIG_DIR/public.htpasswd.XXXXXX")"
+  printf '%s:%s\n' "$username" "$password_hash" > "$temporary_file"
+  chmod 644 "$temporary_file"
+  mv "$temporary_file" "$PUBLIC_AUTH_FILE"
+  unset password confirmation password_hash
+  echo "Public login hash saved to $PUBLIC_AUTH_FILE"
+  echo "The plaintext password was not stored."
+}
+
+start_public_runtime() {
+  require_public_auth
+  start_public_prerequisites
+  [[ -x "$PUBLIC_DB_ACCESS_TOOL" ]] || { echo "public database access tool is not executable: $PUBLIC_DB_ACCESS_TOOL" >&2; exit 1; }
+  ROADAGENT_PUBLIC_CONFIG_DIR="$PUBLIC_CONFIG_DIR" \
+  ROADAGENT_PUBLIC_DB_ACCESS_FILE="$PUBLIC_DB_ACCESS_FILE" \
+    "$PUBLIC_DB_ACCESS_TOOL" ensure
+  public_compose --profile public up -d public-backend public-frontend
+  wait_container_healthy road-agent-dgx-public-backend 1200
+  wait_http "$PUBLIC_LOCAL_URL/healthz" 120
+  tailscale funnel --bg --yes --https=443 "$PUBLIC_LOCAL_URL"
+  tailscale funnel status
+}
+
+stop_public_runtime() {
+  tailscale funnel --https=443 off >/dev/null 2>&1 || true
+  public_compose --profile public stop public-frontend public-backend >/dev/null 2>&1 || true
+  public_compose --profile public rm -f public-frontend public-backend >/dev/null 2>&1 || true
+}
+
+show_public_status() {
+  echo "Public access marker: $([[ -f "$PUBLIC_ENABLED_FILE" ]] && echo enabled || echo disabled)"
+  echo "Public login: $([[ -s "$PUBLIC_AUTH_FILE" ]] && echo configured || echo missing)"
+  echo "Restricted original database login: $([[ -s "$PUBLIC_DB_ACCESS_FILE" ]] && echo configured || echo missing)"
+  echo "Database mode: original database (traffic reads; emergency workflow reads/writes)"
+  public_compose --profile public ps public-backend public-frontend
+  tailscale funnel status 2>&1 || true
+}
+
 preflight() {
   [[ "$(uname -m)" == "aarch64" ]] || { echo "DGX deployment requires aarch64" >&2; exit 1; }
   docker version >/dev/null
@@ -99,10 +210,7 @@ preflight() {
   free -h
   df -h "$MODEL_ROOT"
   [[ -f "$MODEL_STACK_DIR/configs/models.yaml" ]] || { echo "model-serving is missing" >&2; exit 1; }
-  [[ -f "$MODEL_ROOT/NVIDIA--Qwen3.6-35B-A3B--NVFP4/.deployment-manifest.json" ]] || {
-    echo "validated Qwen snapshot is missing" >&2
-    exit 1
-  }
+  "$MODEL_STACK_DIR/scripts/model-stack" verify daily --quick
   for directory in Systran--faster-whisper-small Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice; do
     if [[ ! -f "$MODEL_ROOT/$directory/.deployment-manifest.json" ]]; then
       echo "speech model pending: $MODEL_ROOT/$directory"
@@ -136,6 +244,9 @@ build_stack() {
 }
 
 case "${1:-status}" in
+  model-reload)
+    python3 "$ROOT/model-reload.py" "${@:2}"
+    ;;
   preflight)
     preflight
     ;;
@@ -147,17 +258,18 @@ case "${1:-status}" in
     build_stack
     ;;
   up)
-    require_runtime_files
-    ensure_network
-    ensure_qwen
-    compose up -d
-    wait_http "http://127.0.0.1:18080/" 1200
-    wait_container_healthy road-agent-dgx-speech 1800
+    start_base_stack
+    if [[ -f "$PUBLIC_ENABLED_FILE" ]]; then
+      start_public_runtime
+    fi
     compose ps
     ;;
   status)
     docker ps -a --filter name=road-agent-dgx --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
     docker ps -a --filter name=model-serving-qwen --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+    if [[ -f "$PUBLIC_ENABLED_FILE" ]]; then
+      tailscale funnel status 2>&1 || true
+    fi
     free -h
     ;;
   smoke)
@@ -168,7 +280,14 @@ case "${1:-status}" in
     ;;
   logs)
     if [[ -n "${2:-}" ]]; then
-      compose logs --tail 200 "$2"
+      case "$2" in
+        public-backend|public-frontend)
+          public_compose --profile public logs --tail 200 "$2"
+          ;;
+        *)
+          compose logs --tail 200 "$2"
+          ;;
+      esac
     else
       compose logs --tail 200
     fi
@@ -181,11 +300,42 @@ case "${1:-status}" in
   serve-off)
     tailscale serve reset
     ;;
+  public-auth-set)
+    public_auth_set
+    ;;
+  public-on)
+    require_public_auth
+    mkdir -p "$PUBLIC_CONFIG_DIR"
+    chmod 700 "$PUBLIC_CONFIG_DIR"
+    rm -f "$PUBLIC_ENABLED_FILE"
+    trap 'status=$?; stop_public_runtime; echo "Road Agent public access failed to start and was rolled back." >&2; exit "$status"' EXIT
+    start_public_runtime
+    touch "$PUBLIC_ENABLED_FILE"
+    chmod 600 "$PUBLIC_ENABLED_FILE"
+    trap - EXIT
+    ;;
+  public-off)
+    stop_public_runtime
+    rm -f "$PUBLIC_ENABLED_FILE"
+    echo "Road Agent public access is disabled; its login hash and original database backup were preserved."
+    ;;
+  public-status)
+    show_public_status
+    ;;
+  public-db-access-verify|public-db-access-grants)
+    action="${1#public-db-access-}"
+    ROADAGENT_PUBLIC_CONFIG_DIR="$PUBLIC_CONFIG_DIR" \
+    ROADAGENT_PUBLIC_DB_ACCESS_FILE="$PUBLIC_DB_ACCESS_FILE" \
+      "$PUBLIC_DB_ACCESS_TOOL" "$action"
+    ;;
   down)
+    if [[ -f "$PUBLIC_ENABLED_FILE" ]]; then
+      stop_public_runtime
+    fi
     compose down --remove-orphans
     ;;
   *)
-    echo "usage: $0 [preflight|download-models|build|up|status|smoke|db-preflight|db-backup|db-migrate|db-verify|db-restore|logs|serve|serve-off|down]" >&2
+    echo "usage: $0 [model-reload|preflight|download-models|build|up|status|smoke|db-preflight|db-backup|db-migrate|db-verify|db-restore|logs|serve|serve-off|public-auth-set|public-on|public-off|public-status|public-db-access-verify|public-db-access-grants|down]" >&2
     exit 2
     ;;
 esac

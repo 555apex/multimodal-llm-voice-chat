@@ -1,0 +1,95 @@
+models:
+  qwen3.8-27b-fp8:
+    aliases: [qwen38]
+    role: daily
+    source: Qwen/Qwen3.8-27B-FP8
+    revision: 017b9c7af6b5689d5dd426a76e0bc077eb5ca20a
+    license: apache-2.0
+    quantization: FP8
+    local_dir: /home/whtc/models/Qwen--Qwen3.8-27B-FP8
+    host_port: 8001
+    max_model_len: 65536
+    max_num_seqs: 2
+    vllm_args:
+      - --tensor-parallel-size
+      - '1'
+      - --trust-remote-code
+      - --kv-cache-dtype
+      - fp8
+      - --gpu-memory-utilization
+      - '0.50'
+      - --max-model-len
+      - '65536'
+      - --max-num-seqs
+      - '2'
+      - --max-num-batched-tokens
+      - '8192'
+      - --enable-chunked-prefill
+      - --async-scheduling
+      - --enable-prefix-caching
+      - --language-model-only
+      - --reasoning-parser
+      - qwen3
+      - --tool-call-parser
+      - qwen3_coder
+      - --enable-auto-tool-choice
+      - --default-chat-template-kwargs
+      - '{"enable_thinking":false}'
+  qwen3.6-35b-a3b-nvfp4:
+    aliases: [qwen36]
+    role: rollback
+    source: nvidia/Qwen3.6-35B-A3B-NVFP4
+    revision: 491c2f1ea524c639598bf8fa787a93fed5a6fbce
+    license: apache-2.0
+    quantization: NVFP4
+    local_dir: /home/whtc/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4
+    host_port: 8001
+    max_model_len: 65536
+    max_num_seqs: 2
+    vllm_args:
+      - --tensor-parallel-size
+      - '1'
+      - --trust-remote-code
+      - --kv-cache-dtype
+      - fp8
+      - --attention-backend
+      - flashinfer
+      - --moe-backend
+      - marlin
+      - --gpu-memory-utilization
+      - '0.40'
+      - --max-model-len
+      - '65536'
+      - --max-num-seqs
+      - '2'
+      - --max-num-batched-tokens
+      - '8192'
+      - --enable-chunked-prefill
+      - --async-scheduling
+      - --enable-prefix-caching
+      - --speculative-config
+      - '{"method":"mtp","num_speculative_tokens":3,"moe_backend":"triton"}'
+      - --load-format
+      - fastsafetensors
+      - --reasoning-parser
+      - qwen3
+      - --tool-call-parser
+      - qwen3_xml
+      - --enable-auto-tool-choice
+  gpt-oss-120b:
+    role: deep-reasoning
+    source: openai/gpt-oss-120b
+    revision: b5c939de8f754692c1647ca79fbf85e8c1e70f8a
+    license: apache-2.0
+    quantization: MXFP4
+    local_dir: /home/whtc/models/OpenAI--gpt-oss-120b--MXFP4
+    excluded_source_prefixes:
+      - metal/
+      - original/
+    host_port: 8002
+    max_model_len: 32768
+    max_num_seqs: 1
+runtime:
+  image: docker.m.daocloud.io/vllm/vllm-openai@sha256:1c8e60a0841b333c700488cb029d3664807249da0c071e862191b00fe34b228c
+  image_platform: linux/arm64
+  image_platform_digest: sha256:1c8e60a0841b333c700488cb029d3664807249da0c071e862191b00fe34b228c

@@ -1,0 +1,59 @@
+package cn.fj.roadagent.core.dispatch;
+
+import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlanSnapshot;
+import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceBaseline;
+import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceMode;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class ResponsePlanRendererTest {
+    private final ResponsePlanRenderer renderer = new ResponsePlanRenderer();
+
+    @Test
+    void shouldKeepTemplateAndUseSystemFactsBeforeModelValues() {
+        String rendered = renderer.render(plan(), event(), Map.of(
+                "事件编号", "伪造编号",
+                "封控范围", "事发点前后各500米"
+        ), "持续关注降雨变化。");
+
+        assertTrue(rendered.contains("INC-001"));
+        assertTrue(rendered.contains("福州、G3京台高速"));
+        assertTrue(rendered.contains("事发点前后各500米"));
+        assertTrue(rendered.contains("已匹配资源清单所列力量"));
+        assertTrue(rendered.endsWith("补充建议：持续关注降雨变化。"));
+    }
+
+    @Test
+    void shouldRejectVariablesOutsidePublishedTemplate() {
+        var error = assertThrows(IllegalArgumentException.class,
+                () -> renderer.render(plan(), event(), Map.of("到达时间", "5分钟"), ""));
+        assertEquals("模型返回了预案不存在的填充项：到达时间", error.getMessage());
+    }
+
+    private EmergencyResponsePlanSnapshot plan() {
+        return new EmergencyResponsePlanSnapshot(
+                "ERP-DT01", "DT01", "崩塌（落石）", 1,
+                List.of("覆盖车道"),
+                "接报【事件编号】，赶赴【事件地点、路线、方向和桩号】，设置【封控范围】，投入【数据库分配资源】。",
+                List.of(new ResponsePlanResourceBaseline(
+                        "ROAD_RESCUE_TEAM", 2, "抢通", ResponsePlanResourceMode.BASE)),
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        );
+    }
+
+    private EmergencyEvent event() {
+        return new EmergencyEvent(
+                "INC-001", "INC-001", Instant.parse("2026-09-04T00:00:00Z"),
+                "DT01", "边坡落石", "350100", "福州", null, null,
+                null, "G3", "G3京台高速", 119.2965, 26.0745
+        );
+    }
+}
