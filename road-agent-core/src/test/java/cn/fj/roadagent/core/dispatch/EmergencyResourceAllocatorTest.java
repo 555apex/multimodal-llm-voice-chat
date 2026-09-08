@@ -4,6 +4,7 @@ import cn.fj.roadagent.domain.dispatch.DispatchScope;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
 import cn.fj.roadagent.domain.dispatch.EmergencyResourceStatus;
+import cn.fj.roadagent.domain.dispatch.GeoPoint;
 import cn.fj.roadagent.domain.dispatch.ResourceRequirement;
 import org.junit.jupiter.api.Test;
 
@@ -22,13 +23,14 @@ class EmergencyResourceAllocatorTest {
 
     @Test
     void shouldUseLocalFirstThenNearestCitiesAndPreserveDonorReserve() {
-        Map<String, Double> distances = Map.of(
-                "350200", 210D,
-                "350500", 150D,
-                "350600", 240D
+        Map<String, GeoPoint> centers = Map.of(
+                "350100", new GeoPoint(0, 0),
+                "350200", new GeoPoint(2.1, 0),
+                "350500", new GeoPoint(1.5, 0),
+                "350600", new GeoPoint(2.4, 0)
         );
         EmergencyResourceAllocator allocator = new EmergencyResourceAllocator(
-                (from, to) -> distances.get(to)
+                (from, to) -> to.longitude() * 100
         );
 
         ResourceAllocationResult result = allocator.allocate(
@@ -40,6 +42,7 @@ class EmergencyResourceAllocatorTest {
                         resource("QZ", "350500", "泉州", 3, 1),
                         resource("ZZ", "350600", "漳州", 6, 1)
                 ),
+                centers,
                 "WF-1", "DP-1", 1, NOW
         );
 
@@ -64,6 +67,9 @@ class EmergencyResourceAllocatorTest {
         EmergencyResourceAllocator allocator = new EmergencyResourceAllocator(
                 (from, to) -> 100D
         );
+        Map<String, GeoPoint> centers = Map.of(
+                "350100", new GeoPoint(119.2965, 26.0745),
+                "350900", new GeoPoint(119.5482, 26.6656));
 
         ResourceAllocationResult result = allocator.allocate(
                 EVENT,
@@ -72,6 +78,7 @@ class EmergencyResourceAllocatorTest {
                         resource("FZ", "350100", "福州", 1, 0),
                         resource("ND", "350900", "宁德", 3, 2)
                 ),
+                centers,
                 "WF-1", "DP-1", 1, NOW
         );
 

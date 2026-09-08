@@ -55,7 +55,8 @@ public final class GlobalExceptionHandler {
         HttpStatus status;
         if ("DISPATCH_NOT_FOUND".equals(exception.errorCode())
                 || "EVENT_NOT_FOUND".equals(exception.errorCode())
-                || "WORKFLOW_NOT_FOUND".equals(exception.errorCode())) {
+                || "WORKFLOW_NOT_FOUND".equals(exception.errorCode())
+                || "FACILITY_ALERT_NOT_FOUND".equals(exception.errorCode())) {
             status = HttpStatus.NOT_FOUND;
         } else if (exception.errorCode().startsWith("TRAFFIC_")
                 || "AREA_QUERY_TOO_LARGE".equals(exception.errorCode())) {

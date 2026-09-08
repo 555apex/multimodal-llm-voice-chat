@@ -18,7 +18,8 @@ public record DispatchPlan(
         Instant createdAt,
         Instant updatedAt,
         String rejectionReason,
-        String errorMessage
+        String errorMessage,
+        EmergencyResponsePlanSnapshot responsePlan
 ) {
     public DispatchPlan {
         planId = requireText(planId, "planId不能为空");
@@ -33,6 +34,21 @@ public record DispatchPlan(
         updatedAt = Objects.requireNonNull(updatedAt, "updatedAt不能为空");
         rejectionReason = normalize(rejectionReason);
         errorMessage = normalize(errorMessage);
+    }
+
+    /** 兼容尚未引入预案快照的旧代码和历史数据。 */
+    public DispatchPlan(
+            String planId, EmergencyEvent event,
+            List<ResourceRequirement> resourceRequirements,
+            List<AllocatedResource> allocatedResources,
+            List<ResourceShortage> resourceShortages,
+            String rescuePlan, DispatchStatus status, long version,
+            Instant createdAt, Instant updatedAt, String rejectionReason,
+            String errorMessage
+    ) {
+        this(planId, event, resourceRequirements, allocatedResources, resourceShortages,
+                rescuePlan, status, version, createdAt, updatedAt, rejectionReason,
+                errorMessage, null);
     }
 
     /** 兼容旧测试和旧适配器构造方式。 */
@@ -62,6 +78,16 @@ public record DispatchPlan(
         );
     }
 
+    public static DispatchPlan generating(
+            String planId, EmergencyEvent event, long version, Instant now,
+            EmergencyResponsePlanSnapshot responsePlan
+    ) {
+        return new DispatchPlan(
+                planId, event, List.of(), List.of(), List.of(), "",
+                DispatchStatus.GENERATING, version, now, now, null, null, responsePlan
+        );
+    }
+
     public DispatchPlan generated(
             List<ResourceRequirement> requirements,
             List<AllocatedResource> allocations,
@@ -82,7 +108,8 @@ public record DispatchPlan(
         }
         return new DispatchPlan(
                 planId, event, requirements, allocations, shortages, generatedRescuePlan,
-                DispatchStatus.WAITING_APPROVAL, version, createdAt, now, null, null
+                DispatchStatus.WAITING_APPROVAL, version, createdAt, now, null, null,
+                responsePlan
         );
     }
 
@@ -107,6 +134,14 @@ public record DispatchPlan(
 
     public boolean hasResourceShortage() {
         return !resourceShortages.isEmpty();
+    }
+
+    public DispatchPlan withResponsePlan(EmergencyResponsePlanSnapshot snapshot) {
+        return new DispatchPlan(
+                planId, event, resourceRequirements, allocatedResources, resourceShortages,
+                rescuePlan, status, version, createdAt, updatedAt, rejectionReason,
+                errorMessage, Objects.requireNonNull(snapshot, "预案快照不能为空")
+        );
     }
 
     public DispatchPlan approve(Instant now) {
@@ -136,15 +171,46 @@ public record DispatchPlan(
         }
         return new DispatchPlan(
                 planId, event, List.of(), List.of(), List.of(), "",
-                DispatchStatus.GENERATING, version, createdAt, now, rejectionReason, null
+                DispatchStatus.GENERATING, version, createdAt, now, rejectionReason, null,
+                responsePlan
+        );
+    }
+
+    public DispatchPlan retry(Instant now, EmergencyResponsePlanSnapshot nextResponsePlan) {
+        DispatchPlan retried = retry(now);
+        return new DispatchPlan(
+                retried.planId, retried.event, retried.resourceRequirements,
+                retried.allocatedResources, retried.resourceShortages, retried.rescuePlan,
+                retried.status, retried.version, retried.createdAt, retried.updatedAt,
+                retried.rejectionReason, retried.errorMessage,
+                nextResponsePlan == null ? responsePlan : nextResponsePlan
         );
     }
 
     public DispatchPlan nextRevision(Instant now) {
+        return nextRevision(event, now);
+    }
+
+    public DispatchPlan nextRevision(EmergencyEvent nextEvent, Instant now) {
         requireStatus(DispatchStatus.REJECTED);
         return new DispatchPlan(
-                planId, event, List.of(), List.of(), List.of(), "",
-                DispatchStatus.GENERATING, version + 1, now, now, null, null
+                planId, Objects.requireNonNull(nextEvent, "新事件快照不能为空"),
+                List.of(), List.of(), List.of(), "",
+                DispatchStatus.GENERATING, version + 1, now, now, null, null,
+                responsePlan
+        );
+    }
+
+    public DispatchPlan nextRevision(
+            EmergencyEvent nextEvent, Instant now,
+            EmergencyResponsePlanSnapshot nextResponsePlan
+    ) {
+        DispatchPlan revision = nextRevision(nextEvent, now);
+        return new DispatchPlan(
+                revision.planId, revision.event, revision.resourceRequirements,
+                revision.allocatedResources, revision.resourceShortages, revision.rescuePlan,
+                revision.status, revision.version, revision.createdAt, revision.updatedAt,
+                revision.rejectionReason, revision.errorMessage, nextResponsePlan
         );
     }
 
@@ -153,7 +219,8 @@ public record DispatchPlan(
     ) {
         return new DispatchPlan(
                 planId, event, resourceRequirements, allocatedResources, resourceShortages,
-                rescuePlan, next, version, createdAt, now, nextRejectionReason, nextError
+                rescuePlan, next, version, createdAt, now, nextRejectionReason, nextError,
+                responsePlan
         );
     }
 

@@ -5,6 +5,7 @@ import cn.fj.roadagent.domain.dispatch.AllocatedResource;
 import cn.fj.roadagent.domain.dispatch.DispatchScope;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
+import cn.fj.roadagent.domain.dispatch.GeoPoint;
 import cn.fj.roadagent.domain.dispatch.ResourceAllocation;
 import cn.fj.roadagent.domain.dispatch.ResourceRequirement;
 import cn.fj.roadagent.domain.dispatch.ResourceShortage;
@@ -30,6 +31,7 @@ public final class EmergencyResourceAllocator {
             EmergencyEvent event,
             List<ResourceRequirement> requirements,
             List<EmergencyResource> lockedResources,
+            Map<String, GeoPoint> cityCenters,
             String workflowId,
             String planId,
             long planVersion,
@@ -38,6 +40,7 @@ public final class EmergencyResourceAllocator {
         if (!event.hasStructuredCity()) {
             throw new IllegalArgumentException("事件缺少结构化城市，无法进行就近资源调度");
         }
+        GeoPoint eventCenter = requireCenter(cityCenters, event.cityCode());
         Map<String, EmergencyResource> current = new LinkedHashMap<>();
         lockedResources.stream()
                 .sorted(Comparator.comparing(EmergencyResource::resourceId))
@@ -53,7 +56,7 @@ public final class EmergencyResourceAllocator {
                     .filter(EmergencyResource::available)
                     .filter(item -> item.typeCode().equals(requirement.resourceTypeCode()))
                     .filter(item -> item.appliesTo(event.eventType()))
-                    .sorted(candidateOrder(event.cityCode()))
+                    .sorted(candidateOrder(event.cityCode(), eventCenter, cityCenters))
                     .toList();
             for (EmergencyResource candidate : candidates) {
                 if (remaining == 0) break;
@@ -66,7 +69,7 @@ public final class EmergencyResourceAllocator {
                 if (quantity == 0) continue;
                 double distance = local ? 0
                         : roundDistance(cityDistancePort.estimatedDistanceKm(
-                                event.cityCode(), candidate.cityCode()));
+                                eventCenter, requireCenter(cityCenters, candidate.cityCode())));
                 AllocatedResource snapshot = new AllocatedResource(
                         candidate.resourceId(), candidate.typeCode(), candidate.type(),
                         candidate.name(), candidate.cityCode(), candidate.city(),
@@ -105,13 +108,24 @@ public final class EmergencyResourceAllocator {
         );
     }
 
-    private Comparator<EmergencyResource> candidateOrder(String eventCityCode) {
+    private Comparator<EmergencyResource> candidateOrder(
+            String eventCityCode, GeoPoint eventCenter, Map<String, GeoPoint> cityCenters
+    ) {
         return Comparator
                 .comparing((EmergencyResource item) -> !item.cityCode().equals(eventCityCode))
                 .thenComparingDouble(item -> item.cityCode().equals(eventCityCode) ? 0
-                        : cityDistancePort.estimatedDistanceKm(eventCityCode, item.cityCode()))
+                        : cityDistancePort.estimatedDistanceKm(
+                                eventCenter, requireCenter(cityCenters, item.cityCode())))
                 .thenComparing(EmergencyResource::cityCode)
                 .thenComparing(EmergencyResource::resourceId);
+    }
+
+    private GeoPoint requireCenter(Map<String, GeoPoint> cityCenters, String cityCode) {
+        GeoPoint point = cityCenters == null ? null : cityCenters.get(cityCode);
+        if (point == null) {
+            throw new IllegalArgumentException("资源库缺少城市中心坐标：" + cityCode);
+        }
+        return point;
     }
 
     private double roundDistance(double value) {

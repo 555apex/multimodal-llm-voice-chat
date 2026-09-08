@@ -54,7 +54,7 @@ class EmergencyEventControllerTest {
         mockMvc.perform(get("/api/v1/emergency-events/pending/next"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.event.eventId").value("202607280000000001"))
-                .andExpect(jsonPath("$.data.event.eventTypeName").value("崩塌"))
+                .andExpect(jsonPath("$.data.event.eventTypeName").value("崩塌（落石）"))
                 .andExpect(jsonPath("$.data.pendingCount").value(19));
     }
 

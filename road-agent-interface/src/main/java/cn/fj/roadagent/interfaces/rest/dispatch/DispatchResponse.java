@@ -25,6 +25,9 @@ public record DispatchResponse(
         Instant updatedAt,
         String rejectionReason,
         String errorMessage,
+        String responsePlanId,
+        Long responsePlanVersion,
+        String responsePlanName,
         boolean approvalRequired
 ) {
     public static DispatchResponse from(DispatchPlan plan) {
@@ -42,6 +45,9 @@ public record DispatchResponse(
                 plan.updatedAt(),
                 plan.rejectionReason(),
                 plan.errorMessage(),
+                plan.responsePlan() == null ? null : plan.responsePlan().planId(),
+                plan.responsePlan() == null ? null : plan.responsePlan().version(),
+                plan.responsePlan() == null ? null : plan.responsePlan().eventTypeName(),
                 plan.status() == DispatchStatus.WAITING_APPROVAL
         );
     }

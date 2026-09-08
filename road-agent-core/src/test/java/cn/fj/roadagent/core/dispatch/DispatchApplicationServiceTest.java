@@ -28,6 +28,7 @@ import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.EmergencyWorkflow;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
 import cn.fj.roadagent.domain.dispatch.EmergencyResourceStatus;
+import cn.fj.roadagent.domain.dispatch.GeoPoint;
 import cn.fj.roadagent.domain.dispatch.EventSeverity;
 import cn.fj.roadagent.domain.dispatch.ProfessionalReview;
 import cn.fj.roadagent.domain.dispatch.ResourceFeasibility;
@@ -426,6 +427,11 @@ class DispatchApplicationServiceTest {
                     .filter(item -> resourceIds.contains(item.resourceId()))
                     .sorted(Comparator.comparing(EmergencyResource::resourceId))
                     .toList();
+        }
+
+        @Override
+        public Map<String, GeoPoint> cityCenters() {
+            return Map.of("350100", new GeoPoint(119.2965, 26.0745));
         }
 
         @Override

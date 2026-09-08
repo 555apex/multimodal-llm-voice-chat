@@ -11,6 +11,8 @@ public record EmergencyResource(
         String name,
         String cityCode,
         String city,
+        Double longitude,
+        Double latitude,
         String unit,
         String capability,
         List<String> applicableEventTypes,
@@ -29,6 +31,10 @@ public record EmergencyResource(
         name = requireText(name, "资源名称不能为空");
         cityCode = requireText(cityCode, "资源城市编码不能为空");
         city = requireText(city, "资源城市不能为空");
+        if ((longitude == null) != (latitude == null)) {
+            throw new IllegalArgumentException("资源经纬度必须同时提供");
+        }
+        if (longitude != null) new GeoPoint(longitude, latitude);
         unit = requireText(unit, "资源单位不能为空");
         capability = requireText(capability, "资源能力描述不能为空");
         applicableEventTypes = applicableEventTypes == null
@@ -46,6 +52,20 @@ public record EmergencyResource(
         }
     }
 
+    /** 兼容旧测试的完整构造方式；旧数据没有坐标。 */
+    public EmergencyResource(
+            String resourceId, String typeCode, String type, String name,
+            String cityCode, String city, String unit, String capability,
+            List<String> applicableEventTypes, int totalQuantity, int availableQuantity,
+            int reservedQuantity, int dispatchedQuantity, int minimumReserveQuantity,
+            EmergencyResourceStatus status, long lockVersion
+    ) {
+        this(resourceId, typeCode, type, name, cityCode, city, null, null, unit,
+                capability, applicableEventTypes, totalQuantity, availableQuantity,
+                reservedQuantity, dispatchedQuantity, minimumReserveQuantity, status,
+                lockVersion);
+    }
+
     /** 兼容早期Mock对象；正式数据库适配器使用完整构造参数。 */
     public EmergencyResource(
             String resourceId,
@@ -55,7 +75,7 @@ public record EmergencyResource(
             String capability,
             boolean available
     ) {
-        this(resourceId, type, type, name, "000000", city, "项", capability,
+        this(resourceId, type, type, name, "000000", city, null, null, "项", capability,
                 List.of(), 1, available ? 1 : 0, 0, 0, 0,
                 available ? EmergencyResourceStatus.ACTIVE : EmergencyResourceStatus.DISABLED, 0);
     }
@@ -106,10 +126,18 @@ public record EmergencyResource(
 
     private EmergencyResource quantities(int available, int reserved, int dispatched) {
         return new EmergencyResource(
-                resourceId, typeCode, type, name, cityCode, city, unit, capability,
+                resourceId, typeCode, type, name, cityCode, city, longitude, latitude,
+                unit, capability,
                 applicableEventTypes, totalQuantity, available, reserved, dispatched,
                 minimumReserveQuantity, status, lockVersion + 1
         );
+    }
+
+    public GeoPoint location() {
+        if (longitude == null || latitude == null) {
+            throw new IllegalStateException("资源城市缺少经纬度：" + cityCode);
+        }
+        return new GeoPoint(longitude, latitude);
     }
 
     private static void requirePositive(int quantity) {

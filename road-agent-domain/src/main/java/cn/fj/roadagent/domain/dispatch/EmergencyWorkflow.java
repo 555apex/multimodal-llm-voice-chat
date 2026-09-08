@@ -11,6 +11,7 @@ public record EmergencyWorkflow(
         WorkflowStatus status,
         String planId,
         long planVersion,
+        String terminalReason,
         long lockVersion,
         Instant stageEnteredAt,
         Instant createdAt,
@@ -24,6 +25,7 @@ public record EmergencyWorkflow(
         createdAt = Objects.requireNonNull(createdAt, "创建时间不能为空");
         updatedAt = Objects.requireNonNull(updatedAt, "更新时间不能为空");
         planId = normalize(planId);
+        terminalReason = normalize(terminalReason);
         if (planVersion < 0 || lockVersion < 0) {
             throw new IllegalArgumentException("方案版本和乐观锁版本不能为负数");
         }
@@ -35,6 +37,16 @@ public record EmergencyWorkflow(
         }
     }
 
+    /** 兼容迁移前无终止原因的构造方式。 */
+    public EmergencyWorkflow(
+            String workflowId, String eventId, WorkflowStage currentStage,
+            WorkflowStatus status, String planId, long planVersion, long lockVersion,
+            Instant stageEnteredAt, Instant createdAt, Instant updatedAt
+    ) {
+        this(workflowId, eventId, currentStage, status, planId, planVersion, null,
+                lockVersion, stageEnteredAt, createdAt, updatedAt);
+    }
+
     public static EmergencyWorkflow generating(
             String workflowId,
             String eventId,
@@ -44,14 +56,20 @@ public record EmergencyWorkflow(
     ) {
         return new EmergencyWorkflow(
                 workflowId, eventId, WorkflowStage.LEVEL_1, WorkflowStatus.GENERATING,
-                planId, planVersion, 0, now, now, now
+                planId, planVersion, null, 0, now, now, now
         );
     }
 
     public static EmergencyWorkflow noDispatch(String workflowId, String eventId, Instant now) {
+        return noDispatch(workflowId, eventId, null, now);
+    }
+
+    public static EmergencyWorkflow noDispatch(
+            String workflowId, String eventId, String reason, Instant now
+    ) {
         return new EmergencyWorkflow(
                 workflowId, eventId, null, WorkflowStatus.NO_DISPATCH,
-                null, 0, 0, now, now, now
+                null, 0, reason, 0, now, now, now
         );
     }
 
@@ -120,7 +138,7 @@ public record EmergencyWorkflow(
         requireStageAndStatus(null, WorkflowStatus.PUBLISHED);
         return new EmergencyWorkflow(
                 workflowId, eventId, null, WorkflowStatus.PUBLISHED,
-                planId, planVersion, lockVersion + 1,
+                planId, planVersion, terminalReason, lockVersion + 1,
                 stageEnteredAt, createdAt, now
         );
     }
@@ -134,6 +152,7 @@ public record EmergencyWorkflow(
     ) {
         return new EmergencyWorkflow(
                 workflowId, eventId, nextStage, nextStatus, nextPlanId, nextPlanVersion,
+                nextStatus.terminal() ? terminalReason : null,
                 lockVersion + 1, now, createdAt, now
         );
     }

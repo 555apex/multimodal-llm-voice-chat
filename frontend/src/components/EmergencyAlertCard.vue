@@ -22,7 +22,16 @@ const emit = defineEmits<{
   level1: [decision: 'SUBMIT' | 'REJECT', comment: string]
   review: [input: ProfessionalReviewInput]
   command: [decision: 'APPROVE' | 'REJECT', comment: string]
+  correctType: [eventType: string, reason: string]
 }>()
+
+const eventTypes = [
+  ['DT01', '崩塌（落石）'], ['DT02', '滑坡（坡体位移）'], ['DT03', '泥石流'],
+  ['DT04', '沉陷与塌陷'], ['DT05', '水毁'], ['ET101', '拥堵'], ['ET102', '明火（火灾）'],
+  ['ET103', '抛撒物'], ['ET104', '设备故障'], ['ET105', '占用应急车道'],
+  ['ET106', '交通事故'], ['ET107', '异常停车'], ['ET108', '浓雾检测'], ['ET109', '路障'],
+  ['ET110', '施工'], ['ET112', '道路积雪'],
+] as const
 
 const showingNoDispatch = ref(false)
 const confirmingNoDispatch = ref(false)
@@ -35,6 +44,9 @@ const impactAssessment = ref('')
 const coordinationRequirements = ref('')
 const reviewComment = ref('')
 const commandComment = ref('')
+const showingTypeCorrection = ref(false)
+const correctedType = ref(props.item.event.eventType)
+const correctionReason = ref('')
 
 const isLevel1 = computed(() => props.stage === 'LEVEL_1')
 const isLevel2 = computed(() => props.stage === 'LEVEL_2')
@@ -68,6 +80,9 @@ watch(
     coordinationRequirements.value = ''
     reviewComment.value = ''
     commandComment.value = ''
+    showingTypeCorrection.value = false
+    correctedType.value = props.item.event.eventType
+    correctionReason.value = ''
   },
 )
 
@@ -100,12 +115,20 @@ function submitCommand(decision: 'APPROVE' | 'REJECT') {
   emit('command', decision, comment)
 }
 
+function submitTypeCorrection() {
+  const reason = correctionReason.value.trim()
+  if (reason && correctedType.value !== props.item.event.eventType) {
+    emit('correctType', correctedType.value, reason)
+  }
+}
+
 function actionText(type: string) {
   const labels: Record<string, string> = {
     GENERATION_STARTED: '开始生成应急方案',
     GENERATION_COMPLETED: '应急方案生成完成',
     GENERATION_FAILED: '方案生成失败',
     GENERATION_RETRIED: '重新生成方案',
+    EVENT_TYPE_CORRECTED: '一级人工更正事件类型',
     LEVEL_1_SUBMITTED: '一级确认并上报二级',
     LEVEL_1_RETURNED: '一级退回AI返工',
     LEVEL_2_PASSED: '二级专业复核通过',
@@ -144,7 +167,13 @@ function formatTime(value?: string) {
         <span>{{ item.event.eventType }} · {{ formatTime(item.event.occurrenceTime) }}</span>
       </div>
       <p>{{ item.event.description }}</p>
-      <small>事件编号：{{ item.event.customId || item.event.eventId }}<template v-if="item.event.cityName"> · 调度城市：{{ item.event.cityName }}</template></small>
+      <dl class="incident-source-fields">
+        <div><dt>事件编号</dt><dd>{{ item.event.customId || item.event.eventId }}</dd></div>
+        <div v-if="item.event.sourceName || item.event.sourceOrgName"><dt>事件来源</dt><dd>{{ item.event.sourceName || item.event.sourceOrgName }}</dd></div>
+        <div v-if="item.event.place"><dt>发生地点</dt><dd>{{ item.event.place }}</dd></div>
+        <div v-if="item.event.routeNo || item.event.routeName"><dt>路线</dt><dd>{{ [item.event.routeNo, item.event.routeName].filter(Boolean).join(' · ') }}</dd></div>
+        <div v-if="item.event.cityName"><dt>调度城市</dt><dd>{{ item.event.cityName }}</dd></div>
+      </dl>
     </div>
 
     <p v-if="errorMessage" class="emergency-action-error">{{ errorMessage }}</p>
@@ -196,6 +225,30 @@ function formatTime(value?: string) {
       <DispatchPlanCard v-if="plan && item.workflowId && !generationBusy && !generationFailed"
         :plan="plan" :busy="busy"
         @decide="(decision, comment) => emit('level1', decision === 'APPROVE' ? 'SUBMIT' : 'REJECT', comment)" />
+
+      <div v-if="plan && item.workflowId && !generationBusy && !generationFailed" class="event-type-correction">
+        <button v-if="!showingTypeCorrection" type="button" :disabled="busy"
+          @click="showingTypeCorrection = true">更正事件类型并重新生成</button>
+        <template v-else>
+          <label>更正后类型
+            <select v-model="correctedType" :disabled="busy">
+              <option v-for="entry in eventTypes" :key="entry[0]" :value="entry[0]">
+                {{ entry[0] }} · {{ entry[1] }}
+              </option>
+            </select>
+          </label>
+          <label>更正原因
+            <textarea v-model="correctionReason" rows="2" maxlength="500" :disabled="busy"
+              placeholder="说明误分类依据，旧方案和资源占用将留痕后释放。"></textarea>
+          </label>
+          <div class="no-dispatch-form-actions">
+            <button type="button" :disabled="busy" @click="showingTypeCorrection = false">取消</button>
+            <button type="button" class="danger-confirm-button"
+              :disabled="busy || correctedType === item.event.eventType || !correctionReason.trim()"
+              @click="submitTypeCorrection">确认更正并重新生成</button>
+          </div>
+        </template>
+      </div>
     </template>
 
     <template v-if="isLevel2">

@@ -38,6 +38,9 @@ function submitReject() {
       <div>
         <p>应急调度工单 · 第 {{ plan.version }} 版</p>
         <h3>{{ plan.event.eventType }} · {{ plan.event.description }}</h3>
+        <small v-if="plan.responsePlanId" class="response-plan-reference">
+          执行预案：{{ plan.responsePlanName || plan.event.eventType }} · {{ plan.responsePlanId }} v{{ plan.responsePlanVersion }}
+        </small>
       </div>
       <span class="status-pill" :class="plan.status.toLowerCase()">
         {{ statusText[plan.status] ?? plan.status }}

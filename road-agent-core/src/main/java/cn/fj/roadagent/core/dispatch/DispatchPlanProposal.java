@@ -5,12 +5,28 @@ import java.util.Map;
 
 /** 模型只提出数据库资源类型白名单内的需求和处置文本。 */
 public record DispatchPlanProposal(
+        Map<String, String> templateVariables,
         List<ProposedResource> resourceRequirements,
+        String supplementalAdvice,
         Object rescuePlan
 ) {
     public DispatchPlanProposal {
+        templateVariables = templateVariables == null ? Map.of() : Map.copyOf(templateVariables);
         resourceRequirements = resourceRequirements == null
                 ? List.of() : List.copyOf(resourceRequirements);
+    }
+
+    /** 兼容旧测试和旧模型响应。 */
+    public DispatchPlanProposal(List<ProposedResource> resourceRequirements, Object rescuePlan) {
+        this(Map.of(), resourceRequirements, null, rescuePlan);
+    }
+
+    public String supplementalAdviceText() {
+        if (supplementalAdvice != null && !supplementalAdvice.isBlank()) {
+            return supplementalAdvice.trim();
+        }
+        if (rescuePlan == null) return "";
+        return rescuePlanText();
     }
 
     /**

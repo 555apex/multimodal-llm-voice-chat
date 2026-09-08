@@ -71,10 +71,24 @@ class EmergencyResourceWorkflowIntegrationTest {
     @Transactional
     void shouldAllocateAcrossCitiesPublishAndReleaseAgainstRealMysql() {
         var candidate = jdbc.queryForMap("""
-                SELECT CAST(e.id AS CHAR) AS event_id,
+                SELECT e.c_no AS event_id,
                        remote_resource.resource_type_code
-                FROM w_abnormal_event e
-                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.id
+                FROM (
+                    SELECT incident.*,
+                           CASE
+                             WHEN source_name LIKE '%福州%' THEN '350100'
+                             WHEN source_name LIKE '%厦门%' THEN '350200'
+                             WHEN source_name LIKE '%莆田%' THEN '350300'
+                             WHEN source_name LIKE '%三明%' THEN '350400'
+                             WHEN source_name LIKE '%泉州%' THEN '350500'
+                             WHEN source_name LIKE '%漳州%' THEN '350600'
+                             WHEN source_name LIKE '%南平%' THEN '350700'
+                             WHEN source_name LIKE '%龙岩%' THEN '350800'
+                             WHEN source_name LIKE '%宁德%' THEN '350900'
+                           END AS event_city_code
+                    FROM w_lw_incident incident
+                ) e
+                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.c_no
                 JOIN w_emergency_resource remote_resource
                   ON JSON_CONTAINS(
                       remote_resource.applicable_event_types,
@@ -92,13 +106,14 @@ class EmergencyResourceWorkflowIntegrationTest {
                  AND local_resource.resource_status = 0
                  AND (local_resource.del_flag IS NULL
                       OR local_resource.del_flag IN ('N','0'))
-                WHERE e.event_status = 0
-                  AND (e.del_flag IS NULL OR e.del_flag IN ('N','0'))
+                WHERE e.c_type = '4' AND e.status = '1' AND e.completed = 0
+                  AND e.deleted = 0 AND e.event_type IS NOT NULL
+                  AND e.event_city_code IS NOT NULL
                   AND (w.workflow_id IS NULL OR (
                       w.current_stage = 1 AND w.workflow_status IN (0, 1, 2, 5, 6)
                   ))
                   AND local_resource.resource_id IS NULL
-                ORDER BY e.id, remote_resource.resource_type_code
+                ORDER BY e.c_no, remote_resource.resource_type_code
                 LIMIT 1
                 """);
         String eventId = candidate.get("event_id").toString();
@@ -139,15 +154,15 @@ class EmergencyResourceWorkflowIntegrationTest {
     @Transactional
     void shouldPersistProvincialShortageThroughConditionalApprovalAndRelease() {
         String eventId = jdbc.queryForObject("""
-                SELECT CAST(e.id AS CHAR)
-                FROM w_abnormal_event e
-                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.id
-                WHERE e.event_status = 0 AND e.event_type = 'ET101'
-                  AND (e.del_flag IS NULL OR e.del_flag IN ('N','0'))
+                SELECT e.c_no
+                FROM w_lw_incident e
+                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.c_no
+                WHERE e.c_type = '4' AND e.status = '1' AND e.completed = 0
+                  AND e.deleted = 0 AND e.event_type = 'ET101'
                   AND (w.workflow_id IS NULL OR (
                       w.current_stage = 1 AND w.workflow_status IN (0, 1, 2, 5, 6)
                   ))
-                ORDER BY e.id LIMIT 1
+                ORDER BY e.c_no LIMIT 1
                 """, String.class);
         proposal("WARNING_EQUIPMENT", 999, "建立交通警戒和分流区");
 
@@ -172,7 +187,7 @@ class EmergencyResourceWorkflowIntegrationTest {
         String workflowId = jdbc.queryForObject("""
                 SELECT workflow_id FROM w_emergency_dispatch_workflow
                 WHERE plan_id = ? AND event_id = ?
-                """, String.class, planId, Long.parseLong(eventId));
+                """, String.class, planId, eventId);
         var workflow = service.getWorkflow(workflowId);
         var level2 = service.decideLevel1(new Level1DecisionCommand(
                 workflow.workflow().workflowId(), Level1Decision.SUBMIT, "现场确认上报",
@@ -215,7 +230,7 @@ class EmergencyResourceWorkflowIntegrationTest {
                 scalar("SELECT COUNT(*) FROM w_emergency_command_decision"),
                 scalar("SELECT COUNT(*) FROM w_emergency_dispatch_action_log"),
                 scalar("SELECT COUNT(*) FROM w_emergency_resource_allocation"),
-                scalar("SELECT COALESCE(SUM(event_status), 0) FROM w_abnormal_event"),
+                scalar("SELECT COALESCE(SUM(completed), 0) FROM w_lw_incident"),
                 scalar("SELECT COALESCE(SUM(available_quantity), 0) FROM w_emergency_resource"),
                 scalar("SELECT COALESCE(SUM(reserved_quantity), 0) FROM w_emergency_resource"),
                 scalar("SELECT COALESCE(SUM(dispatched_quantity), 0) FROM w_emergency_resource"),
@@ -229,7 +244,7 @@ class EmergencyResourceWorkflowIntegrationTest {
 
     private record DatabaseSnapshot(
             long orders, long workflows, long reviews, long decisions, long actions,
-            long allocations, long eventStatusChecksum, long available, long reserved,
+            long allocations, long eventCompletedChecksum, long available, long reserved,
             long dispatched, long resourceLockChecksum
     ) {
     }

@@ -11,6 +11,8 @@ import {
   fetchWorkflowInbox,
   reviewEmergencyWorkflow,
   releaseWorkflowResources,
+  correctWorkflowEventType,
+  retryNextEventClassification,
 } from '../api/workflowApi'
 import type {
   EmergencyWorkflowItem,
@@ -23,7 +25,9 @@ import type {
 export type EmergencyQueryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
 export type EmergencyViewMode = 'inbox' | 'history'
 
-const emptyCounts = (): WorkflowCounts => ({ level1: 0, level2: 0, level3: 0 })
+const emptyCounts = (): WorkflowCounts => ({
+  level1: 0, level2: 0, level3: 0, pendingClassification: 0, classificationFailed: 0,
+})
 
 export const useEmergencyStore = defineStore('emergency', {
   state: () => ({
@@ -157,6 +161,29 @@ export const useEmergencyStore = defineStore('emergency', {
           this.item!.workflowId!, decision, comment, this.item!.workflowVersion,
         )
       })
+    },
+
+    async correctEventType(eventType: string, reason: string) {
+      if (!this.item?.workflowId || this.actionBusy) return
+      await this.runWorkflowAction(async () => {
+        await correctWorkflowEventType(
+          this.item!.workflowId!, eventType, reason, this.item!.workflowVersion,
+        )
+      })
+    },
+
+    async retryClassification() {
+      if (this.actionBusy) return
+      this.actionBusy = true
+      this.errorMessage = ''
+      try {
+        await retryNextEventClassification()
+      } catch (error) {
+        this.errorMessage = error instanceof Error ? error.message : '事件类型识别重试失败'
+      } finally {
+        this.actionBusy = false
+      }
+      await this.refresh()
     },
 
     async review(input: ProfessionalReviewInput) {
