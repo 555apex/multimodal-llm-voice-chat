@@ -81,7 +81,7 @@ public final class IntentPlanner {
                 - 询问两个福建地级市之间交通情况时使用CITY_PAIR，并分别提取originCity、destinationCity；
                 - 指定G/S路线编号或国省道路线名称时使用ROUTE_DETAIL，优先提取routeCode，否则提取routeName。
                 - 询问全省各国省道实际通行能力、设计通行能力或利用率总览时使用CAPACITY_OVERVIEW；
-                - 询问全省哪些路线是瓶颈、严重瓶颈或通行能力利用率最低时使用CAPACITY_BOTTLENECKS；
+                - 询问全省哪些路线是瓶颈、严重瓶颈或通行能力利用率最高时使用CAPACITY_BOTTLENECKS；
                 - 询问指定G/S路线的实际通行能力、设计通行能力、利用率或瓶颈等级时使用CAPACITY_ROUTE_DETAIL，优先提取routeCode，否则提取routeName。
                 - 三至九市跨区域交通联系综合分析使用REGIONAL_TRAFFIC_OVERVIEW；只问哪些城市对压力较大使用REGIONAL_PAIR_PRESSURE；只问重要跨市路线、交通枢纽或关键卡口时使用REGIONAL_KEY_CHANNELS，并在路线层级回答，不输出卡口排名。
                 - REGIONAL_*把用户明确指定的三至九个福建地级市写入selectedCities；未指定城市为空数组并默认福建九市。只指定一个或两个城市时仍选择相应REGIONAL_*，并在clarification中追问至少再补充到三个城市。

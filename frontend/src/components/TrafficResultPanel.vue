@@ -249,13 +249,13 @@ function matrixCellStyle(value: number | null | undefined) {
 
     <div v-if="!hasDisplayData" class="empty-result">
       {{ odQuery ? '所选范围暂无可展示的城市目的地联系数据。' : capacityQuery
-        ? (result.queryType === 'CAPACITY_BOTTLENECKS' ? '当前没有通行能力利用率低于80%的瓶颈路线。' : '本次查询没有返回可展示的通行能力数据。')
+        ? (result.queryType === 'CAPACITY_BOTTLENECKS' ? '当前没有通行能力利用率达到15%的瓶颈路线。' : '本次查询没有返回可展示的通行能力数据。')
         : regionalQuery ? '本次查询范围内没有可展示的跨市路线卡口数据。'
           : vehicleQuery ? '该城市暂无可展示的车型出行特征数据。'
             : (abnormal ? '当前没有status≥20的拥堵异常路段。' : '本次查询没有返回可展示的交通数据。') }}
     </div>
     <p v-if="result.truncated && !regionalQuery && !vehicleQuery && !odQuery" class="traffic-truncated">
-      <template v-if="capacityQuery">共 {{ result.totalSegmentCount }} 条瓶颈路线，当前展示利用率最低的前 {{ result.displayedSegmentCount }} 条。</template>
+      <template v-if="capacityQuery">共 {{ result.totalSegmentCount }} 条瓶颈路线，当前展示利用率最高的前 {{ result.displayedSegmentCount }} 条。</template>
       <template v-else>共 {{ result.totalSegmentCount }} 条路段，当前展示拥堵程度较高的前 {{ result.displayedSegmentCount }} 条。</template>
     </p>
   </section>

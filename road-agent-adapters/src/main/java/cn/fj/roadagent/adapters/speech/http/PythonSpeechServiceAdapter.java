@@ -19,6 +19,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 /** 通过内部HTTP访问Docker中的Python语音服务。 */
 public final class PythonSpeechServiceAdapter implements
@@ -79,6 +80,11 @@ public final class PythonSpeechServiceAdapter implements
                 throw unavailable("ASR_EMPTY_RESPONSE", "语音识别没有返回结果", null);
             }
             return new SpeechTranscription(body.text(), body.language(), body.durationMs());
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().value() == 422) {
+                throw unavailable("ASR_NO_SPEECH", "未检测到有效语音", exception);
+            }
+            throw unavailable("ASR_REQUEST_FAILED", "语音识别服务调用失败", exception);
         } catch (RestClientException exception) {
             throw unavailable("ASR_REQUEST_FAILED", "语音识别服务调用失败", exception);
         }

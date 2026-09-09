@@ -175,7 +175,7 @@ class IntentPlannerTest {
         assertEquals("CAPACITY_ROUTE_DETAIL", capacityRoute.trafficScope());
         assertEquals("S201", capacityRoute.routeCode());
         assertEquals("CAPACITY_BOTTLENECKS",
-                planner.plan("哪些国省道利用率偏低？", List.of()).trafficScope());
+                planner.plan("哪些国省道利用率偏高？", List.of()).trafficScope());
     }
 
     @Test
@@ -206,9 +206,9 @@ class IntentPlannerTest {
     void controlledExplanationsAndUnsupportedMetadataUseDirectAnswers() {
         IntentPlanner planner = new IntentPlanner(new ThrowingModel());
 
-        AgentDecision threshold = planner.plan("通行能力利用率等于80%时是什么等级？", List.of());
+        AgentDecision threshold = planner.plan("通行能力利用率等于15%时是什么等级？", List.of());
         assertEquals("DIRECT_ANSWER", threshold.intent());
-        assertTrue(threshold.clarification().contains("正常"));
+        assertTrue(threshold.clarification().contains("瓶颈"));
 
         AgentDecision exactActive = planner.plan("日均流量刚好为100算活跃卡口吗？", List.of());
         assertEquals("DIRECT_ANSWER", exactActive.intent());

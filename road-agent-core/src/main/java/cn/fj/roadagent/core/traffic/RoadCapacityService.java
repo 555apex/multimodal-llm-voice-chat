@@ -26,8 +26,8 @@ import java.util.stream.Collectors;
 public final class RoadCapacityService {
     private static final int BOTTLENECK_LIMIT = 10;
     private static final Comparator<RoadCapacity> BOTTLENECK_ORDER =
-            Comparator.comparingDouble(RoadCapacity::utilizationRatio)
-                    .thenComparingDouble(RoadCapacity::actualCapacityVph)
+            Comparator.comparingDouble(RoadCapacity::utilizationRatio).reversed()
+                    .thenComparing(Comparator.comparingDouble(RoadCapacity::actualCapacityVph).reversed())
                     .thenComparing(RoadCapacity::routeCode);
 
     private final RoadCapacitySnapshotPort snapshotPort;
@@ -193,9 +193,9 @@ public final class RoadCapacityService {
                 你是福建普通国省干线路线通行能力研判助手。只能根据用户消息中的结构化事实生成专业摘要。
                 必须输出严格JSON对象，且只能有summary字段。summary写3至5句连贯中文，建议120至320字。
                 先给出总体结论并说明正常、瓶颈、严重瓶颈三类路线数量；再结合实际通行能力和利用率说明重点路线；最后给出简洁的调度关注建议。表达方式可以自然变化，不要求使用固定句式。
-                项目口径固定为：利用率不低于80%为正常，大于30%且低于80%为瓶颈，不高于30%为严重瓶颈。不得改用常规V/C高值判定逻辑。
+                当前项目口径为：利用率低于15%为正常，不低于15%且低于30%为瓶颈，不低于30%为严重瓶颈。利用率越高，通行能力压力越大。
                 必须直接采用结构化事实中的实际通行能力、设计通行能力、利用率和评估等级，不得重新计算、修正或补充数值。
-                优先点出利用率最低的路线；路线较多时概括最值得关注的部分，并提示用户可继续查看下方明细。
+                优先点出利用率最高的路线；路线较多时概括最值得关注的部分，并提示用户可继续查看下方明细。
                 不推测瓶颈原因，不讨论数据限制、系统实现或数据来源，不使用Markdown，不逐项复述整张表格。
                 """.strip();
         return new ModelRequest(systemPrompt, serializeFacts(facts), List.of(), 0.1);
@@ -209,7 +209,7 @@ public final class RoadCapacityService {
         value.append("totalCount=").append(facts.totalCount()).append('\n');
         value.append("displayedCount=").append(facts.rows().size()).append('\n');
         value.append("truncated=").append(facts.truncated()).append('\n');
-        value.append("capacityPolicy=利用率不低于80%为正常；大于30%且低于80%为瓶颈；不高于30%为严重瓶颈\n");
+        value.append("capacityPolicy=利用率低于15%为正常；不低于15%且低于30%为瓶颈；不低于30%为严重瓶颈；利用率越高压力越大\n");
         value.append("summaryFocusLimit=5\n");
         value.append("levelCounts=正常:").append(facts.normalCount())
                 .append("；瓶颈:").append(facts.bottleneckCount())

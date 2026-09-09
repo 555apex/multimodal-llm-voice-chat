@@ -54,7 +54,7 @@ class MysqlRoadCapacitySnapshotSourceTest {
 
         assertEquals(1, snapshot.capacities().size());
         assertEquals(0, snapshot.capacities().get(0).actualCapacityVph());
-        assertEquals(CapacityLevel.SEVERE_BOTTLENECK, snapshot.capacities().get(0).level());
+        assertEquals(CapacityLevel.NORMAL, snapshot.capacities().get(0).level());
     }
 
     @Test
