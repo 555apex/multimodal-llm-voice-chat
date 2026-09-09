@@ -45,11 +45,11 @@ export async function fetchFacilityFocus(limit = 10): Promise<FacilityFocusItem[
 }
 
 export async function transitionFacilityAlert(
-  alertId: number,
+  alertId: string,
   transition: FacilityAlertTransition,
 ): Promise<FacilityAlert> {
   const response = await fetch(
-    `${apiBaseUrl}/api/v1/facility-alerts/${encodeURIComponent(String(alertId))}/status-transitions`,
+    `${apiBaseUrl}/api/v1/facility-alerts/${encodeURIComponent(alertId)}/status-transitions`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

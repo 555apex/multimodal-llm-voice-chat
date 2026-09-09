@@ -2,7 +2,7 @@ import { createPinia } from 'pinia'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchWorkflowInbox } from './api/workflowApi'
-import { fetchFacilityAlerts } from './api/facilityApi'
+import { fetchFacilityAlerts, transitionFacilityAlert } from './api/facilityApi'
 import { fetchSpeechCapabilities } from './api/speechApi'
 import App from './App.vue'
 import { useEmergencyStore } from './stores/emergency'
@@ -70,7 +70,7 @@ describe('command dashboard shell', () => {
     })
     vi.mocked(fetchFacilityAlerts).mockResolvedValue({
       items: [{
-        alertId: 42,
+        alertId: '2097166786449965057',
         facilityName: '闽江大桥',
         metricName: '主梁应变',
         actualValue: 12.5,
@@ -165,6 +165,25 @@ describe('command dashboard shell', () => {
     expect(wrapper.get('.facility-alert-card').text()).toContain('主梁应变')
     expect(wrapper.get('.facility-alert-card').text()).toContain('超过上限')
 
+    wrapper.unmount()
+  })
+
+  it('keeps the action form usable when a facility transition fails', async () => {
+    vi.mocked(transitionFacilityAlert).mockRejectedValueOnce(new Error('设施告警不存在'))
+    const { wrapper } = mountApp()
+    await flushPromises()
+    await wrapper.get('.assistant-orb').trigger('click')
+    await wrapper.findAll('.agent-mode-tabs button')[2].trigger('click')
+    await wrapper.get('.facility-confirm-button').trigger('click')
+    await wrapper.get('.facility-action-form textarea').setValue('测试处置')
+
+    await wrapper.get('.facility-action-form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('.facility-query-state.error').exists()).toBe(false)
+    expect(wrapper.get('.facility-action-form').text()).toContain('设施告警不存在')
+    expect((wrapper.get('.facility-action-form textarea').element as HTMLTextAreaElement).value)
+      .toBe('测试处置')
     wrapper.unmount()
   })
 

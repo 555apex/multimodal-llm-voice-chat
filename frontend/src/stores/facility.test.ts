@@ -51,7 +51,7 @@ describe('facility warning store', () => {
 
   it('writes expected and target statuses then refreshes the list', async () => {
     vi.mocked(transitionFacilityAlert).mockResolvedValue({
-      alertId: 42, facilityName: '闽江大桥', metricName: '主梁应变',
+      alertId: '2097166786449965057', facilityName: '闽江大桥', metricName: '主梁应变',
       alarmLevel: 'EMERGENCY', alarmLevelName: '紧急',
       collectTime: '2026-09-08T01:59:30Z', triggerTime: '2026-09-08T01:59:00Z',
       status: 'CONFIRMED', statusName: '处理中', remark: '【已确认】已派员',
@@ -59,13 +59,51 @@ describe('facility warning store', () => {
     })
     const store = useFacilityStore()
 
-    await store.transition(42, 'PENDING', 'CONFIRMED', '已派员')
+    await store.transition('2097166786449965057', 'PENDING', 'CONFIRMED', '已派员')
 
-    expect(transitionFacilityAlert).toHaveBeenCalledWith(42, {
+    expect(transitionFacilityAlert).toHaveBeenCalledWith('2097166786449965057', {
       expectedStatus: 'PENDING', targetStatus: 'CONFIRMED',
       resolutionType: undefined, remark: '已派员',
     })
     expect(fetchFacilityAlerts).toHaveBeenCalledWith('PENDING', '', 0, 20)
+  })
+
+  it('discards a stale pending response after switching to confirmed alerts', async () => {
+    const pendingPage: FacilityAlertPage = {
+      ...page,
+      items: [{
+        alertId: '1', facilityName: '待确认桥梁', metricName: '位移',
+        alarmLevel: 'WARNING', alarmLevelName: '警告',
+        collectTime: '2026-09-08T01:58:30Z', triggerTime: '2026-09-08T01:58:00Z',
+        status: 'PENDING', statusName: '待确认',
+        thresholdAssessment: '超过上限', sourceConsistent: true,
+      }],
+    }
+    const confirmedPage: FacilityAlertPage = {
+      ...page,
+      items: [{
+        alertId: '2', facilityName: '已确认隧道', metricName: '沉降',
+        alarmLevel: 'SEVERE', alarmLevelName: '严重',
+        collectTime: '2026-09-08T01:59:30Z', triggerTime: '2026-09-08T01:59:00Z',
+        status: 'CONFIRMED', statusName: '处理中',
+        thresholdAssessment: '超过上限', sourceConsistent: true,
+      }],
+    }
+    let resolvePending!: (value: FacilityAlertPage) => void
+    vi.mocked(fetchFacilityAlerts)
+      .mockImplementationOnce(() => new Promise(resolve => { resolvePending = resolve }))
+      .mockResolvedValueOnce(confirmedPage)
+    const store = useFacilityStore()
+
+    const staleRequest = store.loadAlerts(0)
+    await store.selectStatus('CONFIRMED')
+    expect(store.pageData?.items.map(item => item.status)).toEqual(['CONFIRMED'])
+
+    resolvePending(pendingPage)
+    await staleRequest
+    expect(store.selectedStatus).toBe('CONFIRMED')
+    expect(store.pageData?.items.map(item => item.status)).toEqual(['CONFIRMED'])
+    expect(store.polling).toBe(false)
   })
 
   it('loads reports and focus objects through explicit views', async () => {
@@ -85,5 +123,20 @@ describe('facility warning store', () => {
     await store.showFocus()
     expect(fetchFacilityFocus).toHaveBeenCalledWith(10)
     expect(store.viewMode).toBe('focus')
+  })
+
+  it('does not switch filters or views while an action form is open', async () => {
+    const store = useFacilityStore()
+    store.formOpen = true
+
+    await store.selectStatus('CONFIRMED')
+    await store.selectAlarmLevel('EMERGENCY')
+    await store.showReport()
+
+    expect(store.selectedStatus).toBe('PENDING')
+    expect(store.selectedAlarmLevel).toBe('')
+    expect(store.viewMode).toBe('alerts')
+    expect(fetchFacilityAlerts).not.toHaveBeenCalled()
+    expect(fetchFacilityHealthReport).not.toHaveBeenCalled()
   })
 })

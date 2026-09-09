@@ -69,6 +69,7 @@ public class MysqlFacilityAlertRepository implements FacilityAlertPort {
                   COUNT(CASE WHEN status IN (1,2) AND alarm_level=3 THEN 1 END) AS emergency_count,
                   MAX(collect_time) AS data_as_of
                 FROM w_realtime_abnormal
+                WHERE COALESCE(del_flag, 'N') = 'N'
                 """, (rs, rowNum) -> new FacilityAlertCounts(
                 rs.getLong("pending_count"),
                 rs.getLong("confirmed_count"),
@@ -84,7 +85,7 @@ public class MysqlFacilityAlertRepository implements FacilityAlertPort {
     public List<FacilityAlert> findActive() {
         return jdbcTemplate.query(
                 "SELECT " + COLUMNS + " FROM w_realtime_abnormal "
-                        + "WHERE status IN (1,2) "
+                        + "WHERE COALESCE(del_flag, 'N') = 'N' AND status IN (1,2) "
                         + "ORDER BY alarm_level DESC, trigger_time ASC, id ASC",
                 this::mapAlert
         );
@@ -93,7 +94,8 @@ public class MysqlFacilityAlertRepository implements FacilityAlertPort {
     @Override
     public Optional<FacilityAlert> findById(long alertId) {
         return jdbcTemplate.query(
-                "SELECT " + COLUMNS + " FROM w_realtime_abnormal WHERE id=? LIMIT 1",
+                "SELECT " + COLUMNS + " FROM w_realtime_abnormal "
+                        + "WHERE id=? AND COALESCE(del_flag, 'N') = 'N' LIMIT 1",
                 this::mapAlert,
                 alertId
         ).stream().findFirst();
@@ -109,7 +111,7 @@ public class MysqlFacilityAlertRepository implements FacilityAlertPort {
         return jdbcTemplate.update("""
                 UPDATE w_realtime_abnormal
                 SET status=?, remark=?
-                WHERE id=? AND status=?
+                WHERE id=? AND status=? AND COALESCE(del_flag, 'N') = 'N'
                 """,
                 targetStatus.databaseValue(), remark, alertId, expectedStatus.databaseValue()
         ) == 1;
@@ -117,6 +119,7 @@ public class MysqlFacilityAlertRepository implements FacilityAlertPort {
 
     private QueryParts filters(FacilityAlertStatus status, AlarmLevel alarmLevel) {
         List<String> conditions = new ArrayList<>();
+        conditions.add("COALESCE(del_flag, 'N') = 'N'");
         List<Object> arguments = new ArrayList<>();
         if (status != null) {
             conditions.add("status=?");
