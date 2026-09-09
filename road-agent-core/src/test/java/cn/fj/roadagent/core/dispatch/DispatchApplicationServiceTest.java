@@ -194,6 +194,32 @@ class DispatchApplicationServiceTest {
     }
 
     @Test
+    void interruptedStaleGenerationShouldRecoverSamePlanAndKeepAuditTrail() {
+        Fixture fixture = fixture(new FixedModel());
+        Instant interruptedAt = NOW.minus(Duration.ofMinutes(10));
+        DispatchPlan stuckPlan = DispatchPlan.generating(
+                "DP-STUCK", event(), 1L, interruptedAt
+        );
+        EmergencyWorkflow stuckWorkflow = EmergencyWorkflow.generating(
+                "WF-STUCK", event().eventId(), stuckPlan.planId(), stuckPlan.version(),
+                interruptedAt
+        );
+        assertTrue(fixture.plans.insert(stuckPlan));
+        assertTrue(fixture.workflows.insertWorkflow(stuckWorkflow));
+
+        DispatchPlan recovered = fixture.service.generate(event().eventId());
+
+        assertEquals("DP-STUCK", recovered.planId());
+        assertEquals(1L, recovered.version());
+        assertEquals(DispatchStatus.WAITING_APPROVAL, recovered.status());
+        assertEquals(WorkflowStatus.WAITING_LEVEL_1_SUBMISSION,
+                fixture.workflows.findWorkflow("WF-STUCK").orElseThrow().status());
+        assertTrue(fixture.workflows.findActions("WF-STUCK").stream()
+                .anyMatch(action -> action.actionType()
+                        == cn.fj.roadagent.domain.dispatch.WorkflowActionType.GENERATION_RETRIED));
+    }
+
+    @Test
     void shouldRejectStaleWorkflowVersionWithoutChangingStage() {
         Fixture fixture = fixture(new FixedModel());
         fixture.service.generate(event().eventId());

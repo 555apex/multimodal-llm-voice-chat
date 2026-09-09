@@ -85,6 +85,47 @@ describe('emergency workflow store', () => {
     expect(fetchWorkflowInbox).toHaveBeenCalled()
   })
 
+  it('automatically retries one stale generation when the page observes it', async () => {
+    vi.setSystemTime(new Date('2026-07-28T00:10:00Z'))
+    const stuckItem: EmergencyWorkflowItem = {
+      ...item,
+      workflowStatus: 'GENERATING',
+      currentPlan: {
+        ...waitingPlan,
+        status: 'GENERATING',
+        updatedAt: '2026-07-28T00:00:00Z',
+      },
+    }
+    vi.mocked(fetchWorkflowInbox)
+      .mockResolvedValueOnce({ ...inbox, item: stuckItem })
+      .mockResolvedValueOnce(inbox)
+    vi.mocked(generateEmergencyDispatch).mockResolvedValue(waitingPlan)
+    const store = useEmergencyStore()
+
+    await store.refresh()
+
+    expect(generateEmergencyDispatch).toHaveBeenCalledTimes(1)
+    expect(generateEmergencyDispatch).toHaveBeenCalledWith(event.eventId)
+    expect(fetchWorkflowInbox).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry a generation before the backend stale timeout', async () => {
+    vi.setSystemTime(new Date('2026-07-28T00:01:00Z'))
+    vi.mocked(fetchWorkflowInbox).mockResolvedValue({
+      ...inbox,
+      item: {
+        ...item,
+        workflowStatus: 'GENERATING',
+        currentPlan: { ...waitingPlan, status: 'GENERATING', updatedAt: '2026-07-28T00:00:00Z' },
+      },
+    })
+    const store = useEmergencyStore()
+
+    await store.refresh()
+
+    expect(generateEmergencyDispatch).not.toHaveBeenCalled()
+  })
+
   it('switches between the three pending queues', async () => {
     const store = useEmergencyStore()
     await store.selectStage('LEVEL_2')
