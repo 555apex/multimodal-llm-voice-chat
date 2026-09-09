@@ -3,6 +3,17 @@ import type { SpeechCapabilities, SpeechTranscription } from '../types/speech'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
 
+export class SpeechApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly traceId: string,
+  ) {
+    super(message)
+    this.name = 'SpeechApiError'
+  }
+}
+
 async function parseJson<T>(response: Response, fallback: string): Promise<T> {
   let body: ApiResponse<T>
   try {
@@ -10,7 +21,9 @@ async function parseJson<T>(response: Response, fallback: string): Promise<T> {
   } catch {
     throw new Error(fallback)
   }
-  if (!response.ok) throw new Error(body.message || fallback)
+  if (!response.ok) {
+    throw new SpeechApiError(body.message || fallback, body.code, body.traceId)
+  }
   return body.data
 }
 

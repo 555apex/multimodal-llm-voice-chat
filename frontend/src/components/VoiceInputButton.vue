@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
-import { transcribeSpeech } from '../api/speechApi'
+import { SpeechApiError, transcribeSpeech } from '../api/speechApi'
 import { useSpeechStore } from '../stores/speech'
 
 const props = withDefaults(defineProps<{
@@ -137,6 +137,11 @@ async function completeRecording() {
     status.value = 'idle'
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
+      status.value = 'idle'
+      return
+    }
+    if (error instanceof SpeechApiError && error.code === 'ASR_NO_SPEECH') {
+      errorMessage.value = ''
       status.value = 'idle'
       return
     }

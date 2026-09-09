@@ -506,7 +506,7 @@ paths:
         - in: path
           name: alertId
           required: true
-          schema: { type: integer, format: int64, minimum: 1 }
+          schema: { type: string, pattern: '^[1-9][0-9]*$' }
       requestBody:
         required: true
         content:
@@ -711,7 +711,7 @@ components:
 
     CapacityLevel:
       type: string
-      description: 项目三级评估口径：利用率不低于0.80正常，大于0.30且低于0.80瓶颈，不高于0.30严重瓶颈
+      description: 当前项目三级评估口径：利用率低于0.15正常，不低于0.15且低于0.30瓶颈，不低于0.30严重瓶颈；利用率越高压力越大
       enum: [NORMAL, BOTTLENECK, SEVERE_BOTTLENECK]
 
     RoadCapacityRow:
@@ -1373,7 +1373,10 @@ components:
       type: object
       required: [alertId, facilityName, metricName, alarmLevel, alarmLevelName, collectTime, triggerTime, status, statusName, thresholdAssessment, sourceConsistent]
       properties:
-        alertId: { type: integer, format: int64 }
+        alertId:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: BIGINT十进制文本，避免浏览器对大整数做精度截断
         facilityName: { type: string }
         metricName: { type: string }
         actualValue: { type: [number, 'null'] }

@@ -115,11 +115,11 @@ class AgentRuntimeTest {
                 "UNSUPPORTED", null, null, null, null, null,
                 null, null, null, null, List.of(), null
         )), new TestMemory(), skill).handle(
-                command("通行能力利用率等于80%时是什么等级？"), events::add);
+                command("通行能力利用率等于15%时是什么等级？"), events::add);
 
         assertEquals(0, calls.get());
         assertTrue(events.stream().filter(event -> "answer.delta".equals(event.name()))
-                .map(AgentEvent::data).map(Object::toString).anyMatch(text -> text.contains("正常")));
+                .map(AgentEvent::data).map(Object::toString).anyMatch(text -> text.contains("瓶颈")));
         assertTrue(events.stream().anyMatch(event -> "run.completed".equals(event.name())));
     }
 

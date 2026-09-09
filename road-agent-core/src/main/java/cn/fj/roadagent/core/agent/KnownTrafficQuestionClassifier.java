@@ -123,8 +123,8 @@ final class KnownTrafficQuestionClassifier {
         if (routeCode(text) != null || routeName != null) {
             return Optional.of(TrafficQueryType.CAPACITY_ROUTE_DETAIL);
         }
-        if (containsAny(text, "哪些瓶颈", "能力瓶颈", "瓶颈路线", "严重瓶颈", "利用率最低", "能力最低", "瓶颈排行", "瓶颈排名",
-                "低利用率", "利用率较低", "利用率偏低", "哪些路线利用率低")) {
+        if (containsAny(text, "哪些瓶颈", "能力瓶颈", "瓶颈路线", "严重瓶颈", "利用率最高", "能力压力最大", "瓶颈排行", "瓶颈排名",
+                "高利用率", "利用率较高", "利用率偏高", "哪些路线利用率高")) {
             return Optional.of(TrafficQueryType.CAPACITY_BOTTLENECKS);
         }
         return Optional.of(TrafficQueryType.CAPACITY_OVERVIEW);
@@ -260,8 +260,8 @@ final class KnownTrafficQuestionClassifier {
         if (containsAny(text, "拥堵状况指数", "拥堵指数0到1", "拥堵指数0至1")) {
             return Optional.of("拥堵状况指数取值为0至1，数值越大表示相对拥堵程度越高；具体路况状态仍以数据库status字段为权威，指数只作为排序和研判辅助。 ");
         }
-        if (text.contains("利用率等于80%") || text.contains("利用率等于80％")) {
-            return Optional.of("按本项目口径，通行能力利用率等于80%时判定为正常。 ");
+        if (text.contains("利用率等于15%") || text.contains("利用率等于15％")) {
+            return Optional.of("按当前项目口径，通行能力利用率等于15%时判定为瓶颈。 ");
         }
         if (text.contains("利用率等于30%") || text.contains("利用率等于30％")) {
             return Optional.of("按本项目口径，通行能力利用率等于30%时判定为严重瓶颈。 ");

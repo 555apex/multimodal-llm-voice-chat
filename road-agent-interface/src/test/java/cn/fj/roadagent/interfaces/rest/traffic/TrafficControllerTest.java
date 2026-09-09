@@ -81,7 +81,7 @@ class TrafficControllerTest {
                         + "建议运行监测人员持续关注该路线，并根据评估等级安排后续巡查工作。",
                 List.of(), List.of(), List.of(new RoadCapacityResultItem(
                 "G104", "北京-平潭", 0, 1920, 0,
-                "SEVERE_BOTTLENECK", "严重瓶颈"
+                "NORMAL", "正常"
         )), 1, 1, false, "MYSQL", Instant.parse("2026-08-13T01:00:00Z"),
                 List.of(), query.traceId()
         );
@@ -96,7 +96,7 @@ class TrafficControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.capacityRows[0].actualCapacityVph").value(0))
                 .andExpect(jsonPath("$.data.capacityRows[0].utilizationRatio").value(0))
-                .andExpect(jsonPath("$.data.capacityRows[0].capacityLevelName").value("严重瓶颈"));
+                .andExpect(jsonPath("$.data.capacityRows[0].capacityLevelName").value("正常"));
     }
 
     @Test

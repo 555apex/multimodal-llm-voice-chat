@@ -30,9 +30,9 @@ class RoadCapacityServiceTest {
     void overviewReturnsEveryRouteSortedAndReportsThreeLevelCounts() {
         RecordingModel model = new RecordingModel();
         RoadCapacityService service = service(model, List.of(
-                row("S201", "柘荣-霞浦", 1200, 0.7),
-                row("G104", "北京-平潭", 1600, 0.8),
-                row("G316", "长乐-同仁", 0, 0)
+                row("S201", "柘荣-霞浦", 1200, 0.16),
+                row("G104", "北京-平潭", 1600, 0.30),
+                row("G316", "长乐-同仁", 0, 0.10)
         ));
 
         var result = service.query(query(TrafficQueryType.CAPACITY_OVERVIEW, null, null));
@@ -40,7 +40,7 @@ class RoadCapacityServiceTest {
         assertEquals(List.of("G104", "G316", "S201"), result.capacityRows().stream()
                 .map(value -> value.routeCode()).toList());
         assertEquals(3, result.totalSegmentCount());
-        assertEquals("NORMAL", result.capacityRows().get(0).capacityLevel());
+        assertEquals("SEVERE_BOTTLENECK", result.capacityRows().get(0).capacityLevel());
         assertTrue(model.lastRequest.userPrompt().contains("正常:1；瓶颈:1；严重瓶颈:1"));
         assertTrue(model.lastRequest.systemPrompt().contains("不得重新计算"));
         assertTrue(result.routeSummaries().isEmpty());
@@ -48,12 +48,12 @@ class RoadCapacityServiceTest {
     }
 
     @Test
-    void bottleneckRankingFiltersNormalAndReturnsLowestTenInStableOrder() {
+    void bottleneckRankingFiltersNormalAndReturnsHighestTenInStableOrder() {
         List<RoadCapacity> rows = new ArrayList<>();
-        rows.add(row("G001", "正常路线", 1600, 0.8));
+        rows.add(row("G001", "正常路线", 100, 0.1));
         for (int index = 0; index < 12; index++) {
-            double ratio = index < 2 ? 0 : 0.1 + index * 0.04;
-            rows.add(row("S%03d".formatted(index), "路线" + index, index < 2 ? index * 10 : 300 + index, ratio));
+            double ratio = 0.15 + index * 0.02;
+            rows.add(row("S%03d".formatted(index), "路线" + index, 300 + index, ratio));
         }
         RoadCapacityService service = service(new RecordingModel(), rows);
 
@@ -63,13 +63,13 @@ class RoadCapacityServiceTest {
         assertEquals(10, result.displayedSegmentCount());
         assertTrue(result.truncated());
         assertFalse(result.capacityRows().stream().anyMatch(row -> row.capacityLevel().equals("NORMAL")));
-        assertEquals("S000", result.capacityRows().get(0).routeCode());
-        assertEquals("S001", result.capacityRows().get(1).routeCode());
+        assertEquals("S011", result.capacityRows().get(0).routeCode());
+        assertEquals("S010", result.capacityRows().get(1).routeCode());
         assertEquals("SEVERE_BOTTLENECK", result.capacityRows().get(0).capacityLevel());
     }
 
     @Test
-    void zeroIsValidSevereBottleneckAndDatabaseValuesAreNotRecalculated() {
+    void zeroIsValidNormalValueAndDatabaseValuesAreNotRecalculated() {
         RoadCapacityService service = service(new RecordingModel(), List.of(
                 new RoadCapacity("G104", "北京-平潭", 0, 1920, 0)
         ));
@@ -79,7 +79,7 @@ class RoadCapacityServiceTest {
         assertEquals(0, result.capacityRows().get(0).actualCapacityVph());
         assertEquals(1920, result.capacityRows().get(0).designCapacityVph());
         assertEquals(0, result.capacityRows().get(0).utilizationRatio());
-        assertEquals(CapacityLevel.SEVERE_BOTTLENECK.name(), result.capacityRows().get(0).capacityLevel());
+        assertEquals(CapacityLevel.NORMAL.name(), result.capacityRows().get(0).capacityLevel());
     }
 
     @Test
@@ -102,8 +102,8 @@ class RoadCapacityServiceTest {
     @Test
     void noBottlenecksReturnsEmptyTableWithoutTruncation() {
         RoadCapacityService service = service(new RecordingModel(), List.of(
-                row("G104", "北京-平潭", 1600, 0.8),
-                row("S201", "柘荣-霞浦", 1920, 1)
+                row("G104", "北京-平潭", 160, 0.08),
+                row("S201", "柘荣-霞浦", 192, 0.10)
         ));
 
         var result = service.query(query(TrafficQueryType.CAPACITY_BOTTLENECKS, null, null));
@@ -114,9 +114,9 @@ class RoadCapacityServiceTest {
     }
 
     @Test
-    void allZeroBatchMarksEveryRouteSevereAndStillReturnsTopTen() {
+    void allHighUtilizationBatchMarksEveryRouteSevereAndStillReturnsTopTen() {
         List<RoadCapacity> rows = java.util.stream.IntStream.range(0, 48)
-                .mapToObj(index -> row("S%03d".formatted(index), "路线" + index, 0, 0))
+                .mapToObj(index -> row("S%03d".formatted(index), "路线" + index, 600, 0.30))
                 .toList();
         RoadCapacityService service = service(new RecordingModel(), rows);
 
@@ -146,7 +146,7 @@ class RoadCapacityServiceTest {
             }
         };
         RoadCapacitySnapshot snapshot = new RoadCapacitySnapshot(
-                List.of(row("G104", "北京-平潭", 0, 0)),
+                List.of(row("G104", "北京-平潭", 400, 0.20)),
                 Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp"
         );
         RoadCapacityService service = new RoadCapacityService(() -> snapshot, invalidModel);
@@ -173,7 +173,7 @@ class RoadCapacityServiceTest {
             }
         };
         RoadCapacitySnapshot snapshot = new RoadCapacitySnapshot(
-                List.of(row("G104", "北京-平潭", 0, 0)),
+                List.of(row("G104", "北京-平潭", 400, 0.20)),
                 Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp"
         );
 
@@ -182,14 +182,14 @@ class RoadCapacityServiceTest {
         );
 
         assertFalse(result.summary().contains("999"));
-        assertTrue(result.summary().contains("正常路线0条"));
+        assertTrue(result.summary().contains("瓶颈路线1条"));
     }
 
     @Test
     void twoCityCapacityQueryUsesWholeRoutesWhoseRegisteredEndpointsMatchEitherDirection() {
         RoadCapacitySnapshot capacitySnapshot = new RoadCapacitySnapshot(
                 List.of(
-                        row("G104", "北京-平潭", 100, 0.1),
+                        row("G104", "北京-平潭", 180, 0.18),
                         row("S201", "柘荣-霞浦", 200, 0.2),
                         row("G324", "福州-昆明", 300, 0.3)
                 ), Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp");
@@ -207,7 +207,7 @@ class RoadCapacityServiceTest {
 
         var result = service.query(query);
 
-        assertEquals(List.of("G104", "S201"), result.capacityRows().stream()
+        assertEquals(List.of("S201", "G104"), result.capacityRows().stream()
                 .map(row -> row.routeCode()).toList());
         assertTrue(result.title().contains("登记起终点关联路线"));
     }
