@@ -207,7 +207,10 @@ function formatTime(value?: string) {
       </div>
 
       <div v-if="generationBusy" class="dispatch-generating-state">
-        <span class="progress-dot"></span>大模型正在提出受限资源需求，系统将按库存和距离完成匹配，您可以继续使用聊天功能。
+        <span class="progress-dot"></span>
+        <span>大模型正在提出受限资源需求，系统将按库存和距离完成匹配，您可以继续使用聊天功能。若服务中断，系统会在两分钟后自动尝试恢复。</span>
+        <button type="button" class="recover-generation-button" :disabled="busy"
+          @click="emit('generate')">{{ busy ? '恢复中…' : '恢复生成' }}</button>
       </div>
 
       <div v-if="generationFailed" class="dispatch-failed-state">

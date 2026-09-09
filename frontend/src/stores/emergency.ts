@@ -29,6 +29,21 @@ const emptyCounts = (): WorkflowCounts => ({
   level1: 0, level2: 0, level3: 0, pendingClassification: 0, classificationFailed: 0,
 })
 
+const STALE_GENERATION_MILLIS = 120_000
+
+function staleGeneration(item: EmergencyWorkflowItem | null) {
+  if (!item?.currentPlan?.updatedAt) return false
+  const generating = ['GENERATING', 'REVISING'].includes(item.workflowStatus)
+    || item.currentPlan.status === 'GENERATING'
+  const updatedAt = Date.parse(item.currentPlan.updatedAt)
+  return generating && Number.isFinite(updatedAt)
+    && Date.now() - updatedAt >= STALE_GENERATION_MILLIS
+}
+
+function generationKey(item: EmergencyWorkflowItem) {
+  return `${item.currentPlan?.planId ?? item.event.eventId}:${item.currentPlan?.version ?? 0}`
+}
+
 export const useEmergencyStore = defineStore('emergency', {
   state: () => ({
     selectedStage: 'LEVEL_1' as WorkflowStage,
@@ -41,6 +56,7 @@ export const useEmergencyStore = defineStore('emergency', {
     queryStatus: 'idle' as EmergencyQueryStatus,
     errorMessage: '',
     timerId: 0,
+    automaticRecoveryAttempts: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -94,12 +110,20 @@ export const useEmergencyStore = defineStore('emergency', {
       }
       this.polling = true
       if (!this.item) this.queryStatus = 'loading'
+      let shouldRecover = false
       try {
         const inbox = await fetchWorkflowInbox(this.selectedStage)
         this.item = inbox.item
         this.counts = inbox.counts
         this.queryStatus = inbox.item ? 'ready' : 'empty'
         this.errorMessage = ''
+        if (staleGeneration(inbox.item)) {
+          const key = generationKey(inbox.item!)
+          if (!this.automaticRecoveryAttempts[key]) {
+            this.automaticRecoveryAttempts[key] = true
+            shouldRecover = true
+          }
+        }
       } catch (error) {
         // 单次网络波动时保留当前待办，避免用户正在填写的表单消失。
         this.queryStatus = 'error'
@@ -107,6 +131,7 @@ export const useEmergencyStore = defineStore('emergency', {
       } finally {
         this.polling = false
       }
+      if (shouldRecover) await this.generate()
     },
 
     async loadHistory(page = 0) {
