@@ -42,6 +42,7 @@ export const useFacilityStore = defineStore('facility', {
     errorMessage: '',
     timerId: 0,
     formOpen: false,
+    requestVersion: 0,
   }),
 
   actions: {
@@ -65,82 +66,100 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     async selectStatus(status: FacilityAlertStatus) {
+      if (this.formOpen || this.actionBusy) return
       this.selectedStatus = status
       this.viewMode = 'alerts'
-      await this.loadAlerts(0)
+      await this.loadAlerts(0, true)
     },
 
     async selectAlarmLevel(level: AlarmLevel | '') {
+      if (this.formOpen || this.actionBusy) return
       this.selectedAlarmLevel = level
       this.viewMode = 'alerts'
-      await this.loadAlerts(0)
+      await this.loadAlerts(0, true)
     },
 
     async showAlerts() {
+      if (this.formOpen || this.actionBusy) return
       this.viewMode = 'alerts'
-      await this.loadAlerts(this.pageData?.page ?? 0)
+      await this.loadAlerts(this.pageData?.page ?? 0, true)
     },
 
     async showReport() {
+      if (this.formOpen || this.actionBusy) return
       this.viewMode = 'report'
-      await this.refresh()
+      await this.refresh(true)
     },
 
     async showFocus() {
+      if (this.formOpen || this.actionBusy) return
       this.viewMode = 'focus'
-      await this.refresh()
+      await this.refresh(true)
     },
 
-    async refresh() {
-      if (this.polling || this.actionBusy || this.formOpen) return
+    async refresh(force = false) {
+      if (this.actionBusy || this.formOpen || (this.polling && !force)) return
       if (this.viewMode === 'alerts') {
-        await this.loadAlerts(this.pageData?.page ?? 0)
+        await this.loadAlerts(this.pageData?.page ?? 0, force)
         return
       }
+      const requestVersion = ++this.requestVersion
+      const requestedView = this.viewMode
       this.polling = true
       this.queryStatus = 'loading'
       try {
         const [countPage, content] = await Promise.all([
           fetchFacilityAlerts('PENDING', '', 0, 1),
-          this.viewMode === 'report' ? fetchFacilityHealthReport() : fetchFacilityFocus(10),
+          requestedView === 'report' ? fetchFacilityHealthReport() : fetchFacilityFocus(10),
         ])
+        if (requestVersion !== this.requestVersion || requestedView !== this.viewMode) return
         this.counts = countPage.counts
-        if (this.viewMode === 'report') this.report = content as FacilityHealthReport
+        if (requestedView === 'report') this.report = content as FacilityHealthReport
         else this.focusItems = content as FacilityFocusItem[]
-        const hasContent = this.viewMode === 'report'
+        const hasContent = requestedView === 'report'
           ? Boolean(this.report)
           : this.focusItems.length > 0
         this.queryStatus = hasContent ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        if (requestVersion !== this.requestVersion) return
         this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '设施预警查询失败'
       } finally {
-        this.polling = false
+        if (requestVersion === this.requestVersion) this.polling = false
       }
     },
 
-    async loadAlerts(page = 0) {
-      if (this.polling || this.actionBusy || this.formOpen) return
+    async loadAlerts(page = 0, force = false) {
+      if (this.actionBusy || this.formOpen || (this.polling && !force)) return
+      const requestVersion = ++this.requestVersion
+      const requestedStatus = this.selectedStatus
+      const requestedAlarmLevel = this.selectedAlarmLevel
       this.polling = true
       if (!this.pageData) this.queryStatus = 'loading'
       try {
-        this.pageData = await fetchFacilityAlerts(
-          this.selectedStatus, this.selectedAlarmLevel, page, 20,
+        const response = await fetchFacilityAlerts(
+          requestedStatus, requestedAlarmLevel, page, 20,
         )
+        if (requestVersion !== this.requestVersion
+          || this.viewMode !== 'alerts'
+          || requestedStatus !== this.selectedStatus
+          || requestedAlarmLevel !== this.selectedAlarmLevel) return
+        this.pageData = response
         this.counts = this.pageData.counts
         this.queryStatus = this.pageData.items.length ? 'ready' : 'empty'
         this.errorMessage = ''
       } catch (error) {
+        if (requestVersion !== this.requestVersion) return
         this.queryStatus = 'error'
         this.errorMessage = error instanceof Error ? error.message : '设施预警查询失败'
       } finally {
-        this.polling = false
+        if (requestVersion === this.requestVersion) this.polling = false
       }
     },
 
     async transition(
-      alertId: number,
+      alertId: string,
       expectedStatus: FacilityAlertStatus,
       targetStatus: FacilityAlertStatus,
       remark: string,
@@ -159,7 +178,8 @@ export const useFacilityStore = defineStore('facility', {
       } finally {
         this.actionBusy = false
       }
-      await this.loadAlerts(0)
+      if (this.viewMode === 'alerts') await this.loadAlerts(0, true)
+      else await this.refresh(true)
     },
   },
 })

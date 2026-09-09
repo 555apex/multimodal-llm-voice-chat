@@ -14,7 +14,7 @@ type ActionKind = 'confirm' | 'resolved' | 'ignored'
 const store = useFacilityStore()
 const {
   viewMode, selectedStatus, selectedAlarmLevel, pageData, report, focusItems,
-  counts, polling, actionBusy, queryStatus, errorMessage,
+  counts, polling, actionBusy, queryStatus, errorMessage, formOpen,
 } = storeToRefs(store)
 
 const actionAlert = ref<FacilityAlert | null>(null)
@@ -56,6 +56,7 @@ function thresholdText(alert: FacilityAlert) {
 }
 
 function beginAction(alert: FacilityAlert, kind: ActionKind) {
+  store.errorMessage = ''
   actionAlert.value = alert
   actionKind.value = kind
   actionRemark.value = ''
@@ -63,6 +64,7 @@ function beginAction(alert: FacilityAlert, kind: ActionKind) {
 }
 
 function cancelAction() {
+  store.errorMessage = ''
   actionAlert.value = null
   actionRemark.value = ''
   store.formOpen = false
@@ -101,12 +103,12 @@ function selectAlarmLevel(event: Event) {
   <section class="facility-warning-panel" aria-label="设施预警">
     <header class="facility-warning-toolbar">
       <div class="facility-warning-filters">
-        <select :value="selectedStatus" :disabled="actionBusy" aria-label="告警处理状态" @change="selectStatus">
+        <select :value="selectedStatus" :disabled="actionBusy || formOpen" aria-label="告警处理状态" @change="selectStatus">
           <option v-for="option in statusOptions" :key="option.value" :value="option.value">
             {{ option.label }}（{{ counts[option.value === 'PENDING' ? 'pending' : option.value === 'CONFIRMED' ? 'confirmed' : 'closed'] }}）
           </option>
         </select>
-        <select :value="selectedAlarmLevel" :disabled="actionBusy" aria-label="告警等级" @change="selectAlarmLevel">
+        <select :value="selectedAlarmLevel" :disabled="actionBusy || formOpen" aria-label="告警等级" @change="selectAlarmLevel">
           <option value="">全部等级</option>
           <option value="EMERGENCY">紧急</option>
           <option value="SEVERE">严重</option>
@@ -114,17 +116,17 @@ function selectAlarmLevel(event: Event) {
         </select>
       </div>
       <div class="facility-warning-views">
-        <button type="button" :class="{ active: viewMode === 'alerts' }" @click="store.showAlerts">预警清单</button>
-        <button type="button" :class="{ active: viewMode === 'report' }" @click="store.showReport">健康报告</button>
-        <button type="button" :class="{ active: viewMode === 'focus' }" @click="store.showFocus">重点关注</button>
+        <button type="button" :disabled="actionBusy || formOpen" :class="{ active: viewMode === 'alerts' }" @click="store.showAlerts">预警清单</button>
+        <button type="button" :disabled="actionBusy || formOpen" :class="{ active: viewMode === 'report' }" @click="store.showReport">健康报告</button>
+        <button type="button" :disabled="actionBusy || formOpen" :class="{ active: viewMode === 'focus' }" @click="store.showFocus">重点关注</button>
       </div>
     </header>
 
     <div class="facility-warning-scroll">
-      <div v-if="errorMessage" class="facility-query-state error" role="alert">
+      <div v-if="queryStatus === 'error' && errorMessage" class="facility-query-state error" role="alert">
         <strong>设施预警暂时无法加载</strong>
         <p>{{ errorMessage }}</p>
-        <button type="button" @click="store.refresh">重新查询</button>
+        <button type="button" @click="store.refresh()">重新查询</button>
       </div>
 
       <div v-else-if="queryStatus === 'loading' && !pageData && !report" class="facility-query-state">
@@ -170,6 +172,7 @@ function selectAlarmLevel(event: Event) {
                 {{ actionKind === 'confirm' ? '处理说明' : actionKind === 'resolved' ? '处置结果' : '忽略原因' }}
                 <textarea v-model="actionRemark" rows="3" maxlength="200" required></textarea>
               </label>
+              <p v-if="errorMessage" class="facility-action-error" role="alert">{{ errorMessage }}</p>
               <p v-if="actionKind !== 'confirm'">提交后告警将结束且不能在本页面恢复。</p>
               <div>
                 <button type="button" :disabled="actionBusy" @click="cancelAction">取消</button>

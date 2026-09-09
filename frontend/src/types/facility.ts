@@ -4,7 +4,8 @@ export type FacilityAlertResolution = 'RESOLVED' | 'IGNORED'
 export type FacilityHealthState = 'NO_ACTIVE_ALERT' | 'ATTENTION' | 'ABNORMAL' | 'DANGER'
 
 export interface FacilityAlert {
-  alertId: number
+  /** BIGINT identifier. Kept as text so browsers do not round it. */
+  alertId: string
   facilityName: string
   metricName: string
   actualValue?: number

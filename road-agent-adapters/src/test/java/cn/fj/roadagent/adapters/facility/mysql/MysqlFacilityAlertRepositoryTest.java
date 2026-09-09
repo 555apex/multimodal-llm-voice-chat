@@ -33,7 +33,7 @@ class MysqlFacilityAlertRepositoryTest {
                   threshold_min DECIMAL(15,6), threshold_max DECIMAL(15,6),
                   alarm_level TINYINT NOT NULL, collect_time TIMESTAMP NOT NULL,
                   trigger_time TIMESTAMP NOT NULL, status TINYINT NOT NULL,
-                  remark VARCHAR(255)
+                  remark VARCHAR(255), del_flag CHAR(1) DEFAULT 'N'
                 )
                 """);
         repository = new MysqlFacilityAlertRepository(jdbc);
@@ -44,6 +44,8 @@ class MysqlFacilityAlertRepositoryTest {
         insert("A桥", "位移", 1, 1, Instant.parse("2026-09-08T01:00:00Z"));
         insert("B隧道", "沉降", 3, 1, Instant.parse("2026-09-08T01:30:00Z"));
         insert("C边坡", "含水率", 2, 2, Instant.parse("2026-09-08T00:30:00Z"));
+        insert("D服务区", "积水深度", 3, 1, Instant.parse("2026-09-08T00:20:00Z"));
+        jdbc.update("UPDATE w_realtime_abnormal SET del_flag='Y' WHERE facility_name='D服务区'");
 
         var pending = repository.findPage(FacilityAlertStatus.PENDING, null, 0, 20);
         assertEquals(2, pending.size());
@@ -52,6 +54,14 @@ class MysqlFacilityAlertRepositoryTest {
         assertEquals(2, repository.counts().pending());
         assertEquals(1, repository.counts().confirmed());
         assertEquals(3, repository.findActive().size());
+        long deletedId = jdbc.queryForObject(
+                "SELECT id FROM w_realtime_abnormal WHERE facility_name='D服务区'", Long.class
+        );
+        assertTrue(repository.findById(deletedId).isEmpty());
+        assertFalse(repository.updateStatus(
+                deletedId, FacilityAlertStatus.PENDING,
+                FacilityAlertStatus.CONFIRMED, "不应更新"
+        ));
 
         long id = pending.get(0).alertId();
         assertTrue(repository.updateStatus(
