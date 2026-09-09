@@ -251,10 +251,11 @@ public class RoadAgentConfiguration {
             RoadCapacityService capacityService,
             RegionalTrafficService regionalTrafficService,
             VehiclePatternService vehiclePatternService,
-            OdTrafficService odTrafficService
+            OdTrafficService odTrafficService,
+            ChatModelPort chatModelPort
     ) {
         return new HighwayTrafficSkill(
-                trafficService, capacityService, regionalTrafficService, vehiclePatternService, odTrafficService
+                trafficService, capacityService, regionalTrafficService, vehiclePatternService, odTrafficService, chatModelPort
         );
     }
 

@@ -41,11 +41,16 @@ export const useFacilityStore = defineStore('facility', {
     actionBusy: false,
     queryStatus: 'idle' as FacilityQueryStatus,
     errorMessage: '',
+    actionError: '',
     timerId: 0,
     formOpen: false,
   }),
 
   actions: {
+    closeForm() {
+      this.formOpen = false
+      this.actionError = ''
+    },
     invalidateQuery() {
       this.requestSequence++
       this.polling = false
@@ -71,6 +76,8 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     async selectStatus(status: FacilityAlertStatus) {
+      if (this.actionBusy) return
+      this.closeForm()
       this.selectedStatus = status
       this.pageData = null
       this.viewMode = 'alerts'
@@ -78,6 +85,8 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     async selectAlarmLevel(level: AlarmLevel | '') {
+      if (this.actionBusy) return
+      this.closeForm()
       this.selectedAlarmLevel = level
       this.pageData = null
       this.viewMode = 'alerts'
@@ -85,17 +94,23 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     async showAlerts() {
+      if (this.actionBusy) return
+      this.closeForm()
       this.viewMode = 'alerts'
       await this.loadAlerts(this.pageData?.page ?? 0)
     },
 
     async showReport() {
+      if (this.actionBusy) return
+      this.closeForm()
       this.invalidateQuery()
       this.viewMode = 'report'
       await this.refresh()
     },
 
     async showFocus() {
+      if (this.actionBusy) return
+      this.closeForm()
       this.invalidateQuery()
       this.viewMode = 'focus'
       await this.refresh()
@@ -147,6 +162,11 @@ export const useFacilityStore = defineStore('facility', {
         )
         if (sequence !== this.requestSequence || this.viewMode !== 'alerts'
           || status !== this.selectedStatus || level !== this.selectedAlarmLevel) return
+        if (!result.items.length && page > 0) {
+          this.polling = false
+          await this.loadAlerts(Math.max(0, Math.min(page - 1, Math.ceil(result.total / 20) - 1)))
+          return
+        }
         this.pageData = result
         this.counts = this.pageData.counts
         this.queryStatus = this.pageData.items.length ? 'ready' : 'empty'
@@ -161,7 +181,7 @@ export const useFacilityStore = defineStore('facility', {
     },
 
     async transition(
-      alertId: number,
+      alertId: string,
       expectedStatus: FacilityAlertStatus,
       targetStatus: FacilityAlertStatus,
       remark: string,
@@ -170,18 +190,27 @@ export const useFacilityStore = defineStore('facility', {
       if (this.actionBusy) return
       this.invalidateQuery()
       this.actionBusy = true
-      this.errorMessage = ''
+      this.actionError = ''
       try {
         await transitionFacilityAlert(alertId, {
           expectedStatus, targetStatus, resolutionType, remark,
         })
       } catch (error) {
-        this.errorMessage = error instanceof Error ? error.message : '设施告警状态更新失败'
+        this.actionError = error instanceof Error ? error.message : '设施告警状态更新失败'
+        const failure = error as { status?: number }
+        if (failure.status === 404 || failure.status === 409) {
+          this.formOpen = false
+          this.actionBusy = false
+          await this.loadAlerts(this.pageData?.page ?? 0)
+        }
         throw error
       } finally {
         this.actionBusy = false
       }
-      await this.loadAlerts(0)
+      this.formOpen = false
+      this.report = null
+      this.focusItems = []
+      await this.loadAlerts(this.pageData?.page ?? 0)
     },
   },
 })

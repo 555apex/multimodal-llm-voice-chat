@@ -35,6 +35,8 @@ const icon = computed(() => {
     >
       <span aria-hidden="true">{{ icon }}</span>{{ label }}
     </button>
+    <button v-if="isCurrent && (playbackStatus === 'playing' || playbackStatus === 'paused')"
+      type="button" aria-label="停止朗读" @click="store.stop()">停止</button>
     <small v-if="isCurrent && playbackError">{{ playbackError }}</small>
   </div>
 </template>

@@ -2,6 +2,28 @@ const SENTENCE_END = /[^。！？；\n]+[。！？；]?/g
 const SOFT_END = /[，、,：:]\s*/g
 
 /** 按中文语义边界切分；首段较短以降低首音频延迟，后续段较长以减少停顿。 */
+export function speechSummary(source: string): string {
+  const text = source.replace(/\s+/g, ' ').trim()
+  if (text.length <= 160) return text
+  const sentences = text.match(SENTENCE_END) ?? []
+  let result = ''
+  for (const sentence of sentences) {
+    if (result.length + sentence.length > 160) break
+    result += sentence
+    if (result.length >= 120) break
+  }
+  return result || '查询结果已显示，请查看详细数据，或点击全文朗读。'
+}
+
+export function streamingSpeechSegments(source: string): string[] {
+  const result: string[] = []
+  for (const part of splitSpeechText(source)) {
+    if (result.length && result[result.length - 1].length + part.length <= 160) result[result.length - 1] += part
+    else result.push(part)
+  }
+  return result
+}
+
 export function splitSpeechText(source: string): string[] {
   const text = source.replace(/\s+/g, ' ').trim()
   if (!text) return []

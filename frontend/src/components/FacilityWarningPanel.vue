@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useFacilityStore } from '../stores/facility'
 import type {
@@ -14,12 +14,13 @@ type ActionKind = 'confirm' | 'resolved' | 'ignored'
 const store = useFacilityStore()
 const {
   viewMode, selectedStatus, selectedAlarmLevel, pageData, report, focusItems,
-  counts, polling, actionBusy, queryStatus, errorMessage,
+  counts, polling, actionBusy, queryStatus, errorMessage, actionError,
 } = storeToRefs(store)
 
 const actionAlert = ref<FacilityAlert | null>(null)
 const actionKind = ref<ActionKind>('confirm')
 const actionRemark = ref('')
+watch(() => [store.viewMode, store.selectedStatus, store.selectedAlarmLevel], () => cancelAction())
 
 const totalPages = computed(() => Math.max(1, Math.ceil((pageData.value?.total ?? 0) / 20)))
 
@@ -56,6 +57,8 @@ function thresholdText(alert: FacilityAlert) {
 }
 
 function beginAction(alert: FacilityAlert, kind: ActionKind) {
+  if (actionBusy.value) return
+  store.actionError = ''
   actionAlert.value = alert
   actionKind.value = kind
   actionRemark.value = ''
@@ -65,7 +68,7 @@ function beginAction(alert: FacilityAlert, kind: ActionKind) {
 function cancelAction() {
   actionAlert.value = null
   actionRemark.value = ''
-  store.formOpen = false
+  store.closeForm()
 }
 
 async function submitAction() {
@@ -78,13 +81,12 @@ async function submitAction() {
     target = 'CLOSED'
     resolution = actionKind.value === 'resolved' ? 'RESOLVED' : 'IGNORED'
   }
-  store.formOpen = false
   try {
     await store.transition(alert.alertId, alert.status, target, remark, resolution)
     actionAlert.value = null
     actionRemark.value = ''
   } catch {
-    store.formOpen = true
+    if (!store.formOpen) actionAlert.value = null
   }
 }
 
@@ -114,14 +116,15 @@ function selectAlarmLevel(event: Event) {
         </select>
       </div>
       <div class="facility-warning-views">
-        <button type="button" :class="{ active: viewMode === 'alerts' }" @click="store.showAlerts">预警清单</button>
-        <button type="button" :class="{ active: viewMode === 'report' }" @click="store.showReport">健康报告</button>
-        <button type="button" :class="{ active: viewMode === 'focus' }" @click="store.showFocus">重点关注</button>
+        <button type="button" :disabled="actionBusy" :class="{ active: viewMode === 'alerts' }" @click="store.showAlerts">预警清单</button>
+        <button type="button" :disabled="actionBusy" :class="{ active: viewMode === 'report' }" @click="store.showReport">健康报告</button>
+        <button type="button" :disabled="actionBusy" :class="{ active: viewMode === 'focus' }" @click="store.showFocus">重点关注</button>
       </div>
     </header>
 
     <div class="facility-warning-scroll">
-      <div v-if="errorMessage" class="facility-query-state error" role="alert">
+      <p v-if="actionError" class="facility-query-state error" role="alert">{{ actionError }}</p>
+      <div v-if="errorMessage && !pageData && !report && !focusItems.length" class="facility-query-state error" role="alert">
         <strong>设施预警暂时无法加载</strong>
         <p>{{ errorMessage }}</p>
         <button type="button" @click="store.refresh">重新查询</button>
@@ -156,12 +159,12 @@ function selectAlarmLevel(event: Event) {
             <p v-if="alert.remark" class="facility-alert-remark">{{ alert.remark }}</p>
 
             <div v-if="alert.status !== 'CLOSED'" class="facility-alert-actions">
-              <button v-if="alert.status === 'PENDING'" type="button" class="facility-confirm-button" @click="beginAction(alert, 'confirm')">
+              <button v-if="alert.status === 'PENDING'" type="button" class="facility-confirm-button" :disabled="actionBusy" @click="beginAction(alert, 'confirm')">
                 确认并处置
               </button>
               <template v-else>
-                <button type="button" class="facility-resolve-button" @click="beginAction(alert, 'resolved')">异常已消除</button>
-                <button type="button" class="facility-ignore-button" @click="beginAction(alert, 'ignored')">确认忽略</button>
+                <button type="button" class="facility-resolve-button" :disabled="actionBusy" @click="beginAction(alert, 'resolved')">异常已消除</button>
+                <button type="button" class="facility-ignore-button" :disabled="actionBusy" @click="beginAction(alert, 'ignored')">确认忽略</button>
               </template>
             </div>
 

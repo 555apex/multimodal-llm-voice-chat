@@ -62,7 +62,7 @@ public final class SpeechApplicationService implements
             return new SpeechCapabilities(
                     provider.asrAvailable(), provider.ttsAvailable(),
                     provider.asrModel(), provider.ttsVoice(),
-                    maxRecordingSeconds, maxAudioBytes
+                    maxRecordingSeconds, maxAudioBytes, provider.ttsStreamingAvailable()
             );
         } catch (RuntimeException exception) {
             return unavailable();
@@ -121,6 +121,16 @@ public final class SpeechApplicationService implements
             );
         }
         return audio;
+    }
+
+    @Override
+    public void stream(SynthesizeSpeechCommand command, java.io.OutputStream output) throws java.io.IOException {
+        requireEnabled();
+        if (command == null || command.text() == null || command.text().isBlank()
+                || command.text().trim().length() > maxTtsCharacters) {
+            throw new IllegalArgumentException("朗读文本为空或超过长度限制");
+        }
+        synthesisPort.stream(new SynthesizeSpeechCommand(command.text().trim()), output);
     }
 
     private SpeechCapabilities unavailable() {

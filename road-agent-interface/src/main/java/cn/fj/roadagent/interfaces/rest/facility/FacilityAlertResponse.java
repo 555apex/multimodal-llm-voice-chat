@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 public record FacilityAlertResponse(
-        long alertId, String facilityName, String metricName,
+        String alertId, String facilityName, String metricName,
         BigDecimal actualValue, String actualStringValue,
         BigDecimal thresholdMin, BigDecimal thresholdMax,
         AlarmLevel alarmLevel, String alarmLevelName,
@@ -19,7 +19,7 @@ public record FacilityAlertResponse(
     public static FacilityAlertResponse from(FacilityAlert alert) {
         Assessment assessment = assess(alert);
         return new FacilityAlertResponse(
-                alert.alertId(), alert.facilityName(), alert.metricName(),
+                Long.toString(alert.alertId()), alert.facilityName(), alert.metricName(),
                 alert.actualValue(), alert.actualStringValue(),
                 alert.thresholdMin(), alert.thresholdMax(), alert.alarmLevel(),
                 alert.alarmLevel().displayName(), alert.collectTime(), alert.triggerTime(),

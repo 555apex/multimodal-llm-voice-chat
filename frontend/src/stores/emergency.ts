@@ -7,6 +7,7 @@ import {
 import {
   decideCommandWorkflow,
   decideLevel1Workflow,
+  fetchWorkflowDetail,
   fetchWorkflowHistory,
   fetchWorkflowInbox,
   reviewEmergencyWorkflow,
@@ -39,6 +40,9 @@ export const useEmergencyStore = defineStore('emergency', {
     polling: false,
     requestSequence: 0,
     actionBusy: false,
+    generationPending: false,
+    operationStartedAt: 0,
+    elapsedSeconds: 0,
     queryStatus: 'idle' as EmergencyQueryStatus,
     errorMessage: '',
     timerId: 0,
@@ -47,6 +51,9 @@ export const useEmergencyStore = defineStore('emergency', {
   getters: {
     totalPending(state): number {
       return state.counts.level1 + state.counts.level2 + state.counts.level3
+    },
+    serverGenerating(state): boolean {
+      return !!state.item && ['GENERATING', 'REVISING'].includes(state.item.workflowStatus)
     },
   },
 
@@ -58,9 +65,12 @@ export const useEmergencyStore = defineStore('emergency', {
     startPolling() {
       if (this.timerId) return
       void this.refresh()
+      let ticks = 0
       this.timerId = window.setInterval(() => {
-        if (document.visibilityState === 'visible') void this.refresh()
-      }, 5000)
+        if (this.operationStartedAt) this.elapsedSeconds = Math.floor((Date.now() - this.operationStartedAt) / 1000)
+        ticks++
+        if (document.visibilityState === 'visible' && (this.actionBusy || this.serverGenerating || ticks % 5 === 0)) void this.refresh()
+      }, 1000)
       document.addEventListener('visibilitychange', this.handleVisibility)
     },
 
@@ -95,7 +105,7 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async refresh() {
-      if (this.polling || this.actionBusy) return
+      if (this.polling || (this.actionBusy && !this.generationPending)) return
       if (this.viewMode === 'history') {
         await this.loadHistory(this.history?.page ?? 0)
         return
@@ -105,6 +115,16 @@ export const useEmergencyStore = defineStore('emergency', {
       const stage = this.selectedStage
       if (!this.item) this.queryStatus = 'loading'
       try {
+        if ((this.generationPending || this.serverGenerating) && this.item?.workflowId) {
+          const id = this.item.workflowId
+          const item = await fetchWorkflowDetail(id)
+          if (sequence === this.requestSequence && this.item?.workflowId === id) {
+            this.item = item
+            this.queryStatus = 'ready'
+            if (!this.actionBusy && !this.serverGenerating) this.operationStartedAt = 0
+          }
+          return
+        }
         const inbox = await fetchWorkflowInbox(stage)
         if (sequence !== this.requestSequence || this.selectedStage !== stage || this.viewMode !== 'inbox') return
         this.item = inbox.item
@@ -143,18 +163,29 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async generate() {
-      if (!this.item || this.actionBusy) return
+      if (!this.item || this.actionBusy || ['GENERATING', 'REVISING'].includes(this.item.workflowStatus)) return
+      let failure = ''
       this.invalidateQuery()
+      this.generationPending = true
+      this.operationStartedAt = Date.now()
+      this.elapsedSeconds = 0
       this.actionBusy = true
       this.errorMessage = ''
       try {
         await generateEmergencyDispatch(this.item.event.eventId)
       } catch (error) {
-        this.errorMessage = error instanceof Error ? error.message : '调度工单生成失败'
+        this.invalidateQuery()
+        await this.refresh()
+        if (this.item?.currentPlan?.status !== 'WAITING_APPROVAL' && this.item?.currentPlan?.status !== 'GENERATING') {
+          failure = error instanceof Error ? error.message : '调度工单生成失败'
+        }
       } finally {
         this.actionBusy = false
+        this.generationPending = false
+        if (!this.serverGenerating) this.operationStartedAt = 0
       }
       await this.refresh()
+      if (failure) this.errorMessage = failure
     },
 
     async markNoDispatch(reason: string) {
@@ -240,6 +271,11 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async runWorkflowAction(operation: () => Promise<void>) {
+      const before = this.item
+      let failure = ''
+      this.generationPending = true
+      this.operationStartedAt = Date.now()
+      this.elapsedSeconds = 0
       this.invalidateQuery()
       this.actionBusy = true
       this.errorMessage = ''
@@ -247,11 +283,18 @@ export const useEmergencyStore = defineStore('emergency', {
         await operation()
         this.item = null
       } catch (error) {
-        this.errorMessage = error instanceof Error ? error.message : '应急工作流操作失败'
+        this.invalidateQuery()
+        await this.refresh()
+        if (!before || !this.item || this.item.workflowVersion <= before.workflowVersion) {
+          failure = error instanceof Error ? error.message : '应急工作流操作失败'
+        }
       } finally {
         this.actionBusy = false
+        this.generationPending = false
+        if (!this.serverGenerating) this.operationStartedAt = 0
       }
       await this.refresh()
+      if (failure) this.errorMessage = failure
     },
 
     /** 旧接口只留给兼容测试或迁移诊断，不参与新版三级页面。 */

@@ -26,6 +26,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class FacilityAlertControllerTest {
+    @Test
+    void shouldSerializeLargeIdentifiersAsDecimalStrings() {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
+        for (long id : new long[] {2097225926893142017L, 2097225926893142019L, Long.MAX_VALUE}) {
+            var alert = new FacilityAlert(id, "桥梁", "位移", BigDecimal.ONE, null,
+                    BigDecimal.ZERO, BigDecimal.TEN, AlarmLevel.EMERGENCY,
+                    Instant.EPOCH, Instant.EPOCH, FacilityAlertStatus.PENDING, null);
+            com.fasterxml.jackson.databind.JsonNode json = mapper.valueToTree(FacilityAlertResponse.from(alert));
+            org.junit.jupiter.api.Assertions.assertTrue(json.path("alertId").isTextual());
+            org.junit.jupiter.api.Assertions.assertEquals(Long.toString(id), json.path("alertId").asText());
+        }
+    }
     private static final Instant NOW = Instant.parse("2026-09-08T02:00:00Z");
     private MockMvc mockMvc;
 

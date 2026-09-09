@@ -201,7 +201,7 @@ public final class RoadCapacityService {
         return new ModelRequest(systemPrompt, serializeFacts(facts), List.of(), 0.1);
     }
 
-    private String serializeFacts(RoadCapacityFacts facts) {
+    String serializeFacts(RoadCapacityFacts facts) {
         StringBuilder value = new StringBuilder();
         value.append("queryType=").append(facts.queryType()).append('\n');
         value.append("title=").append(facts.title()).append('\n');
@@ -249,7 +249,7 @@ public final class RoadCapacityService {
         }
     }
 
-    private String deterministicSummary(RoadCapacityFacts facts) {
+    String deterministicSummary(RoadCapacityFacts facts) {
         String first = "本次共评估%d条国省道路线，其中正常路线%d条、瓶颈路线%d条、严重瓶颈路线%d条。"
                 .formatted(facts.totalCount(), facts.normalCount(), facts.bottleneckCount(),
                         facts.severeBottleneckCount());

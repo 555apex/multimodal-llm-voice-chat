@@ -218,7 +218,7 @@ public final class VehiclePatternService {
         return new ModelRequest(prompt, serializeFacts(facts), List.of(), 0.1);
     }
 
-    private String serializeFacts(VehiclePatternFacts facts) {
+    String serializeFacts(VehiclePatternFacts facts) {
         StringBuilder out = new StringBuilder();
         out.append("queryType=").append(facts.queryType()).append('\n');
         out.append("title=").append(facts.title()).append('\n');
@@ -243,7 +243,7 @@ public final class VehiclePatternService {
         return out.toString();
     }
 
-    private String deterministicSummary(VehiclePatternFacts facts) {
+    String deterministicSummary(VehiclePatternFacts facts) {
         String first = "已完成" + facts.analysisCity() + "当前车型出行特征分析，相关统计按该城市最新记录形成。";
         String second;
         if (!facts.structureRows().isEmpty()) {

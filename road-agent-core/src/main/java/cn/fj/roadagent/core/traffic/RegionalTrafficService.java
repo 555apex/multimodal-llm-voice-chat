@@ -160,7 +160,7 @@ public final class RegionalTrafficService {
         return new ModelRequest(prompt, serializeFacts(facts), List.of(), 0.1);
     }
 
-    private String serializeFacts(RegionalTrafficFacts facts) {
+    String serializeFacts(RegionalTrafficFacts facts) {
         StringBuilder out = new StringBuilder("queryType=").append(facts.queryType()).append('\n')
                 .append("title=").append(facts.title()).append('\n')
                 .append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n')
@@ -193,7 +193,7 @@ public final class RegionalTrafficService {
                 || text.contains("卡口");
     }
 
-    private String deterministicSummary(RegionalTrafficFacts facts) {
+    String deterministicSummary(RegionalTrafficFacts facts) {
         String scope = facts.selectedRegions().stream().map(SelectedRegionResultItem::regionName).collect(Collectors.joining("、"));
         List<String> sentences = new ArrayList<>();
         sentences.add("本次对" + scope + "范围内的普通国省干线跨市联系进行无方向统计，共识别"

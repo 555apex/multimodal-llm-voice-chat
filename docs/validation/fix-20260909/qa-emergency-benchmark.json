@@ -1,0 +1,254 @@
+{
+  "schema": "road_agent_fix_20260909",
+  "backendImage": "sha256:ae6cfca0a8f16cfd852882d7d0ba85771eef5ea68850f2ecb96d0ed06c6f7c1b",
+  "results": [
+    {
+      "label": "warmup",
+      "seconds": 9.042709452000054,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 4
+    },
+    {
+      "label": "single-0",
+      "seconds": 8.408356578999701,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 5
+    },
+    {
+      "label": "single-1",
+      "seconds": 8.829082295000262,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 6
+    },
+    {
+      "label": "single-2",
+      "seconds": 8.667936856999404,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 7
+    },
+    {
+      "label": "single-3",
+      "seconds": 8.089064879000034,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 8
+    },
+    {
+      "label": "single-4",
+      "seconds": 8.891578231000494,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 9
+    },
+    {
+      "label": "single-5",
+      "seconds": 8.81275569600075,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 10
+    },
+    {
+      "label": "single-6",
+      "seconds": 8.699449216000176,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 11
+    },
+    {
+      "label": "single-7",
+      "seconds": 9.086518530999456,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 12
+    },
+    {
+      "label": "single-8",
+      "seconds": 9.207827977000306,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 13
+    },
+    {
+      "label": "single-9",
+      "seconds": 8.505365475999497,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 14
+    },
+    {
+      "label": "single-10",
+      "seconds": 8.58054667900069,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 15
+    },
+    {
+      "label": "single-11",
+      "seconds": 8.847465499999998,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 16
+    },
+    {
+      "label": "single-12",
+      "seconds": 8.765114935000383,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 17
+    },
+    {
+      "label": "single-13",
+      "seconds": 8.100782827999865,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 18
+    },
+    {
+      "label": "single-14",
+      "seconds": 10.61418469399996,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 19
+    },
+    {
+      "label": "single-15",
+      "seconds": 13.104387742000654,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 20
+    },
+    {
+      "label": "single-16",
+      "seconds": 8.811388676000206,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 21
+    },
+    {
+      "label": "single-17",
+      "seconds": 8.699879597999825,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 22
+    },
+    {
+      "label": "single-18",
+      "seconds": 8.76229732199954,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 23
+    },
+    {
+      "label": "single-19",
+      "seconds": 8.972767688999738,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 24
+    },
+    {
+      "label": "dual-0-0",
+      "seconds": 17.510307978000128,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 26
+    },
+    {
+      "label": "dual-0-1",
+      "seconds": 14.560284666999905,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 2
+    },
+    {
+      "label": "dual-1-0",
+      "seconds": 11.498127417999967,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 27
+    },
+    {
+      "label": "dual-1-1",
+      "seconds": 9.601083878999816,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 3
+    },
+    {
+      "label": "dual-2-0",
+      "seconds": 13.693543780000255,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 28
+    },
+    {
+      "label": "dual-2-1",
+      "seconds": 10.898191373999907,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 4
+    },
+    {
+      "label": "dual-3-0",
+      "seconds": 15.642490778000138,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 29
+    },
+    {
+      "label": "dual-3-1",
+      "seconds": 13.229803641000217,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 5
+    },
+    {
+      "label": "dual-4-0",
+      "seconds": 14.89429593099976,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 30
+    },
+    {
+      "label": "dual-4-1",
+      "seconds": 13.487263985000027,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 6
+    },
+    {
+      "label": "dual-5-0",
+      "seconds": 12.48589605000052,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 31
+    },
+    {
+      "label": "dual-5-1",
+      "seconds": 10.916969956000685,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 7
+    },
+    {
+      "label": "dual-6-0",
+      "seconds": 10.276377730000604,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 32
+    },
+    {
+      "label": "dual-6-1",
+      "seconds": 8.785556930999519,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 8
+    },
+    {
+      "label": "dual-7-0",
+      "seconds": 11.527217482999731,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 33
+    },
+    {
+      "label": "dual-7-1",
+      "seconds": 8.530550774999938,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 9
+    },
+    {
+      "label": "dual-8-0",
+      "seconds": 10.459531710000192,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 34
+    },
+    {
+      "label": "dual-8-1",
+      "seconds": 9.602715320999778,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 10
+    },
+    {
+      "label": "dual-9-0",
+      "seconds": 13.90659586899983,
+      "workflowId": "WF-706b9b19-a4e0-458a-87e8-be6b36b7787a",
+      "planVersion": 35
+    },
+    {
+      "label": "dual-9-1",
+      "seconds": 9.795685971000239,
+      "workflowId": "WF-4a999313-288a-4f0b-9bf7-32ea7988e259",
+      "planVersion": 11
+    }
+  ],
+  "singleP95": 10.61418469399996,
+  "dualP95": 15.642490778000138
+}

@@ -1,0 +1,83 @@
+[
+  {
+    "label": "single-0",
+    "characters": 17,
+    "firstChunk": 1.2857673820003583,
+    "elapsed": 2.35734675599997,
+    "audioSeconds": 3.52,
+    "rtf": 0.6697007829545369,
+    "underrunSeconds": 0
+  },
+  {
+    "label": "single-1",
+    "characters": 49,
+    "firstChunk": 1.275647772999946,
+    "elapsed": 7.056032461000086,
+    "audioSeconds": 10.56,
+    "rtf": 0.6681848921401596,
+    "underrunSeconds": 0
+  },
+  {
+    "label": "single-2",
+    "characters": 116,
+    "firstChunk": 1.26054595100004,
+    "elapsed": 18.73692284000026,
+    "audioSeconds": 28.72,
+    "rtf": 0.6523998203342709,
+    "underrunSeconds": 0
+  },
+  {
+    "label": "dual-0-0",
+    "characters": 49,
+    "firstChunk": 1.9380327499998202,
+    "elapsed": 10.072645080999791,
+    "audioSeconds": 9.68,
+    "rtf": 1.040562508367747,
+    "underrunSeconds": 0.2710654450000405
+  },
+  {
+    "label": "dual-0-1",
+    "characters": 116,
+    "firstChunk": 1.9571713300001647,
+    "elapsed": 19.728483646999848,
+    "audioSeconds": 24.4,
+    "rtf": 0.8085444117622889,
+    "underrunSeconds": 0.3199811849997971
+  },
+  {
+    "label": "dual-1-0",
+    "characters": 49,
+    "firstChunk": 1.9647258290001446,
+    "elapsed": 11.089443323000069,
+    "audioSeconds": 10.72,
+    "rtf": 1.0344629965485137,
+    "underrunSeconds": 0.2889342159999799
+  },
+  {
+    "label": "dual-1-1",
+    "characters": 116,
+    "firstChunk": 1.9436136859999351,
+    "elapsed": 20.825866528000006,
+    "audioSeconds": 25.36,
+    "rtf": 0.8212092479495271,
+    "underrunSeconds": 0.24351682699973054
+  },
+  {
+    "label": "dual-2-0",
+    "characters": 49,
+    "firstChunk": 1.946648556999662,
+    "elapsed": 10.135790762999932,
+    "audioSeconds": 9.76,
+    "rtf": 1.0385031519467143,
+    "underrunSeconds": 0.24904166200014544
+  },
+  {
+    "label": "dual-2-1",
+    "characters": 116,
+    "firstChunk": 1.958093440999619,
+    "elapsed": 21.66662027099983,
+    "audioSeconds": 27.28,
+    "rtf": 0.7942309483504336,
+    "underrunSeconds": 0.31116937400003764
+  }
+]

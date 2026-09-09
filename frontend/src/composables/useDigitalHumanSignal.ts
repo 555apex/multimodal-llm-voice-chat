@@ -8,6 +8,7 @@ export interface DigitalHumanSnapshot {
   playbackStatus: SpeechPlaybackStatus
   running: boolean
   hasAnswerDelta: boolean
+  facilityActionBusy?: boolean
   emergencyActionBusy: boolean
   errorActive: boolean
 }
@@ -18,6 +19,7 @@ export interface DigitalHumanSources {
   playbackAmplitude: Ref<number>
   running: Ref<boolean>
   lastAssistantMessage: Ref<AgentMessage | undefined>
+  facilityActionBusy?: Ref<boolean>
   emergencyActionBusy: Ref<boolean>
 }
 
@@ -25,7 +27,7 @@ export function resolveDigitalHumanMode(snapshot: DigitalHumanSnapshot): Digital
   if (snapshot.recording) return 'listening'
   if (snapshot.playbackStatus === 'playing') return 'speaking'
   if (snapshot.running && snapshot.hasAnswerDelta) return 'answering'
-  if (snapshot.running || snapshot.playbackStatus === 'loading' || snapshot.emergencyActionBusy) {
+  if (snapshot.running || snapshot.playbackStatus === 'loading' || snapshot.emergencyActionBusy || snapshot.facilityActionBusy) {
     return 'thinking'
   }
   if (snapshot.errorActive) return 'error'
@@ -71,6 +73,7 @@ export function useDigitalHumanSignal(sources: DigitalHumanSources) {
       running: sources.running.value,
       hasAnswerDelta: Boolean(message?.status === 'pending' && message.content.trim()),
       emergencyActionBusy: sources.emergencyActionBusy.value,
+      facilityActionBusy: sources.facilityActionBusy?.value ?? false,
       errorActive: errorActive.value,
     })
     const speechLevel = mode === 'speaking'

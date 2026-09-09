@@ -1,0 +1,73 @@
+{
+  "errors": [],
+  "requests": [
+    {
+      "path": "/api/v1/speech/capabilities",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/emergency-workflows/inbox",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts/health-report",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts/focus",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/emergency-workflows/history",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/conversations/f7fdfbb1-0ace-4d31-82e8-6288d74915e2/messages/stream",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/emergency-workflows/inbox",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts/focus",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/facility-alerts",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/emergency-workflows/inbox",
+      "status": 200
+    },
+    {
+      "path": "/api/v1/speech/capabilities",
+      "status": 200
+    }
+  ],
+  "checks": [
+    "production_facility_report",
+    "production_facility_focus",
+    "production_emergency_inbox",
+    "live_query_and_foreground_frame_intervals",
+    "production_demo"
+  ],
+  "motion": {
+    "maxGap": 104.70000000000005,
+    "longTasks": []
+  },
+  "passed": true
+}

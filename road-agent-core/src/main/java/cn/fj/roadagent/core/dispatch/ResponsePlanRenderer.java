@@ -55,6 +55,26 @@ final class ResponsePlanRenderer {
         return Set.copyOf(result);
     }
 
+    Map<String, String> modelFields(EmergencyResponsePlanSnapshot plan, EmergencyEvent event) {
+        Map<String, String> fields = new java.util.LinkedHashMap<>();
+        placeholders(plan.rescuePlanTemplate()).stream().sorted()
+                .filter(key -> systemValue(key, event) == null)
+                .forEach(key -> fields.put("F" + (fields.size() + 1), key));
+        return fields;
+    }
+
+    Map<String, String> expandModelFields(EmergencyResponsePlanSnapshot plan, EmergencyEvent event,
+                                          Map<String, String> values) {
+        Map<String, String> fields = modelFields(plan, event);
+        Map<String, String> expanded = new java.util.LinkedHashMap<>();
+        if (values != null) values.forEach((key, value) -> {
+            String target = fields.getOrDefault(key, key);
+            if (expanded.containsKey(target)) throw new IllegalArgumentException("重复的预案填充项：" + key);
+            expanded.put(target, value);
+        });
+        return expanded;
+    }
+
     private String systemValue(String key, EmergencyEvent event) {
         if ("事件编号".equals(key)) {
             return event.customId().isBlank() ? event.eventId() : event.customId();

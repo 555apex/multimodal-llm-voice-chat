@@ -1,9 +1,12 @@
 import { defineStore } from 'pinia'
 import { fetchSpeechCapabilities, synthesizeSpeech } from '../api/speechApi'
 import { splitSpeechText } from '../utils/speechText'
+import { streamingSpeechSegments } from '../utils/speechText'
+import { PcmSpeechPlayer, receiveSpeech } from '../utils/pcmSpeech'
 import type { SpeechCapabilities, SpeechPlaybackStatus } from '../types/speech'
 
 let activeAudio: HTMLAudioElement | null = null
+let activePcm: PcmSpeechPlayer | null = null
 let activeObjectUrl = ''
 let activeAbort: AbortController | null = null
 let activePlaybackCompletion: {
@@ -129,7 +132,7 @@ export const useSpeechStore = defineStore('speech', {
     capabilities: null as SpeechCapabilities | null,
     capabilitiesLoading: false,
     capabilityError: '',
-    autoReadEnabled: false,
+    autoReadEnabled: true,
     surfaceActive: true,
     playbackMessageId: '',
     playbackStatus: 'idle' as SpeechPlaybackStatus,
@@ -169,9 +172,15 @@ export const useSpeechStore = defineStore('speech', {
     async toggleMessage(messageId: string, speechText: string) {
       if (this.playbackMessageId === messageId) {
         if (this.playbackStatus === 'playing') {
+          activePcm?.pause()
           activeAudio?.pause()
           stopAmplitudeTracking((level) => { this.playbackAmplitude = level })
           this.playbackStatus = 'paused'
+          return
+        }
+        if (this.playbackStatus === 'paused' && activePcm) {
+          activePcm.resume()
+          this.playbackStatus = 'playing'
           return
         }
         if (this.playbackStatus === 'paused' && activeAudio) {
@@ -204,6 +213,24 @@ export const useSpeechStore = defineStore('speech', {
       this.playbackError = ''
 
       try {
+        if (this.capabilities.ttsStreamingAvailable && typeof AudioWorkletNode !== 'undefined' && typeof AudioContext !== 'undefined') {
+          const player = new PcmSpeechPlayer((event) => {
+            if (generation !== playbackGeneration || this.playbackStatus === 'paused') return
+            if (event.type === 'playing') this.playbackStatus = 'playing'
+            if (event.type === 'level') this.playbackAmplitude = event.level ?? 0
+          })
+          activePcm = player
+          await player.open()
+          if (generation !== playbackGeneration) { player.close(); return }
+          for (const text of streamingSpeechSegments(speechText)) {
+            await receiveSpeech(text, player, activeAbort.signal)
+            if (generation !== playbackGeneration) return
+          }
+          player.end()
+          await player.done
+          if (generation === playbackGeneration) this.finishPlayback()
+          return
+        }
         let nextAudio = this.loadSegment(messageId, 0, segments[0], activeAbort.signal)
         for (let index = 0; index < segments.length; index += 1) {
           const blob = await nextAudio
@@ -211,6 +238,7 @@ export const useSpeechStore = defineStore('speech', {
           nextAudio = index + 1 < segments.length
             ? this.loadSegment(messageId, index + 1, segments[index + 1], activeAbort.signal)
             : Promise.resolve(new Blob())
+          void nextAudio.catch(() => undefined)
           await this.playBlob(blob, generation)
         }
         if (generation === playbackGeneration) {
@@ -218,6 +246,7 @@ export const useSpeechStore = defineStore('speech', {
         }
       } catch (error) {
         if (generation !== playbackGeneration) return
+        activeAbort?.abort()
         this.releaseActiveAudio()
         this.playbackStatus = 'failed'
         this.playbackError = error instanceof Error && error.name !== 'AbortError'
@@ -287,6 +316,8 @@ export const useSpeechStore = defineStore('speech', {
     },
 
     releaseActiveAudio(error?: Error) {
+      activePcm?.close()
+      activePcm = null
       const completion = activePlaybackCompletion
       activePlaybackCompletion = null
       stopAmplitudeTracking((level) => { this.playbackAmplitude = level })

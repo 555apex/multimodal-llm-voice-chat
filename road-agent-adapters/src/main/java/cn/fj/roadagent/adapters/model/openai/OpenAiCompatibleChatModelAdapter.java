@@ -30,6 +30,10 @@ import java.util.stream.Stream;
  */
 public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     private static final Logger LOGGER = LoggerFactory.getLogger(OpenAiCompatibleChatModelAdapter.class);
+    private static final java.util.concurrent.ScheduledExecutorService STREAM_DEADLINES =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(task -> {
+                Thread thread = new Thread(task, "model-stream-deadline"); thread.setDaemon(true); return thread;
+            });
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
@@ -91,7 +95,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
                     request.systemPrompt(),
                     request.userPrompt() + repairInstruction(first, firstException, resultType),
                     request.history(),
-                    0.0
+                    0.0, request.maxOutputTokens()
             );
             String repaired = complete(repairRequest, true);
             try {
@@ -117,6 +121,8 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     public void stream(ModelRequest request, ModelStreamListener listener) {
         HttpRequest httpRequest = buildHttpRequest(request, true, false);
         boolean receivedContent = false;
+        boolean completed = false;
+        var timedOut = new java.util.concurrent.atomic.AtomicBoolean();
         try {
             HttpResponse<Stream<String>> response = httpClient.send(
                     httpRequest, HttpResponse.BodyHandlers.ofLines()
@@ -124,6 +130,10 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
             requireSuccess(response.statusCode(), "模型流式请求失败");
 
             try (Stream<String> lines = response.body()) {
+                var deadline = STREAM_DEADLINES.schedule(() -> {
+                    timedOut.set(true); lines.close();
+                }, requestTimeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+                try {
                 var iterator = lines.iterator();
                 while (iterator.hasNext()) {
                     String line = iterator.next().trim();
@@ -132,6 +142,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
                     }
                     String data = line.substring(5).trim();
                     if ("[DONE]".equals(data)) {
+                        completed = true;
                         break;
                     }
                     String delta = extractDelta(data);
@@ -140,15 +151,20 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
                         listener.onDelta(delta);
                     }
                 }
+                } finally { deadline.cancel(false); }
             }
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw modelError("模型流式请求被中断", exception);
         } catch (IOException | RuntimeException exception) {
+            if (timedOut.get()) throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型响应超时", exception);
             if (exception instanceof ExternalServiceException external) {
                 throw external;
             }
             throw modelError("模型流式请求失败", exception);
+        }
+        if (timedOut.get() || !completed) {
+            throw new ExternalServiceException("CHAT_MODEL", timedOut.get() ? "MODEL_TIMEOUT" : "MODEL_STREAM_INTERRUPTED", "模型流式回答中断");
         }
         if (!receivedContent) {
             throw new ExternalServiceException(
@@ -159,6 +175,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
 
     private String complete(ModelRequest request, boolean structured) {
         HttpRequest httpRequest = buildHttpRequest(request, false, structured);
+        long started = System.nanoTime();
         try {
             HttpResponse<String> response = httpClient.send(
                     httpRequest, HttpResponse.BodyHandlers.ofString()
@@ -172,6 +189,12 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
             }
             requireSuccess(response.statusCode(), "模型请求失败");
             JsonNode root = objectMapper.readTree(response.body());
+            if ("length".equals(root.path("choices").path(0).path("finish_reason").asText())) {
+                throw new ExternalServiceException("CHAT_MODEL", "MODEL_TRUNCATED", "模型输出超过长度限制，请缩小问题范围后重试");
+            }
+            LOGGER.info("Model complete model={} structured={} elapsedMs={} promptTokens={} completionTokens={}",
+                    modelName, structured, (System.nanoTime() - started) / 1_000_000,
+                    root.path("usage").path("prompt_tokens"), root.path("usage").path("completion_tokens"));
             JsonNode content = root.path("choices").path(0).path("message").path("content");
             if (!content.isTextual() || content.asText().isBlank()) {
                 throw new ExternalServiceException(
@@ -196,6 +219,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         body.put("messages", buildMessages(request));
         body.put("temperature", request.temperature());
         body.put("stream", stream);
+        body.put("max_tokens", request.maxOutputTokens());
         if (enableThinking != null) {
             body.put("chat_template_kwargs", Map.of("enable_thinking", enableThinking));
         }
@@ -241,6 +265,9 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
 
     private String extractDelta(String data) throws JsonProcessingException {
         JsonNode root = objectMapper.readTree(data);
+        if ("length".equals(root.path("choices").path(0).path("finish_reason").asText())) {
+            throw new ExternalServiceException("CHAT_MODEL", "MODEL_TRUNCATED", "模型输出超过长度限制");
+        }
         JsonNode error = root.path("error");
         if (!error.isMissingNode() && !error.isNull()) {
             throw new ExternalServiceException(
@@ -301,6 +328,13 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     }
 
     private ExternalServiceException modelError(String message, Throwable cause) {
+        LOGGER.warn("Model request failed model={} type={}", modelName, cause.getClass().getSimpleName());
+        if (cause instanceof java.net.http.HttpTimeoutException) {
+            return new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型响应超时，请稍后重试", cause);
+        }
+        if (cause instanceof IOException) {
+            return new ExternalServiceException("CHAT_MODEL", "MODEL_CONNECTION_FAILED", "模型连接中断，请稍后重试", cause);
+        }
         return new ExternalServiceException(
                 "CHAT_MODEL", "MODEL_UPSTREAM_ERROR", message, cause
         );

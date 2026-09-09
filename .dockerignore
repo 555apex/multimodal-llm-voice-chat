@@ -14,5 +14,7 @@ tmp
 **/.env.*
 **/.releases
 **/outputs
+**/pytest-of-*
+**/.pytest_cache
 config/api-test.env
 config/api-test.ps1

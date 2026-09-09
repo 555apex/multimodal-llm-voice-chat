@@ -215,6 +215,7 @@ onMounted(async () => {
   min-width: 0;
   overflow: hidden;
   isolation: isolate;
+  contain: layout paint;
 }
 
 .digital-human-aura {
@@ -266,7 +267,7 @@ onMounted(async () => {
     transform 600ms cubic-bezier(.22, 1, .36, 1),
     filter 400ms ease;
   pointer-events: none;
-  will-change: opacity, transform, filter;
+  will-change: opacity, transform;
 }
 
 .digital-human-portrait-layer.is-active {
@@ -386,10 +387,7 @@ onMounted(async () => {
   box-shadow: 0 0 24px rgba(236, 108, 99, .28);
 }
 
-.digital-human-portrait-stage[data-mode='error'] .digital-human-pose-motion,
-.digital-human-portrait-stage[data-mode='error'] .digital-human-aura {
-  animation-play-state: paused;
-}
+
 
 .digital-human-loading {
   position: absolute;

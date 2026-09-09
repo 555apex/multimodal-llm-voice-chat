@@ -49,6 +49,17 @@ class ResponsePlanRendererTest {
         );
     }
 
+    @Test
+    void shortModelKeysMapBackToPublishedFieldsAndExcludeSystemFacts() {
+        assertEquals(Map.of("F1", "封控范围"), renderer.modelFields(plan(), event()));
+        var values = renderer.expandModelFields(plan(), event(), Map.of("F1", "现场核实后设定"));
+        assertTrue(renderer.render(plan(), event(), values, "").contains("现场核实后设定"));
+        assertThrows(IllegalArgumentException.class, () -> renderer.render(plan(), event(),
+                renderer.expandModelFields(plan(), event(), Map.of("F99", "不可信填充")), ""));
+        assertThrows(IllegalArgumentException.class, () -> renderer.expandModelFields(plan(), event(),
+                Map.of("F1", "值1", "封控范围", "值2")));
+    }
+
     private EmergencyEvent event() {
         return new EmergencyEvent(
                 "INC-001", "INC-001", Instant.parse("2026-09-04T00:00:00Z"),

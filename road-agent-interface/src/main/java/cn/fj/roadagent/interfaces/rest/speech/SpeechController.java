@@ -96,6 +96,22 @@ public final class SpeechController {
                 .body(audio.content());
     }
 
+    @PostMapping(value = "/syntheses/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> stream(
+            @Valid @RequestBody SpeechSynthesisRequest body) {
+        return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
+                .cacheControl(CacheControl.noStore()).header("X-Accel-Buffering", "no")
+                .body(output -> {
+                    try {
+                        synthesizeUseCase.stream(new SynthesizeSpeechCommand(body.text()), output);
+                    } catch (RuntimeException failure) {
+                        output.write(("event: audio.failed\ndata: {\"message\":\"语音合成中断，请重试\"}\n\n")
+                                .getBytes(StandardCharsets.UTF_8));
+                        output.flush();
+                    }
+                });
+    }
+
     private String traceId(HttpServletRequest request) {
         Object value = request.getAttribute(TraceIdFilter.ATTRIBUTE_NAME);
         return value == null ? "unknown" : value.toString();

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { streamAgentMessage } from '../api/agentApi'
 import { decideDispatch } from '../api/dispatchApi'
 import { useSpeechStore } from './speech'
+import { speechSummary } from '../utils/speechText'
 import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RunFailedData } from '../types/agent'
 import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
@@ -53,6 +54,7 @@ export const useAgentStore = defineStore('agent', {
     stage: null as AgentStage | null,
     toolProgress: null as AgentToolProgress | null,
     approvalBusyPlanId: '',
+    autoSpokenMessageId: '',
   }),
 
   actions: {
@@ -107,6 +109,11 @@ export const useAgentStore = defineStore('agent', {
           break
         case 'answer.speech':
           message.speechText = (event.data as { content: string }).content
+          if (message.speechText && this.autoSpokenMessageId !== messageId
+            && useSpeechStore().autoReadEnabled && useSpeechStore().surfaceActive) {
+            this.autoSpokenMessageId = messageId
+            void useSpeechStore().speak(messageId, speechSummary(message.speechText))
+          }
           break
         case 'result.traffic':
           message.traffic = event.data as TrafficQueryResult
@@ -118,9 +125,11 @@ export const useAgentStore = defineStore('agent', {
         case 'run.completed':
           message.status = 'completed'
           if (message.speechText
+            && this.autoSpokenMessageId !== message.id
             && useSpeechStore().autoReadEnabled
             && useSpeechStore().surfaceActive) {
-            void useSpeechStore().speak(message.id, message.speechText)
+            this.autoSpokenMessageId = message.id
+            void useSpeechStore().speak(message.id, speechSummary(message.speechText))
           }
           break
         case 'run.failed': {
@@ -137,7 +146,7 @@ export const useAgentStore = defineStore('agent', {
           break
         }
       }
-      this.persist()
+      if (event.name !== 'answer.delta' && event.name !== 'tool.progress' && event.name !== 'stage.changed') this.persist()
     },
 
     async decide(messageId: string, decision: 'APPROVE' | 'REJECT', comment = '') {

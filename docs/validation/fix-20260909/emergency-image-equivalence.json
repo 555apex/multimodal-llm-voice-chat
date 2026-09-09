@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "benchmarkImage": "sha256:ae6cfca0a8f16cfd852882d7d0ba85771eef5ea68850f2ecb96d0ed06c6f7c1b",
+  "releaseImage": "sha256:038fac0e00215d9ae0c37ccb4bf4a164626ea1039f9ec1209e424e87c66d9a07",
+  "changedClasses": [
+    "cn/fj/roadagent/core/traffic/TrafficLiveResponder.class",
+    "cn/fj/roadagent/core/traffic/RoadCapacityService.class",
+    "cn/fj/roadagent/core/traffic/VehiclePatternService.class",
+    "cn/fj/roadagent/core/traffic/RegionalTrafficService.class",
+    "cn/fj/roadagent/core/traffic/OdTrafficService.class",
+    "cn/fj/roadagent/core/traffic/HighwayTrafficService.class",
+    "cn/fj/roadagent/core/traffic/HighwayTrafficSkill.class"
+  ],
+  "identicalClasses": 304
+}

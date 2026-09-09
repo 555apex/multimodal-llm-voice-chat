@@ -34,7 +34,7 @@ const {
   errorMessage: emergencyError,
 } = storeToRefs(emergencyStore)
 const facilityStore = useFacilityStore()
-const { counts: facilityCounts } = storeToRefs(facilityStore)
+const { counts: facilityCounts, actionBusy: facilityActionBusy } = storeToRefs(facilityStore)
 const speechStore = useSpeechStore()
 const {
   capabilities: speechCapabilities,
@@ -60,13 +60,16 @@ const examples = [
 
 const lastAssistantMessage = computed(() => [...messages.value].reverse()
   .find((message) => message.role === 'assistant'))
+const emergencyProcessing = computed(() => emergencyActionBusy.value
+  || ['GENERATING', 'REVISING'].includes(emergencyItem.value?.workflowStatus ?? ''))
 const digitalHumanSignal = useDigitalHumanSignal({
   recording,
   playbackStatus,
   playbackAmplitude,
   running,
   lastAssistantMessage,
-  emergencyActionBusy,
+  emergencyActionBusy: emergencyProcessing,
+  facilityActionBusy,
 })
 
 const pendingCount = computed(() => totalPending.value)
@@ -302,6 +305,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             :item="emergencyItem"
             :stage="emergencyStage"
             :busy="emergencyActionBusy"
+            :elapsed-seconds="emergencyStore.operationStartedAt ? emergencyStore.elapsedSeconds : undefined"
             :error-message="emergencyError"
             @generate="emergencyStore.generate"
             @no-dispatch="emergencyStore.markNoDispatch"

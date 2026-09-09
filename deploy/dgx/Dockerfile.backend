@@ -4,13 +4,15 @@ ARG JAVA_RUNTIME_IMAGE=eclipse-temurin:17-jre-jammy
 FROM ${JAVA_BUILD_IMAGE} AS build
 
 WORKDIR /workspace
+ENV MAVEN_OPTS="-Djava.net.preferIPv4Stack=true"
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
-RUN chmod +x mvnw \
-    && ./mvnw -B verify
+RUN --mount=type=cache,target=/root/.m2 printf 'timeout=30\ntries=2\ninet4_only=on\n' > /root/.wgetrc \
+    && chmod +x mvnw \
+    && ./mvnw -B -Daether.connector.connectTimeout=10000 -Daether.connector.requestTimeout=30000 verify
 
 FROM ${JAVA_RUNTIME_IMAGE} AS runtime
 

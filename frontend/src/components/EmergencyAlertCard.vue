@@ -13,6 +13,7 @@ const props = defineProps<{
   item: EmergencyWorkflowItem
   stage: WorkflowStage
   busy: boolean
+  elapsedSeconds?: number
   errorMessage: string
 }>()
 
@@ -206,11 +207,12 @@ function formatTime(value?: string) {
         </div>
       </div>
 
-      <div v-if="generationBusy" class="dispatch-generating-state">
+      <div v-if="generationBusy || (busy && elapsedSeconds !== undefined)" class="dispatch-generating-state">
+        <span>已等待 {{ elapsedSeconds ?? 0 }} 秒。</span>
         <span class="progress-dot"></span>大模型正在提出受限资源需求，系统将按库存和距离完成匹配，您可以继续使用聊天功能。
       </div>
 
-      <div v-if="generationFailed" class="dispatch-failed-state">
+      <div v-if="generationFailed && !busy" class="dispatch-failed-state">
         <p>{{ plan?.errorMessage || '调度方案生成失败。' }}</p>
         <button :disabled="busy" @click="emit('generate')">{{ busy ? '重试中…' : '重新生成' }}</button>
       </div>

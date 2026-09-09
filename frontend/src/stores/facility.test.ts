@@ -25,6 +25,32 @@ const page: FacilityAlertPage = {
 }
 
 describe('facility warning store', () => {
+  it('retains the form after a failed action and permits switching to focus', async () => {
+    const store = useFacilityStore()
+    store.formOpen = true
+    store.pageData = page
+    vi.mocked(transitionFacilityAlert).mockRejectedValueOnce(new Error('设施告警不存在'))
+    await expect(store.transition('2097225926893142019', 'PENDING', 'CONFIRMED', '核查')).rejects.toThrow()
+    expect(store.actionError).toBe('设施告警不存在')
+    expect(store.errorMessage).toBe('')
+    expect(store.formOpen).toBe(true)
+    vi.mocked(fetchFacilityFocus).mockResolvedValueOnce([])
+    await store.showFocus()
+    expect(store.formOpen).toBe(false)
+    expect(fetchFacilityFocus).toHaveBeenCalled()
+  })
+
+  it('refreshes the current page after submission and clamps an empty last page', async () => {
+    const store = useFacilityStore()
+    store.pageData = { ...page, page: 2, total: 41 }
+    store.formOpen = true
+    vi.mocked(transitionFacilityAlert).mockResolvedValueOnce({} as never)
+    vi.mocked(fetchFacilityAlerts).mockResolvedValueOnce({ ...page, page: 2, total: 40 })
+    await store.transition('9223372036854775807', 'CONFIRMED', 'CLOSED', '已解决', 'RESOLVED')
+    expect(fetchFacilityAlerts).toHaveBeenNthCalledWith(1, 'PENDING', '', 2, 20)
+    expect(fetchFacilityAlerts).toHaveBeenNthCalledWith(2, 'PENDING', '', 1, 20)
+    expect(store.formOpen).toBe(false)
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers()
@@ -80,7 +106,7 @@ describe('facility warning store', () => {
 
   it('writes expected and target statuses then refreshes the list', async () => {
     vi.mocked(transitionFacilityAlert).mockResolvedValue({
-      alertId: 42, facilityName: '闽江大桥', metricName: '主梁应变',
+      alertId: '42', facilityName: '闽江大桥', metricName: '主梁应变',
       alarmLevel: 'EMERGENCY', alarmLevelName: '紧急',
       collectTime: '2026-09-08T01:59:30Z', triggerTime: '2026-09-08T01:59:00Z',
       status: 'CONFIRMED', statusName: '处理中', remark: '【已确认】已派员',
@@ -88,9 +114,9 @@ describe('facility warning store', () => {
     })
     const store = useFacilityStore()
 
-    await store.transition(42, 'PENDING', 'CONFIRMED', '已派员')
+    await store.transition('42', 'PENDING', 'CONFIRMED', '已派员')
 
-    expect(transitionFacilityAlert).toHaveBeenCalledWith(42, {
+    expect(transitionFacilityAlert).toHaveBeenCalledWith('42', {
       expectedStatus: 'PENDING', targetStatus: 'CONFIRMED',
       resolutionType: undefined, remark: '已派员',
     })

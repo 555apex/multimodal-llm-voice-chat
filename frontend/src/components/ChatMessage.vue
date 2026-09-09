@@ -20,9 +20,9 @@ const emit = defineEmits<{
         <p v-if="message.errorMessage" class="message-error">{{ message.errorMessage }}</p>
       </div>
       <MessageSpeechButton
-        v-if="message.role === 'assistant' && message.status === 'completed' && message.speechText"
+        v-if="message.role === 'assistant' && message.status !== 'failed' && message.speechText"
         :message-id="message.id"
-        :speech-text="message.speechText"
+        :speech-text="message.content || message.speechText"
       />
 
       <template v-if="message.trafficResults?.length">

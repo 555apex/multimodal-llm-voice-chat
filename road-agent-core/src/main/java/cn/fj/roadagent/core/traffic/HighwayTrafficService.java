@@ -274,7 +274,7 @@ public final class HighwayTrafficService {
         return new ModelRequest(systemPrompt, serializeFacts(facts), List.of(), 0.1);
     }
 
-    private String verifiedCause(HighwayTrafficQuery query, HighwayTrafficFacts facts) {
+    String verifiedCause(HighwayTrafficQuery query, HighwayTrafficFacts facts) {
         Set<String> abnormalRoutes = java.util.stream.Stream.of(
                         facts.routeSummaries().stream()
                                 .filter(summary -> summary.status().abnormal())
@@ -348,7 +348,7 @@ public final class HighwayTrafficService {
         return event -> seen.add(event.eventCode());
     }
 
-    private String serializeFacts(HighwayTrafficFacts facts) {
+    String serializeFacts(HighwayTrafficFacts facts) {
         StringBuilder value = new StringBuilder();
         value.append("queryType=").append(facts.queryType()).append('\n');
         value.append("title=").append(facts.title()).append('\n');

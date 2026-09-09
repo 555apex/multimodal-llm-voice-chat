@@ -5,6 +5,10 @@ public record SpeechProviderCapabilities(
         boolean asrAvailable,
         boolean ttsAvailable,
         String asrModel,
-        String ttsVoice
+        String ttsVoice,
+        boolean ttsStreamingAvailable
 ) {
+    public SpeechProviderCapabilities(boolean asr, boolean tts, String model, String voice) {
+        this(asr, tts, model, voice, false);
+    }
 }

@@ -48,7 +48,7 @@ public final class PythonSpeechServiceAdapter implements
                 throw unavailable("SPEECH_EMPTY_CAPABILITIES", "语音服务没有返回能力信息", null);
             }
             return new SpeechProviderCapabilities(
-                    body.asrAvailable(), body.ttsAvailable(), body.asrModel(), body.ttsVoice()
+                    body.asrAvailable(), body.ttsAvailable(), body.asrModel(), body.ttsVoice(), body.ttsStreamingAvailable()
             );
         } catch (RestClientException exception) {
             throw unavailable("SPEECH_UNAVAILABLE", "语音服务尚未就绪", exception);
@@ -102,6 +102,27 @@ public final class PythonSpeechServiceAdapter implements
         }
     }
 
+    @Override
+    public void stream(SynthesizeSpeechCommand command, java.io.OutputStream output) {
+        restClient.post().uri(baseUrl + "/v1/tts/speech/stream")
+                .contentType(MediaType.APPLICATION_JSON).accept(MediaType.TEXT_EVENT_STREAM)
+                .body(new TtsRequest(command.text()))
+                .exchange((request, response) -> {
+                    if (!response.getStatusCode().is2xxSuccessful()) {
+                        throw unavailable("TTS_STREAM_FAILED", "流式语音暂不可用，请重试", null);
+                    }
+                    try (var input = response.getBody()) {
+                        byte[] bytes = new byte[8192];
+                        int count;
+                        while ((count = input.read(bytes)) != -1) {
+                            output.write(bytes, 0, count);
+                            output.flush();
+                        }
+                    }
+                    return null;
+                });
+    }
+
     private ExternalServiceException unavailable(String code, String message, Throwable cause) {
         return cause == null
                 ? new ExternalServiceException("SPEECH", code, message)
@@ -113,7 +134,8 @@ public final class PythonSpeechServiceAdapter implements
             boolean asrAvailable,
             boolean ttsAvailable,
             String asrModel,
-            String ttsVoice
+            String ttsVoice,
+            boolean ttsStreamingAvailable
     ) {
     }
 

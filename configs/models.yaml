@@ -11,6 +11,18 @@ models:
     container_directory: /models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice
     device: cuda:0
     speaker: Serena
+    engine: standard
+    implementation: qwen-tts==0.1.1
+    workers: 1
+    accelerated_candidate:
+      release_approved: false
+      reason: dual-user synthesis ratio exceeds 0.8 on this DGX
+      implementation: faster-qwen3-tts==0.3.2
+      wheel_sha256: b17b2839d56cb178f5c382d85214ae62852b5728830bfeda066e6a15c832a364
+      workers: 2
+      max_seq_len: 1024
+      chunk_size: 24
+      stream_format: pcm_s16le_24000_mono
   asr:
     directory: /home/whtc/models/Systran--faster-whisper-small
     container_directory: /models/Systran--faster-whisper-small

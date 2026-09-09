@@ -1,0 +1,408 @@
+{
+  "backendImage": "sha256:038fac0e00215d9ae0c37ccb4bf4a164626ea1039f9ec1209e424e87c66d9a07",
+  "results": [
+    {
+      "label": "single-0",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.50634095300029,
+      "totalSeconds": 2.012376308000057,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-1",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 1.4788482119993205,
+      "totalSeconds": 2.6512059890001183,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-2",
+      "question": "福州、厦门、泉州的跨区域交通联系如何？",
+      "firstBusinessSeconds": 0.4698682190000909,
+      "totalSeconds": 1.941008982999847,
+      "queryTypes": [
+        "REGIONAL_TRAFFIC_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-3",
+      "question": "福州的出行主要联系哪些城市？",
+      "firstBusinessSeconds": 0.408259322000049,
+      "totalSeconds": 1.7499059260007925,
+      "queryTypes": [
+        "OD_DESTINATION_TENDENCY"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-4",
+      "question": "福州、厦门、泉州的城市联系矩阵如何？",
+      "firstBusinessSeconds": 0.4383755550006754,
+      "totalSeconds": 1.7485887780003395,
+      "queryTypes": [
+        "OD_CONNECTION_MATRIX"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-5",
+      "question": "福州市24小时分车型出行规律如何？",
+      "firstBusinessSeconds": 0.3078167170006054,
+      "totalSeconds": 1.2433835520005232,
+      "queryTypes": [
+        "VEHICLE_HOURLY_PATTERN"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-6",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.2879256579999492,
+      "totalSeconds": 1.886810682000032,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-7",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 1.4728034339996157,
+      "totalSeconds": 2.6311321349994614,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-8",
+      "question": "福州、厦门、泉州的跨区域交通联系如何？",
+      "firstBusinessSeconds": 0.4467365410000639,
+      "totalSeconds": 1.6235642379997444,
+      "queryTypes": [
+        "REGIONAL_TRAFFIC_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-9",
+      "question": "福州的出行主要联系哪些城市？",
+      "firstBusinessSeconds": 0.4397646059996987,
+      "totalSeconds": 1.536392068999703,
+      "queryTypes": [
+        "OD_DESTINATION_TENDENCY"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-10",
+      "question": "福州、厦门、泉州的城市联系矩阵如何？",
+      "firstBusinessSeconds": 0.4452120420000938,
+      "totalSeconds": 1.7293680209995728,
+      "queryTypes": [
+        "OD_CONNECTION_MATRIX"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-11",
+      "question": "福州市24小时分车型出行规律如何？",
+      "firstBusinessSeconds": 0.30331808000028104,
+      "totalSeconds": 1.3642074330000469,
+      "queryTypes": [
+        "VEHICLE_HOURLY_PATTERN"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-12",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.2899652789992615,
+      "totalSeconds": 1.9737564269998984,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-13",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 1.4719823409996025,
+      "totalSeconds": 2.5997045959993557,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-14",
+      "question": "福州、厦门、泉州的跨区域交通联系如何？",
+      "firstBusinessSeconds": 0.4032248540006549,
+      "totalSeconds": 1.6110811079997802,
+      "queryTypes": [
+        "REGIONAL_TRAFFIC_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-15",
+      "question": "福州的出行主要联系哪些城市？",
+      "firstBusinessSeconds": 0.4020857089999481,
+      "totalSeconds": 1.5269899449995137,
+      "queryTypes": [
+        "OD_DESTINATION_TENDENCY"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-16",
+      "question": "福州、厦门、泉州的城市联系矩阵如何？",
+      "firstBusinessSeconds": 0.4097962859996187,
+      "totalSeconds": 1.719650690999515,
+      "queryTypes": [
+        "OD_CONNECTION_MATRIX"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-17",
+      "question": "福州市24小时分车型出行规律如何？",
+      "firstBusinessSeconds": 0.296566508000069,
+      "totalSeconds": 1.385440744999869,
+      "queryTypes": [
+        "VEHICLE_HOURLY_PATTERN"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-18",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.29213054699994245,
+      "totalSeconds": 1.9115291509997405,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "single-19",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 1.468866023999908,
+      "totalSeconds": 2.7391615360002106,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-0-0",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.2905877909997798,
+      "totalSeconds": 2.6431615640003656,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-0-1",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 2.1839773519996015,
+      "totalSeconds": 3.4026758800000607,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-1-0",
+      "question": "福州、厦门、泉州的跨区域交通联系如何？",
+      "firstBusinessSeconds": 0.40283392099991033,
+      "totalSeconds": 2.1289785080007277,
+      "queryTypes": [
+        "REGIONAL_TRAFFIC_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-1-1",
+      "question": "福州的出行主要联系哪些城市？",
+      "firstBusinessSeconds": 0.4911008720000609,
+      "totalSeconds": 1.872841805000462,
+      "queryTypes": [
+        "OD_DESTINATION_TENDENCY"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-2-0",
+      "question": "福州、厦门、泉州的城市联系矩阵如何？",
+      "firstBusinessSeconds": 0.48531143000036536,
+      "totalSeconds": 1.9600621390000015,
+      "queryTypes": [
+        "OD_CONNECTION_MATRIX"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-2-1",
+      "question": "福州市24小时分车型出行规律如何？",
+      "firstBusinessSeconds": 0.29490875499959657,
+      "totalSeconds": 1.5874473429994396,
+      "queryTypes": [
+        "VEHICLE_HOURLY_PATTERN"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-3-0",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.29422832900036155,
+      "totalSeconds": 2.6077784930002963,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-3-1",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 2.1526344730000346,
+      "totalSeconds": 3.342162656000255,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-4-0",
+      "question": "福州、厦门、泉州的跨区域交通联系如何？",
+      "firstBusinessSeconds": 0.4395750189996761,
+      "totalSeconds": 2.218478548999883,
+      "queryTypes": [
+        "REGIONAL_TRAFFIC_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-4-1",
+      "question": "福州的出行主要联系哪些城市？",
+      "firstBusinessSeconds": 0.39675512699977844,
+      "totalSeconds": 2.0157528019999518,
+      "queryTypes": [
+        "OD_DESTINATION_TENDENCY"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-5-0",
+      "question": "福州、厦门、泉州的城市联系矩阵如何？",
+      "firstBusinessSeconds": 0.40428397899995616,
+      "totalSeconds": 1.8456714260000808,
+      "queryTypes": [
+        "OD_CONNECTION_MATRIX"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-5-1",
+      "question": "福州市24小时分车型出行规律如何？",
+      "firstBusinessSeconds": 0.2946390050001355,
+      "totalSeconds": 1.6740098760001274,
+      "queryTypes": [
+        "VEHICLE_HOURLY_PATTERN"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-6-0",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.2927116720002232,
+      "totalSeconds": 2.5704864489998727,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-6-1",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 2.1495386330007022,
+      "totalSeconds": 3.7022808130004705,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-7-0",
+      "question": "福州、厦门、泉州的跨区域交通联系如何？",
+      "firstBusinessSeconds": 0.403238760000022,
+      "totalSeconds": 1.962341852999998,
+      "queryTypes": [
+        "REGIONAL_TRAFFIC_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-7-1",
+      "question": "福州的出行主要联系哪些城市？",
+      "firstBusinessSeconds": 0.44370101500044257,
+      "totalSeconds": 1.9623405729998922,
+      "queryTypes": [
+        "OD_DESTINATION_TENDENCY"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-8-0",
+      "question": "福州、厦门、泉州的城市联系矩阵如何？",
+      "firstBusinessSeconds": 1.372577678000198,
+      "totalSeconds": 2.5762288839996472,
+      "queryTypes": [
+        "OD_CONNECTION_MATRIX"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-8-1",
+      "question": "福州市24小时分车型出行规律如何？",
+      "firstBusinessSeconds": 0.29964550499971665,
+      "totalSeconds": 1.369941289000053,
+      "queryTypes": [
+        "VEHICLE_HOURLY_PATTERN"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-9-0",
+      "question": "福建省目前整体交通态势如何？",
+      "firstBusinessSeconds": 0.29496346399992035,
+      "totalSeconds": 2.6417661629993745,
+      "queryTypes": [
+        "PROVINCE_OVERVIEW"
+      ],
+      "notice": false
+    },
+    {
+      "label": "dual-9-1",
+      "question": "福建省哪些路线接近通行瓶颈？",
+      "firstBusinessSeconds": 2.1519639759999336,
+      "totalSeconds": 3.406822240999645,
+      "queryTypes": [
+        "CAPACITY_BOTTLENECKS"
+      ],
+      "notice": false
+    }
+  ],
+  "singleP95": 1.4728034339996157,
+  "dualP95": 2.1526344730000346,
+  "passed": true
+}

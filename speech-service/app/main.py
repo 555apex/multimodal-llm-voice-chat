@@ -3,10 +3,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import asyncio
 import logging
+import os
+import base64
+import json
 from typing import AsyncIterator
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings
@@ -42,6 +45,9 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
     resolved_asr = asr_engine or FasterWhisperAsrEngine(resolved_settings)
+    if tts_engine is None and os.getenv('SPEECH_TTS_ENGINE') == 'cuda-graph':
+        from .streaming_tts import StreamingTtsEngine
+        tts_engine = StreamingTtsEngine(resolved_settings)
     resolved_tts = tts_engine or Qwen3TtsEngine(resolved_settings)
 
     @asynccontextmanager
@@ -66,6 +72,7 @@ def create_app(
         application.state.ready = True
         yield
         application.state.ready = False
+        if hasattr(resolved_tts, 'close'): resolved_tts.close()
 
     application = FastAPI(
         title="Road Agent Speech Service",
@@ -89,12 +96,15 @@ def create_app(
 
     @application.get("/health/ready")
     async def ready() -> dict[str, object]:
+        if hasattr(resolved_tts, 'healthy') and not resolved_tts.healthy():
+            raise HTTPException(status_code=503, detail="TTS worker unavailable")
         if not application.state.ready:
             raise HTTPException(status_code=503, detail="ASR model is loading")
         return {
             "status": "UP",
             "asrAvailable": True,
             "ttsAvailable": True,
+            "ttsStreamingAvailable": hasattr(resolved_tts, 'stream'),
             "asrModel": resolved_settings.asr_model,
             "ttsVoice": resolved_settings.tts_voice,
         }
@@ -146,6 +156,27 @@ def create_app(
             media_type="audio/mpeg",
             headers={"Cache-Control": "no-store"},
         )
+
+    @application.post('/v1/tts/speech/stream')
+    async def stream_speech(request: TtsRequest):
+        text=request.text.strip()
+        if not text: raise HTTPException(400, 'Text is empty')
+        if len(text)>resolved_settings.max_tts_characters: raise HTTPException(413, 'Text is too long')
+        if not hasattr(resolved_tts, 'stream'): raise HTTPException(501, 'Streaming TTS is unavailable')
+        def event(name, data):
+            return 'event: '+name+'\ndata: '+json.dumps(data,separators=(',',':'))+'\n\n'
+        async def audio():
+            yield event('audio.start', {'sampleRate':24000,'channels':1,'format':'s16le'})
+            sequence=0
+            try:
+                async for pcm in resolved_tts.stream(text):
+                    yield event('audio.chunk', {'sequence':sequence,'pcm':base64.b64encode(pcm).decode()})
+                    sequence+=1
+                yield event('audio.completed', {'chunks':sequence})
+            except Exception:
+                LOGGER.exception('Streaming TTS failed')
+                yield event('audio.failed', {'message':'语音合成中断，请重试'})
+        return StreamingResponse(audio(),media_type='text/event-stream',headers={'Cache-Control':'no-store','X-Accel-Buffering':'no'})
 
     return application
 

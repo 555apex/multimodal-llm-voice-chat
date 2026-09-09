@@ -20,6 +20,7 @@ public final class HighwayTrafficSkill implements AgentSkill {
     private final RegionalTrafficService regionalTrafficService;
     private final VehiclePatternService vehiclePatternService;
     private final OdTrafficService odTrafficService;
+    private cn.fj.roadagent.application.port.ChatModelPort streamingModel;
 
     public HighwayTrafficSkill(HighwayTrafficService trafficService) {
         this(trafficService, null, null, null);
@@ -49,6 +50,13 @@ public final class HighwayTrafficSkill implements AgentSkill {
         this.regionalTrafficService = regionalTrafficService;
         this.vehiclePatternService = vehiclePatternService;
         this.odTrafficService = odTrafficService;
+    }
+
+    public HighwayTrafficSkill(HighwayTrafficService traffic, RoadCapacityService capacity,
+            RegionalTrafficService regional, VehiclePatternService vehicle, OdTrafficService od,
+            cn.fj.roadagent.application.port.ChatModelPort model) {
+        this(traffic, capacity, regional, vehicle, od);
+        this.streamingModel = model;
     }
 
     @Override
@@ -90,6 +98,7 @@ public final class HighwayTrafficSkill implements AgentSkill {
                 Boolean.TRUE.equals(context.decision().includeTrend()),
                 trendOnly(context.command().message())
         );
+        if (streamingModel != null && !query.includeTrend() && !query.trendOnly()) return live(query, context, sink);
         HighwayTrafficResult result = odQuery ? odTrafficService.query(query) : capacityQuery ? requireCapacityService().query(query)
                 : regionalQuery ? requireRegionalService().query(query)
                 : vehicleQuery ? requireVehicleService().query(query)
@@ -116,6 +125,33 @@ public final class HighwayTrafficSkill implements AgentSkill {
             sink.emit(new AgentEvent("result.traffic", TrafficAgentResult.from(result)));
         }
         return new AgentSkillResult(publishedSummary, publishedSummary);
+    }
+
+    private AgentSkillResult live(HighwayTrafficQuery query, AgentExecutionContext context, AgentEventSink sink) {
+        Object facts;
+        HighwayTrafficResult result;
+        String trace = context.command().traceId();
+        if (query.queryType().odQuery()) {
+            var f = odTrafficService.collectFacts(query); facts=odTrafficService.serialize(f);
+            result=HighwayTrafficResult.fromOdFacts(f, odTrafficService.deterministicSummary(f), trace);
+        } else if (query.queryType().capacityQuery()) {
+            var f = requireCapacityService().collectFacts(query); facts=capacityService.serializeFacts(f);
+            result=HighwayTrafficResult.fromCapacityFacts(f, capacityService.deterministicSummary(f), trace);
+        } else if (query.queryType().regionalTrafficQuery()) {
+            var f = requireRegionalService().collectFacts(query); facts=regionalTrafficService.serializeFacts(f);
+            result=HighwayTrafficResult.fromRegionalFacts(f, regionalTrafficService.deterministicSummary(f), trace);
+        } else if (query.queryType().vehiclePatternQuery()) {
+            var f = requireVehicleService().collectFacts(query); facts=vehiclePatternService.serializeFacts(f);
+            result=HighwayTrafficResult.fromVehicleFacts(f, vehiclePatternService.deterministicSummary(f), trace);
+        } else {
+            var f = trafficService.collectFacts(query); facts=trafficService.serializeFacts(f);
+            String summary=f.title()+"：已查询到"+f.routeSummaries().size()+"条路线概况、"+f.segments().size()+"条路段明细。具体状态与采集时间见下方数据。";
+            summary += trafficService.verifiedCause(query, f);
+            result=HighwayTrafficResult.fromFacts(f, summary, trace);
+        }
+        sink.emit(new AgentEvent("tool.completed", Map.of("source", "MYSQL")));
+        return TrafficLiveResponder.respond(result, facts, streamingModel, sink,
+                query.includeTrend(), query.trendOnly(), presentationOnly(context.command().message()));
     }
 
     private RoadCapacityService requireCapacityService() {

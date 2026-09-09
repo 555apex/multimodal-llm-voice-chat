@@ -1,6 +1,7 @@
 export interface SpeechCapabilities {
   asrAvailable: boolean
   ttsAvailable: boolean
+  ttsStreamingAvailable?: boolean
   asrModel?: string
   ttsVoice?: string
   maxRecordingSeconds: number

@@ -1,0 +1,20 @@
+{
+  "kind": "local UI regression with simulated services",
+  "checks": [
+    "action failure retains list and editable form",
+    "large ID retry reaches exact record",
+    "views recover after action",
+    "generation continues status polling",
+    "PCM starts during text stream, pause/resume/stop and mouth tracking",
+    "no foreground frame gap over 300 ms"
+  ],
+  "errors": [],
+  "motion": {
+    "maxGap": 64.29999999999927,
+    "longTasks": [
+      64
+    ],
+    "distinctScanPositions": 3694
+  },
+  "passed": true
+}

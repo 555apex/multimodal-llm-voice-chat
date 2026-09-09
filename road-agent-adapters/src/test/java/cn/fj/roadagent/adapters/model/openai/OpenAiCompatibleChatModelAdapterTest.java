@@ -188,6 +188,35 @@ class OpenAiCompatibleChatModelAdapterTest {
         return adapter(true, null);
     }
 
+    @Test
+    void rejectsTruncatedJsonEvenWhenThePartialTextParses() {
+        AtomicReference<String> request = new AtomicReference<>();
+        server.createContext("/chat/completions", exchange -> {
+            request.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            sendJson(exchange, """
+                    {"choices":[{"finish_reason":"length","message":{"content":"{}"}}]}
+                    """);
+        });
+        server.start();
+        var failure = assertThrows(ExternalServiceException.class, () -> adapter(false, false).generateStructured(
+                new ModelRequest("system", "query", java.util.List.of(), 0.1, 1536), IntentJson.class));
+        assertEquals("MODEL_TRUNCATED", failure.errorCode());
+        assertTrue(request.get().contains("\"max_tokens\":1536"));
+        assertTrue(request.get().contains("\"enable_thinking\":false"));
+    }
+
+    @Test
+    void rejectsStreamThatEndsWithoutDone() {
+        server.createContext("/chat/completions", exchange -> sendSse(exchange, """
+                data: {"choices":[{"delta":{"content":"partial"}}]}
+
+                """));
+        server.start();
+        var failure = assertThrows(ExternalServiceException.class, () -> adapter().stream(
+                new ModelRequest("system", "query", 0.1), delta -> {}));
+        assertEquals("MODEL_STREAM_INTERRUPTED", failure.errorCode());
+    }
+
     private OpenAiCompatibleChatModelAdapter adapter(boolean authEnabled, Boolean enableThinking) {
         return new OpenAiCompatibleChatModelAdapter(
                 HttpClient.newHttpClient(), new ObjectMapper(), endpoint,

@@ -70,7 +70,7 @@ describe('command dashboard shell', () => {
     })
     vi.mocked(fetchFacilityAlerts).mockResolvedValue({
       items: [{
-        alertId: 42,
+        alertId: '42',
         facilityName: '闽江大桥',
         metricName: '主梁应变',
         actualValue: 12.5,

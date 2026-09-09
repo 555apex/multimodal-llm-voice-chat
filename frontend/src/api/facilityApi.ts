@@ -18,7 +18,7 @@ async function parseResponse<T>(response: Response, fallback: string): Promise<T
   } catch {
     throw new Error(fallback)
   }
-  if (!response.ok) throw new Error(body.message || fallback)
+  if (!response.ok) throw Object.assign(new Error(body.message || fallback), { status: response.status, code: body.code })
   return body.data
 }
 
@@ -45,7 +45,7 @@ export async function fetchFacilityFocus(limit = 10): Promise<FacilityFocusItem[
 }
 
 export async function transitionFacilityAlert(
-  alertId: number,
+  alertId: string,
   transition: FacilityAlertTransition,
 ): Promise<FacilityAlert> {
   const response = await fetch(

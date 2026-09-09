@@ -195,7 +195,7 @@ public final class OdTrafficService {
                 """.strip();
     }
 
-    private String serialize(OdTrafficFacts facts) {
+    String serialize(OdTrafficFacts facts) {
         StringBuilder out = new StringBuilder("queryType=").append(facts.queryType()).append('\n')
                 .append("title=").append(facts.title()).append('\n')
                 .append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n')
@@ -215,7 +215,7 @@ public final class OdTrafficService {
         return out.toString();
     }
 
-    private boolean invalidClaim(String summary) {
+    static boolean invalidClaim(String summary) {
         String normalized = summary == null ? "" : summary.toLowerCase(Locale.ROOT);
         return normalized.isBlank() || normalized.contains("真实od") || normalized.contains("od概率")
                 || summary.contains("净流入") || summary.contains("净流出") || summary.contains("驶往")
@@ -223,7 +223,7 @@ public final class OdTrafficService {
                 || summary.matches("(?s).*\\d+(?:\\.\\d+)?%的(?:车辆|车).*" );
     }
 
-    private String deterministicSummary(OdTrafficFacts facts) {
+    String deterministicSummary(OdTrafficFacts facts) {
         if (!facts.destinationRows().isEmpty()) {
             var rows = facts.destinationRows();
             String city = rows.get(0).analysisCityName();

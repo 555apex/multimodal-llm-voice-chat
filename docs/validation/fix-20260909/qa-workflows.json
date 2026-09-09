@@ -1,0 +1,51 @@
+{
+  "passed": true,
+  "checks": [
+    {
+      "check": "facility_confirm_close",
+      "passed": true
+    },
+    {
+      "check": "local_llm_classification_retry",
+      "passed": true,
+      "eventType": "ET106"
+    },
+    {
+      "check": "local_llm_versioned_plan_generation",
+      "passed": true,
+      "planId": "DP-b61f196d-1579-475b-9a2f-92676cc60d38"
+    },
+    {
+      "check": "manual_event_type_correction",
+      "passed": true
+    },
+    {
+      "check": "professional_review_return",
+      "passed": true
+    },
+    {
+      "check": "command_return_and_regeneration",
+      "passed": true
+    },
+    {
+      "check": "three_level_approval_publish_release",
+      "passed": true
+    },
+    {
+      "check": "no_dispatch",
+      "passed": true
+    },
+    {
+      "check": "inventory_conservation",
+      "passed": true
+    },
+    {
+      "check": "cross_backend_claim_and_version_guard",
+      "passed": true
+    },
+    {
+      "check": "client_disconnect_keeps_successful_plan",
+      "passed": true
+    }
+  ]
+}

@@ -54,12 +54,12 @@ describe('speech store', () => {
 
   afterEach(() => vi.unstubAllGlobals())
 
-  it('loads capabilities and disables autoplay by default', async () => {
+  it('loads capabilities and enables summary autoplay by default', async () => {
     const store = useSpeechStore()
     await store.loadCapabilities()
 
     expect(store.capabilities?.asrAvailable).toBe(true)
-    expect(store.autoReadEnabled).toBe(false)
+    expect(store.autoReadEnabled).toBe(true)
   })
 
   it('supports pause, resume and completion for one message', async () => {

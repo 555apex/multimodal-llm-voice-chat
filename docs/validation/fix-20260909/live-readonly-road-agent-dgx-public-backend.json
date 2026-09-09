@@ -1,0 +1,168 @@
+[
+  {
+    "endpoint": "/api/v1/speech/capabilities",
+    "passed": true
+  },
+  {
+    "endpoint": "/api/v1/facility-alerts",
+    "passed": true
+  },
+  {
+    "endpoint": "/api/v1/facility-alerts/health-report",
+    "passed": true
+  },
+  {
+    "endpoint": "/api/v1/facility-alerts/focus",
+    "passed": true
+  },
+  {
+    "endpoint": "/api/v1/emergency-workflows/inbox?stage=LEVEL_1",
+    "passed": true
+  },
+  {
+    "question": "福建省目前整体交通态势如何？",
+    "events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "stage.changed",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.speech",
+      "run.completed"
+    ],
+    "seconds": 1.78,
+    "passed": true
+  },
+  {
+    "question": "福建省哪些路线接近通行瓶颈？",
+    "events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "stage.changed",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.speech",
+      "run.completed"
+    ],
+    "seconds": 2.72,
+    "passed": true
+  },
+  {
+    "question": "福州、厦门、泉州的跨区域交通联系如何？",
+    "events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "stage.changed",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.speech",
+      "run.completed"
+    ],
+    "seconds": 1.87,
+    "passed": true
+  },
+  {
+    "question": "福州的出行主要联系哪些城市？",
+    "events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "stage.changed",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.speech",
+      "run.completed"
+    ],
+    "seconds": 1.71,
+    "passed": true
+  },
+  {
+    "question": "福州、厦门、泉州的城市联系矩阵如何？",
+    "events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "stage.changed",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.speech",
+      "run.completed"
+    ],
+    "seconds": 1.83,
+    "passed": true
+  },
+  {
+    "question": "福州市24小时分车型出行规律如何？",
+    "events": [
+      "run.started",
+      "stage.changed",
+      "intent.recognized",
+      "skill.selected",
+      "stage.changed",
+      "tool.started",
+      "tool.completed",
+      "answer.delta",
+      "result.traffic",
+      "answer.speech",
+      "stage.changed",
+      "answer.delta",
+      "answer.delta",
+      "answer.delta",
+      "answer.speech",
+      "run.completed"
+    ],
+    "seconds": 1.31,
+    "passed": true
+  },
+  {
+    "speech_roundtrip": "福建省目前整体交通态势如何",
+    "audio_bytes": 40077,
+    "passed": true
+  }
+]

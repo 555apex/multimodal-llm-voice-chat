@@ -1,0 +1,129 @@
+{
+  "passed": true,
+  "time": 1788933402.9373055,
+  "avatarAssets": [
+    [
+      "frontend/public/digital-human/figure-a/idle.png",
+      "efbed3100e4f524adf33cdd906af9d25e1446e1888c09b178bf6f64ecd99e8bc"
+    ],
+    [
+      "frontend/public/digital-human/figure-a/thinking.png",
+      "d36d15bc2e0379341cb15cedd887e7c2fdca04513a0076354ca8221d358572ea"
+    ],
+    [
+      "frontend/public/digital-human/figure-a/explaining.png",
+      "c89324112c4355467a1e6350c707e78004df251f65382d286b64460deb0869be"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining.png",
+      "275a8d7ce4a8fac60f957a637e10432f570556216e0a0bfc010202855be36d38"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-thinking.webp",
+      "19c8be716cd02eff19bff16a38a56b4c67306d9ca19db5ff64222d380481c3ae"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining-mouth-closed-v2.png",
+      "2e839e361b51f3ffbd416063bcc17702b75e3b7d669f0e807a9fcbae7fbbf2cc"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-idle.png",
+      "145aa3b5a72aaf75bd24af7d70f23e0c2d5a59ecb1ccd657ee70c75eb3d5fa13"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining-mouth-closed-v2.webp",
+      "8018ff4d95c688ffe9d9e6858370361f68d9ab6d0e85b59ed5a55e901cc99e09"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-thinking.png",
+      "d1e05c6361365bf240860d8559d50c92a35555dfff0650d8695263269ce6b984"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining-mouth-open-v2.png",
+      "3426c505e387cbf5b561962b4772c7a7896d190d545d1057c0be63d1b4fc58e6"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining-mouth-half-v2.png",
+      "5a76371f40c04b157893cc212945b72f021b4bef86f50628bcfae8936f83b667"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining.webp",
+      "02f8fde63b55f46bca1f7bc7f86033bf0af48e3d0ea7a65edd1b80184ba90eb4"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining-mouth-half-v2.webp",
+      "3e0fda1085377bcf9fe8519d481fb2072412c57127a5f861917b935528539a22"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-explaining-mouth-open-v2.webp",
+      "116dc9cfa64b9673e38cc6dd75ed071d385773b8cc9ab210a86229bb95b0a986"
+    ],
+    [
+      "frontend/public/digital-human/guardian/guardian-idle.webp",
+      "faf720dce8a40a49f146a016a09ca85cc8eb8e568df6b0cdb3dc7e49b5c11dae"
+    ]
+  ],
+  "model": [
+    "/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4",
+    "--served-model-name",
+    "qwen3.6-35b-a3b-nvfp4",
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8000",
+    "--tensor-parallel-size",
+    "1",
+    "--trust-remote-code",
+    "--kv-cache-dtype",
+    "fp8",
+    "--attention-backend",
+    "flashinfer",
+    "--moe-backend",
+    "marlin",
+    "--gpu-memory-utilization",
+    "0.40",
+    "--max-model-len",
+    "65536",
+    "--max-num-seqs",
+    "2",
+    "--max-num-batched-tokens",
+    "8192",
+    "--enable-chunked-prefill",
+    "--async-scheduling",
+    "--enable-prefix-caching",
+    "--speculative-config",
+    "{\"method\":\"mtp\",\"num_speculative_tokens\":3,\"moe_backend\":\"triton\"}",
+    "--load-format",
+    "fastsafetensors",
+    "--reasoning-parser",
+    "qwen3",
+    "--tool-call-parser",
+    "qwen3_xml",
+    "--enable-auto-tool-choice",
+    "--default-chat-template-kwargs",
+    "{\"enable_thinking\":false}"
+  ],
+  "ttsSpeaker": "Serena",
+  "asr": "CPU/int8",
+  "funnel": {
+    "TCP": {
+      "443": {
+        "HTTPS": true
+      }
+    },
+    "Web": {
+      "spark-8a8d.taile1b178.ts.net:443": {
+        "Handlers": {
+          "/": {
+            "Proxy": "http://127.0.0.1:18081"
+          }
+        }
+      }
+    },
+    "AllowFunnel": {
+      "spark-8a8d.taile1b178.ts.net:443": true
+    }
+  },
+  "loginUnchanged": true,
+  "stockConserved": true
+}

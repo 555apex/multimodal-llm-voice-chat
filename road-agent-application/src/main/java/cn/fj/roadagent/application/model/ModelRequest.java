@@ -9,12 +9,18 @@ public record ModelRequest(
         String systemPrompt,
         String userPrompt,
         List<ModelMessage> history,
-        double temperature
+        double temperature,
+        int maxOutputTokens
 ) {
     public ModelRequest {
         systemPrompt = systemPrompt == null ? "" : systemPrompt.trim();
         userPrompt = userPrompt == null ? "" : userPrompt.trim();
         history = history == null ? List.of() : List.copyOf(history);
+        if (maxOutputTokens < 1) throw new IllegalArgumentException("maxOutputTokens must be positive");
+    }
+
+    public ModelRequest(String systemPrompt, String userPrompt, List<ModelMessage> history, double temperature) {
+        this(systemPrompt, userPrompt, history, temperature, 512);
     }
 
     // 兼容原交通查询代码：没有历史消息时仍可使用三个参数构造。

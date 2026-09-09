@@ -5,6 +5,7 @@ import {
   decideLevel1Workflow,
   fetchWorkflowHistory,
   fetchWorkflowInbox,
+  fetchWorkflowDetail,
   releaseWorkflowResources,
   retryNextEventClassification,
 } from '../api/workflowApi'
@@ -20,6 +21,7 @@ vi.mock('../api/emergencyApi', () => ({
 
 vi.mock('../api/workflowApi', () => ({
   fetchWorkflowInbox: vi.fn(),
+  fetchWorkflowDetail: vi.fn(),
   decideLevel1Workflow: vi.fn(),
   reviewEmergencyWorkflow: vi.fn(),
   decideCommandWorkflow: vi.fn(),
@@ -60,6 +62,45 @@ describe('emergency workflow store', () => {
   })
 
   afterEach(() => vi.useRealTimers())
+
+  it('polls the same workflow while generation is pending and suppresses duplicate requests', async () => {
+    const store = useEmergencyStore()
+    store.item = { ...item, workflowStatus: 'GENERATION_FAILED', currentPlan: { ...waitingPlan, status: 'FAILED' } }
+    let finish!: (plan: DispatchPlan) => void
+    vi.mocked(generateEmergencyDispatch).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+    vi.mocked(fetchWorkflowDetail).mockResolvedValue({ ...item, workflowStatus: 'GENERATING', currentPlan: { ...waitingPlan, status: 'GENERATING' } })
+    const pending = store.generate()
+    await store.generate()
+    await store.refresh()
+    expect(fetchWorkflowDetail).toHaveBeenCalledWith('WF-1')
+    expect(generateEmergencyDispatch).toHaveBeenCalledTimes(1)
+    expect(store.serverGenerating).toBe(true)
+    finish(waitingPlan)
+    await pending
+  })
+
+  it('reconciles a lost generation response before displaying a failure', async () => {
+    const store = useEmergencyStore()
+    store.item = { ...item, workflowStatus: 'GENERATION_FAILED' }
+    vi.mocked(generateEmergencyDispatch).mockRejectedValueOnce(new Error('connection lost'))
+    vi.mocked(fetchWorkflowDetail).mockResolvedValue(item)
+    await store.generate()
+    expect(fetchWorkflowDetail).toHaveBeenCalledWith('WF-1')
+    expect(store.errorMessage).toBe('')
+    expect(store.item?.currentPlan?.status).toBe('WAITING_APPROVAL')
+  })
+
+  it('keeps a real generation failure visible after refreshing the inbox', async () => {
+    const failed = { ...item, workflowStatus: 'GENERATION_FAILED' as const, currentPlan: { ...waitingPlan, status: 'FAILED' as const } }
+    const store = useEmergencyStore()
+    store.item = failed
+    vi.mocked(generateEmergencyDispatch).mockRejectedValueOnce(new Error('model timeout'))
+    vi.mocked(fetchWorkflowDetail).mockResolvedValue(failed)
+    vi.mocked(fetchWorkflowInbox).mockResolvedValue({ ...inbox, item: failed })
+    await store.generate()
+    expect(store.errorMessage).toBe('model timeout')
+    expect(store.actionBusy).toBe(false)
+  })
 
   it('keeps the newest stage when an older inbox arrives late', async () => {
     let finish!: (value: WorkflowInbox) => void

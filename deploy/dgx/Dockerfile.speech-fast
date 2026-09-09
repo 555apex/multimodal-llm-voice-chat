@@ -1,0 +1,9 @@
+ARG SPEECH_RUNTIME_IMAGE=road-agent-dgx-speech:before-fix-20260909
+FROM ${SPEECH_RUNTIME_IMAGE}
+USER root
+COPY wheels/faster_qwen3_tts-0.3.2-py3-none-any.whl /tmp/faster_qwen3_tts-0.3.2-py3-none-any.whl
+RUN echo 'b17b2839d56cb178f5c382d85214ae62852b5728830bfeda066e6a15c832a364  /tmp/faster_qwen3_tts-0.3.2-py3-none-any.whl' | sha256sum -c - \
+    && python -m pip install --no-deps /tmp/faster_qwen3_tts-0.3.2-py3-none-any.whl
+COPY --chown=speech:speech speech-service/app /app/app
+ENV SPEECH_TTS_ENGINE=cuda-graph SPEECH_TTS_MAX_CONCURRENCY=2
+USER speech

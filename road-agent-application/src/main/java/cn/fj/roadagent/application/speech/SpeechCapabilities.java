@@ -7,6 +7,10 @@ public record SpeechCapabilities(
         String asrModel,
         String ttsVoice,
         int maxRecordingSeconds,
-        long maxAudioBytes
+        long maxAudioBytes,
+        boolean ttsStreamingAvailable
 ) {
+    public SpeechCapabilities(boolean asr, boolean tts, String model, String voice, int seconds, long bytes) {
+        this(asr, tts, model, voice, seconds, bytes, false);
+    }
 }

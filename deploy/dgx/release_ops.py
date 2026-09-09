@@ -137,7 +137,7 @@ def guard(source=SOURCE):
     for name in ['backend','public-backend']:
         env=config['services'][name]['environment']
         assert env['ROADAGENT_MODEL_ENDPOINT']=='http://qwen:8000/v1/chat/completions'
-        assert env['ROADAGENT_MODEL_NAME']=='qwen3.6-35b-a3b-nvfp4'
+        assert env['ROADAGENT_MODEL_NAME']==values(source/'deploy/dgx/.env')['ROADAGENT_MODEL_NAME']
         assert str(env['ROADAGENT_MODEL_ENABLE_THINKING']).lower()=='false'
         assert env['ROADAGENT_SPEECH_SERVICE_URL']=='http://speech-service:8091'
         assert str(env['ROADAGENT_EVENT_CLASSIFICATION_ENABLED']).lower()==str(name=='public-backend').lower()

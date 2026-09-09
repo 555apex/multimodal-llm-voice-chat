@@ -1,0 +1,16 @@
+{
+  "schema": "road_agent_fix_20260909",
+  "ids": [
+    "2097225926893142019",
+    "2097225926893142021"
+  ],
+  "javascriptCollision": true,
+  "checks": [
+    "confirmed exact 2097225926893142019",
+    "duplicate is idempotent or conflicted",
+    "closed exact 2097225926893142019",
+    "confirmed exact 2097225926893142021",
+    "duplicate is idempotent or conflicted",
+    "closed exact 2097225926893142021"
+  ]
+}
