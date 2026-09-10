@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Daily operations for the already deployed DGX release.
+set -euo pipefail
+models=(model-serving-qwen road-agent-dgx-speech)
+backends=(road-agent-dgx-backend road-agent-dgx-public-backend)
+frontends=(road-agent-dgx-frontend road-agent-dgx-public-frontend)
+all=("${models[@]}" "${backends[@]}" "${frontends[@]}")
+
+urls() {
+  printf '\nDGX 主界面：http://127.0.0.1:18080/\nDGX 数字人：http://127.0.0.1:18080/digital-human-demo.html\n公网主界面：https://spark-8a8d.taile1b178.ts.net/\n公网数字人：https://spark-8a8d.taile1b178.ts.net/digital-human-demo.html\n'
+}
+status() {
+  printf '%-36s %-12s %-12s\n' 'SERVICE' 'STATE' 'HEALTH'
+  local name
+  for name in "${all[@]}"; do
+    if ! docker inspect --format '{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}' "$name" 2>/dev/null; then
+      printf '%s missing\n' "$name"
+    fi
+  done
+  tailscale funnel status 2>/dev/null || true
+}
+start_group() {
+  local name
+  for name in "$@"; do
+    if [[ "$(docker inspect --format '{{.State.Running}}' "$name")" != true ]]; then
+      docker start "$name" >/dev/null
+    fi
+  done
+}
+wait_group() {
+  local deadline=$((SECONDS + 1200)) last_notice=-30 name ready health
+  while (( SECONDS < deadline )); do
+    ready=true
+    for name in "$@"; do
+      health=$(docker inspect --format '{{if .State.Running}}{{if .State.Health}}{{.State.Health.Status}}{{else}}healthy{{end}}{{else}}stopped{{end}}' "$name")
+      if [[ "$health" == stopped ]]; then echo "$name 已停止，请检查 docker logs --tail 50 $name" >&2; return 1; fi
+      [[ "$health" == healthy ]] || ready=false
+    done
+    if [[ "$ready" == true ]]; then return 0; fi
+    if (( SECONDS - last_notice >= 30 )); then echo "等待服务就绪：$*"; last_notice=$SECONDS; fi
+    sleep 5
+  done
+  echo '等待超时，请执行 ./roadagent status 查看状态。' >&2
+  return 1
+}
+case "${1:-status}" in
+  start)
+    # Check the full deployment before starting anything. Never rebuild or initialize data.
+    docker inspect "${all[@]}" >/dev/null
+    start_group "${models[@]}"
+    wait_group "${models[@]}"
+    start_group "${backends[@]}"
+    wait_group "${backends[@]}"
+    start_group "${frontends[@]}"
+    wait_group "${frontends[@]}"
+    echo 'RoadAgent 已就绪。'
+    status
+    urls
+    ;;
+  status) status ;;
+  urls) urls ;;
+  *) echo '用法：./roadagent [start|status|urls]' >&2; exit 2 ;;
+esac
