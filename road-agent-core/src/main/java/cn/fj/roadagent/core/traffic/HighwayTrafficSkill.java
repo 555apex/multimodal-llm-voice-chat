@@ -11,6 +11,8 @@ import cn.fj.roadagent.core.agent.AgentSkill;
 import cn.fj.roadagent.core.agent.AgentSkillResult;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 /** MySQL 国省干线查询 Agent Skill。模型成功前不发布任何回答或表格事件。 */
@@ -70,7 +72,7 @@ public final class HighwayTrafficSkill implements AgentSkill {
                 : "query_mysql_highway_traffic";
         String label = odQuery ? "正在分析城市目的地联系倾向" : capacityQuery ? "正在读取国省干线通行能力数据"
                 : regionalQuery ? "正在统计跨区域交通联系"
-                : vehicleQuery ? "正在分析最新车型出行特征"
+                : vehicleQuery ? "正在分析车型出行特征"
                 : "正在读取国省干线交通数据";
         sink.emit(new AgentEvent("stage.changed", Map.of(
                 "stage", "TOOL_CALLING",
@@ -88,7 +90,8 @@ public final class HighwayTrafficSkill implements AgentSkill {
                 effectiveAnalysisCity(context),
                 context.command().traceId(),
                 Boolean.TRUE.equals(context.decision().includeTrend()),
-                trendOnly(context.command().message())
+                trendOnly(context.command().message()),
+                effectiveAnalysisDate(context, vehicleQuery)
         );
         HighwayTrafficResult result = odQuery ? odTrafficService.query(query) : capacityQuery ? requireCapacityService().query(query)
                 : regionalQuery ? requireRegionalService().query(query)
@@ -152,6 +155,21 @@ public final class HighwayTrafficSkill implements AgentSkill {
             return context.decision().analysisCity();
         }
         return context.decision().city();
+    }
+
+    private LocalDate effectiveAnalysisDate(AgentExecutionContext context, boolean vehicleQuery) {
+        if (!vehicleQuery) return null;
+        String planned = context.decision().analysisDate();
+        if (planned != null && !planned.isBlank()) {
+            try {
+                return LocalDate.parse(planned.trim());
+            } catch (DateTimeParseException exception) {
+                throw new cn.fj.roadagent.application.exception.BusinessRuleException(
+                        "VEHICLE_PATTERN_DATE_INVALID", "车型分析日期格式不正确，请使用YYYY-MM-DD"
+                );
+            }
+        }
+        return VehicleAnalysisDateParser.parse(context.command().message()).orElse(null);
     }
 
     private boolean presentationOnly(String message) {

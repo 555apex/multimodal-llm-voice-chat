@@ -80,8 +80,17 @@ public record HighwayTrafficResult(
     }
 
     public static HighwayTrafficResult fromVehicleFacts(VehiclePatternFacts facts, String summary, String traceId) {
-        List<String> warnings = facts.missingHourCount() > 0 && !facts.hourlySeries().isEmpty()
-                ? List.of("有" + facts.missingHourCount() + "个小时源数据缺失，图表按项目规则补0；补0不代表实际无车。") : List.of();
+        java.util.ArrayList<String> warningValues = new java.util.ArrayList<>();
+        if (!facts.hourlySeries().isEmpty() && facts.hourlyDataDate() != null
+                && !facts.hourlyDataDate().equals(facts.analysisDate())) {
+            warningValues.add("所选记录的小时明细日期为" + facts.hourlyDataDate()
+                    + "，与查询日期" + facts.analysisDate() + "不同，已展示记录内最新可用分时数据。");
+        }
+        if (facts.missingHourCount() > 0 && !facts.hourlySeries().isEmpty()) {
+            warningValues.add("有" + facts.missingHourCount()
+                    + "个小时源数据缺失，图表按项目规则补0；补0不代表实际无车。");
+        }
+        List<String> warnings = List.copyOf(warningValues);
         return new HighwayTrafficResult(facts.queryType(), facts.title(), summary,
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), 0, 0,
                 facts.analysisCity(), facts.structureRows(), facts.timeFeatureRows(), facts.dayTypeRows(),

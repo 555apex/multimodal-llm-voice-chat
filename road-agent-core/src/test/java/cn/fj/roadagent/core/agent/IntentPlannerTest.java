@@ -109,6 +109,24 @@ class IntentPlannerTest {
                 planner.plan("厦门市24小时分车型出行规律如何？", List.of()).trafficScope());
         assertEquals("VEHICLE_DAY_TYPE_COMPARISON",
                 planner.plan("福州市工作日和周末的分车型通行量有什么差异？", List.of()).trafficScope());
+
+        AgentDecision historical = planner.plan("查询2026年8月24日福州市的交通运输特征", List.of());
+        assertEquals("VEHICLE_PATTERN_OVERVIEW", historical.trafficScope());
+        assertEquals("2026-08-24", historical.analysisDate());
+    }
+
+    @Test
+    void vehicleDateFollowUpKeepsPreviousCityAndScope() {
+        IntentPlanner planner = new IntentPlanner(new ThrowingModel());
+        AgentDecision previous = planner.plan("福州市的交通运输特征如何？", List.of());
+
+        AgentDecision followUp = planner.plan("改查2026年8月24日", List.of(
+                new ConversationMessage("user", "福州市的交通运输特征如何？", Instant.EPOCH)
+        ), previous);
+
+        assertEquals("VEHICLE_PATTERN_OVERVIEW", followUp.trafficScope());
+        assertEquals("福州", followUp.analysisCity());
+        assertEquals("2026-08-24", followUp.analysisDate());
     }
 
     @Test
@@ -206,9 +224,9 @@ class IntentPlannerTest {
     void controlledExplanationsAndUnsupportedMetadataUseDirectAnswers() {
         IntentPlanner planner = new IntentPlanner(new ThrowingModel());
 
-        AgentDecision threshold = planner.plan("通行能力利用率等于15%时是什么等级？", List.of());
+        AgentDecision threshold = planner.plan("通行能力利用率等于20%时是什么等级？", List.of());
         assertEquals("DIRECT_ANSWER", threshold.intent());
-        assertTrue(threshold.clarification().contains("瓶颈"));
+        assertTrue(threshold.clarification().contains("正常"));
 
         AgentDecision exactActive = planner.plan("日均流量刚好为100算活跃卡口吗？", List.of());
         assertEquals("DIRECT_ANSWER", exactActive.intent());

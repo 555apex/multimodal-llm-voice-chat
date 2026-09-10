@@ -140,7 +140,7 @@ describe('TrafficResultPanel MySQL highway modes', () => {
       segments: [],
       capacityRows: [{
         routeCode: 'G104', routeName: '北京-平潭', actualCapacityVph: 320,
-        designCapacityVph: 1920, utilizationRatio: 0.1667,
+        designCapacityVph: 1920, utilizationRatio: 0.25,
         capacityLevel: 'BOTTLENECK', capacityLevelName: '瓶颈',
       }],
       totalSegmentCount: 1,
@@ -151,7 +151,7 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     expect(wrapper.text()).toContain('实际通行能力')
     expect(wrapper.text()).toContain('320.00 辆/小时')
     expect(wrapper.text()).toContain('1920.00 辆/小时')
-    expect(wrapper.text()).toContain('16.67%')
+    expect(wrapper.text()).toContain('25.00%')
     expect(wrapper.text()).toContain('瓶颈')
   })
 
@@ -162,7 +162,7 @@ describe('TrafficResultPanel MySQL highway modes', () => {
       routeSummaries: [], segments: [],
       capacityRows: [{
         routeCode: 'S201', routeName: '柘荣-霞浦', actualCapacityVph: 100,
-        designCapacityVph: 1920, utilizationRatio: 0.2,
+        designCapacityVph: 1920, utilizationRatio: 0.25,
         capacityLevel: 'BOTTLENECK', capacityLevelName: '瓶颈',
       }],
       totalSegmentCount: 12, displayedSegmentCount: 10, truncated: true,

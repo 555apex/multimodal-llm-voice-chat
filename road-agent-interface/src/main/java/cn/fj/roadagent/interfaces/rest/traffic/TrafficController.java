@@ -34,7 +34,7 @@ public final class TrafficController {  // 声明该类不可继承
         var result = useCase.query(new HighwayTrafficQuery(
                 request.queryType(), request.originCity(), request.destinationCity(),
                 request.routeCode(), request.routeName(), request.selectedCities(), request.analysisCity(), traceId,
-                Boolean.TRUE.equals(request.includeTrend())
+                Boolean.TRUE.equals(request.includeTrend()), false, request.analysisDate()
         ));
         return ApiResponse.success(TrafficQueryResponse.from(result), result.traceId());  // 将结果result包装为ApiResponse，返回JSON到前端
     }

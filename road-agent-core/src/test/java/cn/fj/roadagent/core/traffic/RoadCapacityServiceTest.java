@@ -30,8 +30,8 @@ class RoadCapacityServiceTest {
     void overviewReturnsEveryRouteSortedAndReportsThreeLevelCounts() {
         RecordingModel model = new RecordingModel();
         RoadCapacityService service = service(model, List.of(
-                row("S201", "柘荣-霞浦", 1200, 0.16),
-                row("G104", "北京-平潭", 1600, 0.30),
+                row("S201", "柘荣-霞浦", 1200, 0.25),
+                row("G104", "北京-平潭", 1600, 0.31),
                 row("G316", "长乐-同仁", 0, 0.10)
         ));
 
@@ -52,7 +52,7 @@ class RoadCapacityServiceTest {
         List<RoadCapacity> rows = new ArrayList<>();
         rows.add(row("G001", "正常路线", 100, 0.1));
         for (int index = 0; index < 12; index++) {
-            double ratio = 0.15 + index * 0.02;
+            double ratio = 0.21 + index * 0.02;
             rows.add(row("S%03d".formatted(index), "路线" + index, 300 + index, ratio));
         }
         RoadCapacityService service = service(new RecordingModel(), rows);
@@ -116,7 +116,7 @@ class RoadCapacityServiceTest {
     @Test
     void allHighUtilizationBatchMarksEveryRouteSevereAndStillReturnsTopTen() {
         List<RoadCapacity> rows = java.util.stream.IntStream.range(0, 48)
-                .mapToObj(index -> row("S%03d".formatted(index), "路线" + index, 600, 0.30))
+                .mapToObj(index -> row("S%03d".formatted(index), "路线" + index, 600, 0.31))
                 .toList();
         RoadCapacityService service = service(new RecordingModel(), rows);
 
@@ -146,7 +146,7 @@ class RoadCapacityServiceTest {
             }
         };
         RoadCapacitySnapshot snapshot = new RoadCapacitySnapshot(
-                List.of(row("G104", "北京-平潭", 400, 0.20)),
+                List.of(row("G104", "北京-平潭", 400, 0.21)),
                 Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp"
         );
         RoadCapacityService service = new RoadCapacityService(() -> snapshot, invalidModel);
@@ -173,7 +173,7 @@ class RoadCapacityServiceTest {
             }
         };
         RoadCapacitySnapshot snapshot = new RoadCapacitySnapshot(
-                List.of(row("G104", "北京-平潭", 400, 0.20)),
+                List.of(row("G104", "北京-平潭", 400, 0.21)),
                 Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp"
         );
 
@@ -189,9 +189,9 @@ class RoadCapacityServiceTest {
     void twoCityCapacityQueryUsesWholeRoutesWhoseRegisteredEndpointsMatchEitherDirection() {
         RoadCapacitySnapshot capacitySnapshot = new RoadCapacitySnapshot(
                 List.of(
-                        row("G104", "北京-平潭", 180, 0.18),
-                        row("S201", "柘荣-霞浦", 200, 0.2),
-                        row("G324", "福州-昆明", 300, 0.3)
+                        row("G104", "北京-平潭", 180, 0.21),
+                        row("S201", "柘荣-霞浦", 200, 0.25),
+                        row("G324", "福州-昆明", 300, 0.31)
                 ), Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp");
         HighwayTrafficSnapshot trafficSnapshot = new HighwayTrafficSnapshot(
                 List.of(
