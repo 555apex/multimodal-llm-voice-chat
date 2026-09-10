@@ -1,5 +1,20 @@
 # 开发进度与版本记录
 
+## 2026-09-10：未办结通告卡片直接归还资源
+
+- 未办结摘要卡片新增“归还全部资源”按钮，不展开详情即可填写原因并二次确认；展开时隐藏摘要入口，仅显示详情入口，收起后恢复，避免同时出现两个按钮。
+- 卡片操作前按需读取最新归还资格与工作流版本，两个入口复用同一提交锁、幂等重试和归还接口；后台轮询不禁用按钮，失败保留输入，版本冲突后重新确认。
+- 本次只修改前端及测试，未操作数据库或改动后端接口。前端82项测试与生产构建通过，未打开浏览器。
+- 本次“数据库更改”版本发布整理另行完成通告、预案、车型日期和容量相关的前端33项、后端76项定向测试，以及SQL模板、OpenAPI、文档路径和敏感信息静态检查；未执行共享库脚本、Docker、真实模型或浏览器验收。
+
+## 2026-09-10：简明预案与下发通告
+
+- 提供16类约350字简明预案的新版本发布SQL，沿用原事实项和资源基线，保留历史版本与通告快照；本次未操作共享数据库。
+- 填充变量控制为完整短句，未知事实使用完整兜底句；处理变量边界重复标点，保留小数及道路桩号。简明版正文校验300–400字，超长最多请求一次修正，校验位于库存事务前。
+- 新增通告摘要分页接口，MySQL按最终版本的实际DISPATCHED占用筛选未办结，归还后及无需调度记录进入已办结；旧history接口保留。
+- 前端按需展开详情，轮询保留当前筛选和分页，过期响应丢弃；归还独立忙状态、二次确认、失败保留原因、幂等重试与冲突刷新。
+- 已通过Maven全量测试、前端78项测试及生产构建；真实数据库、真实模型和浏览器未执行验收。
+
 ## 2026-09-09：设施预警与应急生成中断修复
 
 - 设施告警 `BIGINT` ID 从 REST、OpenAPI 到前端统一改为十进制字符串，避免浏览器整数舍入导致处置错位；所有读取、统计和条件更新补齐逻辑删除过滤。
@@ -80,7 +95,7 @@
 | TQ-B03 | 数据与Tool支线 | 节假日及重大活动即时只读仓储 | `MysqlTrafficContextEventRepository.java`、`w_festival_data` | 交通快照时间、事件时间与影响范围 | 最多3条已验证交通背景事实 | 已完成 | 北京时间边界、启停/逻辑删除、城市/路线范围、单条非法数据隔离、辅助表失败不阻断路况 | `MysqlTrafficContextEventRepositoryTest`、`HighwayTrafficServiceTest` | 2027—2028完整调休安排需待官方通知后维护 |
 | CP-A01 | Agent与业务主线 | 通行能力与瓶颈路线研判 | `RoadCapacityService.java`、`HighwayTrafficSkill.java` | 全省能力、瓶颈排行、G/S路线 | 专业研判 + 容量表格 | 已完成 | 三级阈值、数据库值不重算、瓶颈前10、不依赖固定句式或“表格”关键词、越界数字使用事实摘要 | `RoadCapacityServiceTest`、`CapacityLevelTest`、前端表格测试 | 无 |
 | RT-A01 | Agent与业务主线 | 跨区域交通联系分析（需求1-5） | `MysqlRegionalTrafficRepository.java`、`RegionalTrafficService.java`、`HighwayTrafficSkill.java` | 路网路线起终点城市对 + 同路线卡口 | 模型总结 + 城市对Top5/跨市路线Top10 | 已完成 | 3至9市或全省、7日流量排序、无方向、禁止真实OD结论、卡口仅用于路线聚合 | 区域仓储/服务/意图/前端测试 | 无 |
-| VP-A01 | Agent与业务主线 | 车型出行特征分析（需求1-6） | `VehiclePatternService.java`、`VehiclePatternCharts.vue` | 福州或厦门最新记录 | 车型/时间/日类型表格和三类图表 | 已完成 | 按城市最新、缺小时补0、工作日周末口径、按问题选择视图 | 车型仓储/服务/前端测试 | 当前仅福州和厦门测试数据 |
+| VP-A01 | Agent与业务主线 | 车型出行特征分析（需求1-6） | `VehiclePatternService.java`、`VehiclePatternCharts.vue` | 福州或厦门当天/指定历史日期记录 | 车型/时间/日类型表格和三类图表 | 已完成 | 默认当天、支持昨天/前天/明确日期、保留记录内有效小时点、缺小时补0并说明、工作日周末口径、按问题选择视图 | 车型仓储/服务/前端测试 | 当前仅福州和厦门测试数据 |
 | ED-A01 | Agent与业务主线 | 三级应急状态机与通告 | `EmergencyWorkflow.java`、`DispatchApplicationService.java` | 事件、版本方案、三级决策 | 市级专业复核、省级决策通告和全程流水 | 已完成 | 禁止越级；三级批准前贴源事件保持 `status='1', completed=0`；任一级退回生成新版并重走三级 | `EmergencyWorkflowTest`、`DispatchApplicationServiceTest` | 真实身份权限与外部通知平台未接入 |
 | TQ-B01 | 数据与Tool支线 | MySQL三表只读仓储 | `MysqlHighwayTrafficSnapshotSource.java` | 三张交通表 | 不可变交通快照 | 已完成 | 逻辑删除、五级状态、业务路线为活动路网子集、唯一性/范围校验 | `MysqlHighwayTrafficSnapshotSourceTest` | 无 |
 | TQ-B02 | 数据与Tool支线 | 一致性快照原子发布 | `MysqlHighwayTrafficSnapshotSource.java`、`InMemoryHighwayTrafficSnapshotCache.java` | 5秒候选快照 | 冷启动首份合法快照 + 稳定后更新 | 已完成 | 一致性事务内取数和生成指纹；冷启动立即可用；运行期保留旧快照并稳定30秒后切换 | `MysqlHighwayTrafficSnapshotSourceTest`、`InMemoryHighwayTrafficSnapshotCacheTest` | 无数据库批次号，无法识别协作者定义的业务批次边界 |
