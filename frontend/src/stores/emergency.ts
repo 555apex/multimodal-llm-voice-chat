@@ -13,6 +13,7 @@ import {
   releaseWorkflowResources,
   correctWorkflowEventType,
   retryNextEventClassification,
+  fetchNotices,
 } from '../api/workflowApi'
 import type {
   EmergencyWorkflowItem,
@@ -20,6 +21,7 @@ import type {
   WorkflowCounts,
   WorkflowHistoryPage,
   WorkflowStage,
+  NoticePage,
 } from '../types/dispatch'
 
 export type EmergencyQueryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
@@ -51,6 +53,12 @@ export const useEmergencyStore = defineStore('emergency', {
     item: null as EmergencyWorkflowItem | null,
     counts: emptyCounts(),
     history: null as WorkflowHistoryPage | null,
+    notices: null as NoticePage | null,
+    completionStatus: 'PENDING' as 'PENDING' | 'COMPLETED',
+    noticePage: 0,
+    noticeQueryId: 0,
+    noticeLoading: false,
+    noticeError: '',
     polling: false,
     actionBusy: false,
     queryStatus: 'idle' as EmergencyQueryStatus,
@@ -94,7 +102,7 @@ export const useEmergencyStore = defineStore('emergency', {
 
     async showHistory() {
       this.viewMode = 'history'
-      await this.loadHistory()
+      await this.loadNotices()
     },
 
     async showInbox() {
@@ -105,7 +113,7 @@ export const useEmergencyStore = defineStore('emergency', {
     async refresh() {
       if (this.polling || this.actionBusy) return
       if (this.viewMode === 'history') {
-        await this.loadHistory()
+        if (!this.noticeLoading) await this.loadNotices()
         return
       }
       this.polling = true
@@ -132,6 +140,31 @@ export const useEmergencyStore = defineStore('emergency', {
         this.polling = false
       }
       if (shouldRecover) await this.generate()
+    },
+
+    async selectCompletion(status: 'PENDING' | 'COMPLETED') {
+      this.completionStatus = status
+      this.notices = null
+      await this.loadNotices(0)
+    },
+
+    async loadNotices(page?: number): Promise<void> {
+      page = page ?? this.noticePage
+      const queryId = ++this.noticeQueryId
+      this.noticePage = page
+      this.noticeLoading = true
+      try {
+        const result = await fetchNotices(this.completionStatus, page)
+        if (queryId !== this.noticeQueryId) return
+        this.notices = result
+        this.noticeError = ''
+        if (!result.items.length && page > 0) await this.loadNotices(page - 1)
+      } catch (error) {
+        if (queryId === this.noticeQueryId)
+          this.noticeError = error instanceof Error ? error.message : '下发通告查询失败'
+      } finally {
+        if (queryId === this.noticeQueryId) this.noticeLoading = false
+      }
     },
 
     async loadHistory(page = 0) {

@@ -164,6 +164,14 @@ public final class EmergencyWorkflowController {
         );
     }
 
+    @GetMapping("/notices")
+    public ApiResponse<cn.fj.roadagent.application.dispatch.NoticePage> notices(
+            @RequestParam(defaultValue = "PENDING") String completionStatus,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size, HttpServletRequest request) {
+        return ApiResponse.success(queryUseCase.notices(completionStatus, page, size), traceId(request));
+    }
+
     private String traceId(HttpServletRequest request) {
         Object value = request.getAttribute(TraceIdFilter.ATTRIBUTE_NAME);
         return value == null ? "unknown" : value.toString();

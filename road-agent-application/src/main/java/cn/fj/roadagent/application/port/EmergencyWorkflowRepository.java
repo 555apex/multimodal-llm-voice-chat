@@ -50,4 +50,12 @@ public interface EmergencyWorkflowRepository {
     List<EmergencyWorkflow> findHistory(int offset, int limit);
 
     long countHistory();
+
+    default List<EmergencyWorkflow> findNotices(boolean pending, int offset, int limit) {
+        throw new UnsupportedOperationException("通告查询尚未实现");
+    }
+
+    default long countNotices(boolean pending) {
+        throw new UnsupportedOperationException("通告统计尚未实现");
+    }
 }

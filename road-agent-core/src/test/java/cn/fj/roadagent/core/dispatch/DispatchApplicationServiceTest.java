@@ -101,12 +101,14 @@ class DispatchApplicationServiceTest {
                 fixture.allocations.values.get(0).status());
         assertEquals(1, fixture.resources.resources.get("ER-FZ-ROAD").dispatchedQuantity());
         assertEquals(5, published.timeline().size());
+        assertTrue(published.canReleaseResources());
 
         var released = fixture.service.releaseResources(new ReleaseResourcesCommand(
                 workflow.workflowId(), "演练结束，资源归队",
                 published.workflow().lockVersion(), "release-all"
         ));
         assertTrue(released.resourcesReleased());
+        assertFalse(released.canReleaseResources());
         assertEquals(ResourceAllocationStatus.RELEASED,
                 fixture.allocations.values.get(0).status());
         assertEquals(5, fixture.resources.resources.get("ER-FZ-ROAD").availableQuantity());
