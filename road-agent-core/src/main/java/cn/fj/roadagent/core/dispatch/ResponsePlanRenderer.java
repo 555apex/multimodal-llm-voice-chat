@@ -22,11 +22,12 @@ final class ResponsePlanRenderer {
         if (plan == null) throw new IllegalArgumentException("工单缺少应急预案快照");
         Map<String, String> variables = modelVariables == null ? Map.of() : modelVariables;
         Set<String> allowed = placeholders(plan.rescuePlanTemplate());
+        boolean concise = allowed.contains("现场事实简述");
         for (Map.Entry<String, String> item : variables.entrySet()) {
             if (!allowed.contains(item.getKey())) {
                 throw new IllegalArgumentException("模型返回了预案不存在的填充项：" + item.getKey());
             }
-            if (item.getValue() != null && item.getValue().length() > 500) {
+            if (item.getValue() != null && item.getValue().length() > (concise ? 50 : 500)) {
                 throw new IllegalArgumentException("预案填充项过长：" + item.getKey());
             }
         }
@@ -36,16 +37,33 @@ final class ResponsePlanRenderer {
             String key = matcher.group(1).trim();
             String value = systemValue(key, event);
             if (value == null) value = normalize(variables.get(key));
+            if (concise && (value == null || value.equals("待核实") || value.equals("未知"))) {
+                value = "现场影响范围及人员情况尚待核实";
+            }
             if (value == null) value = "待核实";
+            // 变量末尾的句读由模板负责，避免“。。”或“。，”；不触碰数字与桩号。
+            int end = matcher.end();
+            if (end < plan.rescuePlanTemplate().length()
+                    && "，。；：！？".indexOf(plan.rescuePlanTemplate().charAt(end)) >= 0) {
+                value = value.replaceAll("[，。；：！？]+$", "");
+            }
             matcher.appendReplacement(output, Matcher.quoteReplacement(value));
         }
         matcher.appendTail(output);
         String advice = normalize(supplementalAdvice);
         if (advice != null) {
-            if (advice.length() > 1500) throw new IllegalArgumentException("模型补充建议不能超过1500字");
+            if (advice.length() > (concise ? 50 : 1500)) throw new IllegalArgumentException("模型补充建议超过长度限制");
             output.append("\n\n补充建议：").append(advice);
         }
-        return output.toString().trim();
+        String rendered = output.toString().trim()
+                .replaceAll("([，。；：！？])\\1+", "$1")
+                .replaceAll("[，；：]+([。！？])", "$1")
+                .replaceAll("([。！？])[，；：]+", "$1");
+        if (concise) {
+            int length = rendered.replaceAll("\\s", "").length();
+            if (length < 300 || length > 400) throw new IllegalArgumentException("救援方案正文需为300至400字，当前为" + length + "字");
+        }
+        return rendered;
     }
 
     Set<String> placeholders(String template) {

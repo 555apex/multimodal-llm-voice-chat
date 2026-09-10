@@ -5,6 +5,7 @@ import type {
   WorkflowHistoryPage,
   WorkflowInbox,
   WorkflowStage,
+  NoticePage,
 } from '../types/dispatch'
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
@@ -16,7 +17,7 @@ async function parseResponse<T>(response: Response, fallback: string): Promise<T
   } catch {
     throw new Error(fallback)
   }
-  if (!response.ok) throw new Error(body.message || fallback)
+  if (!response.ok) throw Object.assign(new Error(body.message || fallback), { status: response.status })
   return body.data
 }
 
@@ -27,7 +28,7 @@ function actionBody(
   return JSON.stringify({
     ...fields,
     expectedWorkflowVersion,
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey: fields.idempotencyKey ?? crypto.randomUUID(),
   })
 }
 
@@ -109,16 +110,24 @@ export async function releaseWorkflowResources(
   workflowId: string,
   reason: string,
   expectedWorkflowVersion: number,
+  idempotencyKey?: string,
 ): Promise<EmergencyWorkflowItem> {
   const response = await fetch(
     `${apiBaseUrl}/api/v1/emergency-workflows/${encodeURIComponent(workflowId)}/resource-releases`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: actionBody(expectedWorkflowVersion, { reason }),
+      body: actionBody(expectedWorkflowVersion, { reason, idempotencyKey }),
     },
   )
   return parseResponse<EmergencyWorkflowItem>(response, '已调度资源归还失败')
+}
+
+export async function fetchNotices(completionStatus: 'PENDING' | 'COMPLETED', page = 0): Promise<NoticePage> {
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/emergency-workflows/notices?completionStatus=${completionStatus}&page=${page}&size=20`,
+  )
+  return parseResponse<NoticePage>(response, '下发通告查询失败')
 }
 
 export async function correctWorkflowEventType(

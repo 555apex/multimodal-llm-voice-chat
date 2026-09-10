@@ -210,6 +210,29 @@ class MysqlEmergencyWorkflowRepositoryTest {
         assertTrue(restored.resourceShortages().isEmpty());
     }
 
+    @Test
+    void shouldFilterBeforePaginationAndIgnoreOldVersionAllocations() {
+        jdbc.execute("CREATE TABLE w_emergency_resource_allocation (plan_id VARCHAR(40), plan_version INT, allocation_status INT)");
+        for (int i = 1; i <= 4; i++) {
+            jdbc.update("""
+                    INSERT INTO w_emergency_dispatch_workflow
+                    (workflow_id,event_id,current_stage,workflow_status,plan_id,plan_version,
+                     lock_version,stage_entered_at,create_time,update_time)
+                    VALUES (?, ?, NULL, ?, ?, 2, 0, ?, ?, ?)
+                    """, "WF-" + i, "EVENT-" + i, i == 4 ? 8 : 7, "DP-" + i,
+                    java.sql.Timestamp.from(NOW), java.sql.Timestamp.from(NOW), java.sql.Timestamp.from(NOW));
+        }
+        jdbc.update("INSERT INTO w_emergency_resource_allocation VALUES ('DP-1',2,1),('DP-2',2,2),('DP-3',1,1)");
+        assertEquals(1, repository.countNotices(true));
+        assertEquals(3, repository.countNotices(false));
+        assertEquals("WF-1", repository.findNotices(true, 0, 1).get(0).workflowId());
+        assertTrue(repository.findNotices(true, 1, 1).isEmpty());
+        assertEquals(1, repository.findNotices(false, 1, 1).size());
+        jdbc.update("UPDATE w_emergency_resource_allocation SET allocation_status=2 WHERE plan_id='DP-1'");
+        assertEquals(0, repository.countNotices(true));
+        assertEquals(4, repository.countNotices(false));
+    }
+
     private NoticeSnapshot notice() {
         EmergencyEvent event = new EmergencyEvent(
                 "9223372036854775000", "EVT-1", NOW.minusSeconds(60),

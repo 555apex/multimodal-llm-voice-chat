@@ -7,6 +7,7 @@ import {
   fetchWorkflowInbox,
   releaseWorkflowResources,
   retryNextEventClassification,
+  fetchNotices,
 } from '../api/workflowApi'
 import type { DispatchPlan, EmergencyWorkflowItem, WorkflowInbox } from '../types/dispatch'
 import { useAgentStore } from './agent'
@@ -27,6 +28,7 @@ vi.mock('../api/workflowApi', () => ({
   releaseWorkflowResources: vi.fn(),
   correctWorkflowEventType: vi.fn(),
   retryNextEventClassification: vi.fn(),
+  fetchNotices: vi.fn(),
 }))
 
 const event = {
@@ -151,11 +153,34 @@ describe('emergency workflow store', () => {
   })
 
   it('loads completed workflow history independently from pending queues', async () => {
-    vi.mocked(fetchWorkflowHistory).mockResolvedValue({ items: [item], page: 0, size: 20, total: 1 })
+    vi.mocked(fetchNotices).mockResolvedValue({ items: [], page: 0, size: 20, total: 1, pendingCount: 1, completedCount: 0 })
     const store = useEmergencyStore()
     await store.showHistory()
     expect(store.viewMode).toBe('history')
-    expect(store.history?.total).toBe(1)
+    expect(store.notices?.total).toBe(1)
+    expect(fetchNotices).toHaveBeenCalledWith('PENDING', 0)
+  })
+
+  it('keeps the selected notice page during polling and discards stale filter responses', async () => {
+    const store = useEmergencyStore()
+    const result = { items: [{ workflowId: 'WF-N', eventId: 'N', eventType: 'ET106',
+      workflowStatus: 'PUBLISHED' as const, completionStatus: 'COMPLETED' as const }],
+      page: 2, size: 20, total: 45, pendingCount: 1, completedCount: 45 }
+    vi.mocked(fetchNotices).mockResolvedValue(result)
+    store.viewMode = 'history'
+    await store.loadNotices(2)
+    await store.refresh()
+    expect(fetchNotices).toHaveBeenLastCalledWith('PENDING', 2)
+    let resolveOld!: (value: typeof result) => void
+    vi.mocked(fetchNotices).mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
+    const old = store.loadNotices(2)
+    await store.selectCompletion('COMPLETED')
+    resolveOld({ ...result, total: 999 })
+    await old
+    expect(store.notices?.total).toBe(45)
+    expect(store.completionStatus).toBe('COMPLETED')
+    expect(store.noticePage).toBe(0)
+    expect(store.noticeLoading).toBe(false)
   })
 
   it('releases a published plan and refreshes its history page', async () => {

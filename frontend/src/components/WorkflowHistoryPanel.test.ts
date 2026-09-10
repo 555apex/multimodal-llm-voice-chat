@@ -7,6 +7,7 @@ const history: WorkflowHistoryPage = {
   page: 0, size: 20, total: 1,
   items: [{
     workflowId: 'WF-1', currentStage: null, workflowStatus: 'PUBLISHED', workflowVersion: 4,
+    canReleaseResources: true,
     event: {
       eventId: '202607280000000001', customId: 'EVT-1',
       occurrenceTime: '2026-08-19T00:00:00Z', eventType: 'DT01', description: '边坡崩塌',
@@ -83,6 +84,9 @@ describe('WorkflowHistoryPanel', () => {
     expect(wrapper.emitted('releaseResources')?.[0]).toEqual([
       'WF-1', 4, '现场处置完成，资源归队',
     ])
+    await wrapper.setProps({ errorMessage: '网络中断，请重试' })
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('现场处置完成，资源归队')
+    expect(wrapper.get('[role="alert"]').text()).toContain('网络中断')
   })
 
   it('shows the saved no-dispatch reason and type-correction audit label', () => {

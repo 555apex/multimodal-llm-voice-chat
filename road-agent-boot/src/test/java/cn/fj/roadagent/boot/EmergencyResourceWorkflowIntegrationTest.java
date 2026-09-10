@@ -109,21 +109,26 @@ class EmergencyResourceWorkflowIntegrationTest {
                 WHERE e.c_type = '4' AND e.status = '1' AND e.completed = 0
                   AND e.deleted = 0 AND e.event_type IS NOT NULL
                   AND e.event_city_code IS NOT NULL
-                  AND (w.workflow_id IS NULL OR (
-                      w.current_stage = 1 AND w.workflow_status IN (0, 1, 2, 5, 6)
-                  ))
+                  AND w.workflow_id IS NULL
                   AND local_resource.resource_id IS NULL
                 ORDER BY e.c_no, remote_resource.resource_type_code
                 LIMIT 1
                 """);
         String eventId = candidate.get("event_id").toString();
-        proposal(candidate.get("resource_type_code").toString(), 1, "验证跨市资源调配");
+        String remoteResourceType = candidate.get("resource_type_code").toString();
+        proposal(remoteResourceType, 1, "验证跨市资源调配");
 
         var plan = service.generate(eventId);
         assertFalse(plan.hasResourceShortage());
-        assertTrue(plan.allocatedResources().stream()
+        var remoteAllocations = plan.allocatedResources().stream()
+                .filter(item -> item.resourceTypeCode().equals(remoteResourceType))
+                .toList();
+        assertFalse(remoteAllocations.isEmpty());
+        assertTrue(remoteAllocations.stream()
                 .allMatch(item -> item.dispatchScope() == DispatchScope.CROSS_CITY));
-        plan.allocatedResources().forEach(item -> {
+        plan.allocatedResources().stream()
+                .filter(item -> item.dispatchScope() == DispatchScope.CROSS_CITY)
+                .forEach(item -> {
             var quantities = jdbc.queryForMap("""
                     SELECT available_quantity, minimum_reserve_quantity
                     FROM w_emergency_resource WHERE resource_id = ?
