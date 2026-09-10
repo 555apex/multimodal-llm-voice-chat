@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.time.LocalDate;
 import java.util.List;
 
 public record TrafficQueryRequest(
@@ -29,7 +30,9 @@ public record TrafficQueryRequest(
         @Size(max = 20, message = "车型分析城市不能超过20个字符")
         String analysisCity,
 
-        Boolean includeTrend
+        Boolean includeTrend,
+
+        LocalDate analysisDate
 ) {
     public TrafficQueryRequest(
             TrafficQueryType queryType,
@@ -41,6 +44,20 @@ public record TrafficQueryRequest(
             String analysisCity
     ) {
         this(queryType, originCity, destinationCity, routeCode, routeName,
-                selectedCities, analysisCity, null);
+                selectedCities, analysisCity, null, null);
+    }
+
+    public TrafficQueryRequest(
+            TrafficQueryType queryType,
+            String originCity,
+            String destinationCity,
+            String routeCode,
+            String routeName,
+            List<String> selectedCities,
+            String analysisCity,
+            Boolean includeTrend
+    ) {
+        this(queryType, originCity, destinationCity, routeCode, routeName,
+                selectedCities, analysisCity, includeTrend, null);
     }
 }

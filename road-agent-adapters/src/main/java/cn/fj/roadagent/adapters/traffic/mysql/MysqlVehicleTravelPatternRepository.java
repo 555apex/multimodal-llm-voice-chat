@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -25,7 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/** 按城市create_time读取w_vehicletravelpatternanalyzer最新有效记录。 */
+/** 按城市及create_time日期读取w_vehicletravelpatternanalyzer有效记录。 */
 public final class MysqlVehicleTravelPatternRepository implements VehicleTravelPatternPort {
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter HOUR_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -68,11 +69,31 @@ public final class MysqlVehicleTravelPatternRepository implements VehicleTravelP
         }
     }
 
-    private Optional<VehicleTravelPatternSnapshot> loadLatest(String cityName) {
-        if (cityName == null || cityName.isBlank()) {
-            throw new IllegalArgumentException("城市不能为空");
+    @Override
+    public Optional<VehicleTravelPatternSnapshot> forCityOnDate(String cityName, LocalDate date) {
+        if (date == null) return latestForCity(cityName);
+        try {
+            Optional<VehicleTravelPatternSnapshot> result = transactionTemplate.execute(
+                    status -> loadForDate(cityName, date)
+            );
+            return result == null ? Optional.empty() : result;
+        } catch (ExternalServiceException exception) {
+            throw exception;
+        } catch (IllegalArgumentException exception) {
+            throw new ExternalServiceException(
+                    "MYSQL_VEHICLE_PATTERN", "VEHICLE_PATTERN_DATA_INVALID",
+                    "车型出行特征数据校验失败：" + exception.getMessage(), exception
+            );
+        } catch (RuntimeException exception) {
+            throw new ExternalServiceException(
+                    "MYSQL_VEHICLE_PATTERN", "VEHICLE_PATTERN_DATA_UNAVAILABLE",
+                    "车型出行特征数据库暂时不可用", exception
+            );
         }
-        String normalized = cityName.trim().replace("福建省", "").replace("市", "");
+    }
+
+    private Optional<VehicleTravelPatternSnapshot> loadLatest(String cityName) {
+        String normalized = normalizeCity(cityName);
         List<VehicleTravelPatternSnapshot> rows = jdbcTemplate.query("""
                 SELECT cityName, result1, result2, result3, create_time
                 FROM w_vehicletravelpatternanalyzer
@@ -97,6 +118,45 @@ public final class MysqlVehicleTravelPatternRepository implements VehicleTravelP
             );
         }, normalized, normalized + "市");
         return rows.stream().findFirst();
+    }
+
+    private Optional<VehicleTravelPatternSnapshot> loadForDate(String cityName, LocalDate date) {
+        String normalized = normalizeCity(cityName);
+        Timestamp start = Timestamp.valueOf(date.atStartOfDay());
+        Timestamp end = Timestamp.valueOf(date.plusDays(1).atStartOfDay());
+        List<VehicleTravelPatternSnapshot> rows = jdbcTemplate.query("""
+                SELECT cityName, result1, result2, result3, create_time
+                FROM w_vehicletravelpatternanalyzer
+                WHERE (del_flag IS NULL OR del_flag IN ('N', '0'))
+                  AND cityName IN (?, ?)
+                  AND create_time >= ?
+                  AND create_time < ?
+                ORDER BY create_time DESC, id DESC
+                LIMIT 1
+                """, (rs, rowNum) -> {
+            Timestamp createTime = rs.getTimestamp("create_time");
+            if (createTime == null) {
+                throw new IllegalArgumentException("对应日期记录create_time为空");
+            }
+            LocalDateTime localCreateTime = createTime.toLocalDateTime();
+            Instant acquiredAt = localCreateTime.atZone(BUSINESS_ZONE).toInstant();
+            return new VehicleTravelPatternSnapshot(
+                    rs.getString("cityName"),
+                    parseTotals(rs.getString("result1"), "result1"),
+                    parseHourly(rs.getString("result2")),
+                    parseTotals(rs.getString("result3"), "result3"),
+                    localCreateTime.toLocalDate(),
+                    acquiredAt
+            );
+        }, normalized, normalized + "市", start, end);
+        return rows.stream().findFirst();
+    }
+
+    private String normalizeCity(String cityName) {
+        if (cityName == null || cityName.isBlank()) {
+            throw new IllegalArgumentException("城市不能为空");
+        }
+        return cityName.trim().replace("福建省", "").replace("市", "");
     }
 
     private Map<VehicleType, Long> parseTotals(String json, String label) {

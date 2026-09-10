@@ -10,6 +10,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDate;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -49,6 +51,19 @@ class MysqlVehicleTravelPatternRepositoryTest {
         assertEquals(900, xiamen.weeklyVolume(VehicleType.CAR));
         assertEquals(1, fuzhou.hourlyFlows().size());
         assertEquals(0, fuzhou.hourlyFlows().get(0).volume(VehicleType.TRUCK));
+    }
+
+    @Test
+    void selectsLatestRowWithinRequestedCreateTimeDate() {
+        insert(1, "福州市", 100, "2026-08-26 23:59:59", "N");
+        insert(2, "福州市", 200, "2026-08-27 08:00:00", "N");
+        insert(3, "福州市", 300, "2026-08-27 20:00:00", "N");
+        insert(4, "福州市", 400, "2026-08-28 00:00:00", "N");
+
+        var selected = repository.forCityOnDate("福州", LocalDate.of(2026, 8, 27)).orElseThrow();
+
+        assertEquals(300, selected.weeklyVolume(VehicleType.CAR));
+        assertEquals(true, repository.forCityOnDate("厦门", LocalDate.of(2026, 8, 27)).isEmpty());
     }
 
     @Test

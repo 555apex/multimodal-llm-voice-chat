@@ -28,6 +28,7 @@ export interface TrafficQueryPayload {
   routeName?: string
   selectedCities?: string[]
   analysisCity?: string
+  analysisDate?: string
   includeTrend?: boolean
 }
 

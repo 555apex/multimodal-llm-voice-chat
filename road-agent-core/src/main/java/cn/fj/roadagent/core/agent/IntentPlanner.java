@@ -9,6 +9,7 @@ import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
 import cn.fj.roadagent.domain.traffic.FujianCity;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
+import cn.fj.roadagent.core.traffic.VehicleAnalysisDateParser;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -47,7 +48,7 @@ public final class IntentPlanner {
             List<ConversationMessage> history,
             AgentDecision latestSuccessfulTrafficDecision
     ) {
-        boolean followUp = !history.isEmpty() && currentMessage.matches("(?s).*(它|其中|这些|上述|前面|反方向|再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|只展示|只保留|改为|改成|换成|那|可以|好的|同意).*");
+        boolean followUp = !history.isEmpty() && currentMessage.matches("(?s).*(它|其中|这些|上述|前面|反方向|再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|只展示|只保留|改为|改成|换成|那|可以|好的|同意|今天|今日|昨天|昨日|前天|日期|\\d{1,2}月\\d{1,2}日|20\\d{2}[-年/]\\d{1,2}).*");
         var inherited = followUp
                 ? inheritTrafficContext(currentMessage, latestSuccessfulTrafficDecision)
                 : java.util.Optional.<AgentDecision>empty();
@@ -66,8 +67,8 @@ public final class IntentPlanner {
                 必须输出json对象，字段如下：
                 intent, trafficScope, originCity, destinationCity, routeCode, routeName, selectedCities, analysisCity,
                 city, areaName, roadName, direction, eventType, location, severity,
-                eventDescription, resourceTypes, clarification, includeTrend。
-                selectedCities和resourceTypes使用字符串数组，includeTrend使用布尔值，其他不适用字段使用null。
+                eventDescription, resourceTypes, clarification, includeTrend, analysisDate。
+                selectedCities和resourceTypes使用字符串数组，includeTrend使用布尔值；analysisDate仅用于车型查询，格式为YYYY-MM-DD，未指定日期时为null并由Java默认当天；其他不适用字段使用null。
                 trafficScope只能为PROVINCE_OVERVIEW、ROUTE_CATALOG、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、REGIONAL_PAIR_PRESSURE、REGIONAL_KEY_CHANNELS、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON、OD_DESTINATION_TENDENCY、OD_CONNECTION_MATRIX：
                 - 询问当前覆盖路线、当前有数据的国省道或路线与路段名称对应关系时使用ROUTE_CATALOG。
                 - 单独分析一个城市主要联系哪些目的地、目的地联系倾向或出行需求结构时使用OD_DESTINATION_TENDENCY，selectedCities必须恰好一个城市。
@@ -90,6 +91,7 @@ public final class IntentPlanner {
                 - 只询问车型构成、车型流量或车型占比时使用VEHICLE_STRUCTURE；把唯一城市写入analysisCity。
                 - 只询问24小时、早晚高峰或分时出行规律时使用VEHICLE_HOURLY_PATTERN；把唯一城市写入analysisCity。
                 - 只询问工作日和周末车型出行对比时使用VEHICLE_DAY_TYPE_COMPARISON；把唯一城市写入analysisCity。
+                - 车型查询提到今天、昨天、前天或明确年月日时，把对应日期写入analysisDate；不得把日期放入clarification。车型历史查询仍使用相同VEHICLE_*范围。
                 车型查询中若用户没有指定城市，analysisCity必须为null并追问城市；同时指定福州和厦门时analysisCity为null、selectedCities保留两市，由Java分别生成两份结果。
                 用户提到“通行能力”“能力利用率”“瓶颈路线”时，必须选择CAPACITY_开头的范围，不要选择普通路况范围。
                 用户提到跨区域或多城市“交通联系”时优先选择REGIONAL_*；CITY_PAIR只用于两个城市之间当前路况。
@@ -119,6 +121,16 @@ public final class IntentPlanner {
         }
         String normalized = message == null ? "" : message.replaceAll("\\s+", "");
         TrafficQueryType previousType = previous.parsedTrafficQueryType().orElse(null);
+        var requestedVehicleDate = VehicleAnalysisDateParser.parse(normalized);
+        if (previousType != null && previousType.vehiclePatternQuery() && requestedVehicleDate.isPresent()) {
+            return java.util.Optional.of(new AgentDecision(
+                    previous.intent(), previous.trafficScope(), previous.originCity(), previous.destinationCity(),
+                    previous.routeCode(), previous.routeName(), previous.selectedCities(), previous.analysisCity(),
+                    previous.city(), previous.areaName(), previous.roadName(), previous.direction(),
+                    previous.eventType(), previous.location(), previous.severity(), previous.eventDescription(),
+                    previous.resourceTypes(), null, previous.includeTrend(), requestedVehicleDate.get().toString()
+            ));
+        }
         if (previousType != null && previousType.odQuery()) {
             List<String> mentioned = mentionedCities(normalized);
             boolean changesCities = List.of("再加", "加上", "补充", "加入", "去掉", "移除", "删掉")
@@ -134,7 +146,7 @@ public final class IntentPlanner {
                 return java.util.Optional.of(new AgentDecision(previous.intent(), type.name(), null, null,
                         null, null, List.copyOf(cities), null, previous.city(), previous.areaName(), previous.roadName(),
                         previous.direction(), previous.eventType(), previous.location(), previous.severity(),
-                        previous.eventDescription(), previous.resourceTypes(), null, false));
+                        previous.eventDescription(), previous.resourceTypes(), null, false, previous.analysisDate()));
             }
             return java.util.Optional.empty();
         }
@@ -157,7 +169,7 @@ public final class IntentPlanner {
                 return java.util.Optional.of(new AgentDecision(previous.intent(), type.name(), null, null,
                         null, null, List.copyOf(cities), null, previous.city(), previous.areaName(), previous.roadName(),
                         previous.direction(), previous.eventType(), previous.location(), previous.severity(),
-                        previous.eventDescription(), previous.resourceTypes(), clarification, false));
+                        previous.eventDescription(), previous.resourceTypes(), clarification, false, previous.analysisDate()));
             }
         }
         if (!normalized.matches("(?s).*(它|其中|这些|上述|前面|反方向|那|为什么|原因|节假日影响|活动影响).*")) {
@@ -173,12 +185,14 @@ public final class IntentPlanner {
         boolean includeTrend = Boolean.TRUE.equals(previous.includeTrend())
                 || List.of("拥堵", "异常", "趋势", "未来", "缓解", "加剧", "持续")
                 .stream().anyMatch(normalized::contains);
+        String analysisDate = VehicleAnalysisDateParser.parse(normalized)
+                .map(java.time.LocalDate::toString).orElse(previous.analysisDate());
         return java.util.Optional.of(new AgentDecision(
                 previous.intent(), previous.trafficScope(), origin, destination,
                 previous.routeCode(), previous.routeName(), previous.selectedCities(), previous.analysisCity(),
                 previous.city(), previous.areaName(), previous.roadName(), previous.direction(),
                 previous.eventType(), previous.location(), previous.severity(), previous.eventDescription(),
-                previous.resourceTypes(), null, includeTrend
+                previous.resourceTypes(), null, includeTrend, analysisDate
         ));
     }
 

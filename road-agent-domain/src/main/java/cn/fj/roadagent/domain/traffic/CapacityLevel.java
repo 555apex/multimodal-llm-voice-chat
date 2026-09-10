@@ -6,10 +6,10 @@ public enum CapacityLevel {
     BOTTLENECK("瓶颈"),
     SEVERE_BOTTLENECK("严重瓶颈");
 
-    /** 当前模拟数据的瓶颈起始阈值；数据恢复后可将此值改回0.80。 */
-    public static final double BOTTLENECK_THRESHOLD = 0.15;
-    /** 严重瓶颈线为起始阈值的2倍，上限为1.00。 */
-    public static final double SEVERE_BOTTLENECK_THRESHOLD = Math.min(1.00, BOTTLENECK_THRESHOLD * 2);
+    /** 利用率严格大于该值时进入瓶颈等级。 */
+    public static final double BOTTLENECK_THRESHOLD = 0.20;
+    /** 利用率严格大于该值时进入严重瓶颈等级。 */
+    public static final double SEVERE_BOTTLENECK_THRESHOLD = 0.30;
 
     private final String displayName;
 
@@ -22,13 +22,13 @@ public enum CapacityLevel {
     }
 
     public static CapacityLevel fromUtilization(double utilizationRatio) {
-        if (!Double.isFinite(utilizationRatio) || utilizationRatio < 0 || utilizationRatio > 1) {
-            throw new IllegalArgumentException("通行能力利用率必须在0到1之间");
+        if (!Double.isFinite(utilizationRatio) || utilizationRatio < 0) {
+            throw new IllegalArgumentException("通行能力利用率必须是非负有限数");
         }
-        if (utilizationRatio >= SEVERE_BOTTLENECK_THRESHOLD) {
+        if (utilizationRatio > SEVERE_BOTTLENECK_THRESHOLD) {
             return SEVERE_BOTTLENECK;
         }
-        if (utilizationRatio >= BOTTLENECK_THRESHOLD) {
+        if (utilizationRatio > BOTTLENECK_THRESHOLD) {
             return BOTTLENECK;
         }
         return NORMAL;

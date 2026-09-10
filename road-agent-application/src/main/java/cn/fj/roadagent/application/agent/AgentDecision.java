@@ -25,7 +25,8 @@ public record AgentDecision(
         String eventDescription,
         List<String> resourceTypes,
         String clarification,
-        Boolean includeTrend
+        Boolean includeTrend,
+        String analysisDate
 ) {
     public AgentDecision {
         selectedCities = selectedCities == null ? List.of() : List.copyOf(selectedCities);
@@ -49,7 +50,7 @@ public record AgentDecision(
     ) {
         this(intent, trafficScope, null, null, null, null, List.of(), null,
                 city, areaName, roadName, direction,
-                eventType, location, severity, eventDescription, resourceTypes, clarification, null);
+                eventType, location, severity, eventDescription, resourceTypes, clarification, null, null);
     }
 
     /** 保留交通功能扩展前的完整构造方式。 */
@@ -73,7 +74,7 @@ public record AgentDecision(
     ) {
         this(intent, trafficScope, originCity, destinationCity, routeCode, routeName,
                 List.of(), null, city, areaName, roadName, direction, eventType, location,
-                severity, eventDescription, resourceTypes, clarification, null);
+                severity, eventDescription, resourceTypes, clarification, null, null);
     }
 
     /** 保留增加趋势开关前的完整构造契约。 */
@@ -99,7 +100,34 @@ public record AgentDecision(
     ) {
         this(intent, trafficScope, originCity, destinationCity, routeCode, routeName,
                 selectedCities, analysisCity, city, areaName, roadName, direction, eventType, location,
-                severity, eventDescription, resourceTypes, clarification, null);
+                severity, eventDescription, resourceTypes, clarification, null, null);
+    }
+
+    /** 兼容增加车型分析日期前的完整构造契约。 */
+    public AgentDecision(
+            String intent,
+            String trafficScope,
+            String originCity,
+            String destinationCity,
+            String routeCode,
+            String routeName,
+            List<String> selectedCities,
+            String analysisCity,
+            String city,
+            String areaName,
+            String roadName,
+            String direction,
+            String eventType,
+            String location,
+            String severity,
+            String eventDescription,
+            List<String> resourceTypes,
+            String clarification,
+            Boolean includeTrend
+    ) {
+        this(intent, trafficScope, originCity, destinationCity, routeCode, routeName,
+                selectedCities, analysisCity, city, areaName, roadName, direction, eventType, location,
+                severity, eventDescription, resourceTypes, clarification, includeTrend, null);
     }
 
     public AgentIntent parsedIntent() {

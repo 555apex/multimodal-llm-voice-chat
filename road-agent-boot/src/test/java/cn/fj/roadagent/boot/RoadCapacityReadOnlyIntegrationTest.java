@@ -35,8 +35,7 @@ class RoadCapacityReadOnlyIntegrationTest {
         assertTrue(snapshot.capacities().stream().allMatch(value ->
                 value.actualCapacityVph() >= 0
                         && value.designCapacityVph() >= 0
-                        && value.utilizationRatio() >= 0
-                        && value.utilizationRatio() <= 1));
+                        && value.utilizationRatio() >= 0));
 
         RoadCapacityService service = new RoadCapacityService(() -> snapshot, null);
         var overview = service.collectFacts(query(TrafficQueryType.CAPACITY_OVERVIEW, null));
@@ -44,7 +43,7 @@ class RoadCapacityReadOnlyIntegrationTest {
 
         assertEquals(snapshot.capacities().size(), overview.rows().size());
         assertTrue(bottlenecks.rows().size() <= 10);
-        assertTrue(bottlenecks.rows().stream().allMatch(value -> value.utilizationRatio() < 0.8));
+        assertTrue(bottlenecks.rows().stream().allMatch(value -> value.utilizationRatio() > 0.20));
         if (!snapshot.capacities().isEmpty()) {
             String availableCode = snapshot.capacities().get(0).routeCode();
             var detail = service.collectFacts(query(TrafficQueryType.CAPACITY_ROUTE_DETAIL, availableCode));
