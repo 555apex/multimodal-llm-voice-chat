@@ -207,7 +207,8 @@ prepare_backup() {
     --env MYSQL_ALLOW_EMPTY_PASSWORD=yes --env "MYSQL_DATABASE=$schema" \
     "$(client_image)" >/dev/null
   deadline=$((SECONDS + 180))
-  while ! docker exec "$container" mysqladmin --protocol=socket --user=root ping --silent >/dev/null 2>&1; do
+  while ! docker exec "$container" mysql --protocol=socket --user=root \
+      "$schema" --execute "SELECT 1" >/dev/null 2>&1; do
     if (( SECONDS >= deadline )); then
       docker logs "$container" >&2 || true
       docker rm -f "$container" >/dev/null 2>&1 || true
