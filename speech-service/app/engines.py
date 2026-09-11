@@ -6,6 +6,7 @@ from pathlib import Path
 import asyncio
 import subprocess
 import tempfile
+import threading
 from typing import Protocol
 
 from .config import Settings
@@ -17,6 +18,12 @@ class Transcription:
     text: str
     language: str
     duration_seconds: float
+
+class InvalidAudioError(ValueError):
+    pass
+
+class AudioTooLongError(ValueError):
+    pass
 
 
 class AsrEngine(Protocol):
@@ -59,8 +66,15 @@ class FasterWhisperAsrEngine:
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temporary:
                 temporary.write(audio)
                 temporary_path = temporary.name
+            from faster_whisper.audio import decode_audio
+            try:
+                samples = decode_audio(temporary_path, sampling_rate=16000)
+            except Exception as error:
+                raise InvalidAudioError('Unable to decode recording') from error
+            if len(samples) / 16000 > 60.25:
+                raise AudioTooLongError('Recording exceeds 60 seconds')
             segments, info = self._model.transcribe(
-                temporary_path,
+                samples,
                 language=self._settings.asr_language,
                 beam_size=5,
                 vad_filter=True,
@@ -78,9 +92,11 @@ class FasterWhisperAsrEngine:
 
 
 class Qwen3TtsEngine:
+    supports_cancellation = True
     def __init__(self, settings: Settings):
         self._settings = settings
         self._model = None
+        self._request = threading.local()
 
     def load(self) -> None:
         import torch
@@ -100,18 +116,31 @@ class Qwen3TtsEngine:
             dtype=dtype,
             attn_implementation="sdpa",
         )
+        # qwen-tts 0.1.1 drops arbitrary stopping_criteria before talker.generate.
+        # Check at each talker forward boundary, after the previous CUDA step returns.
+        def check_cancelled(_module, _args):
+            event = getattr(self._request, 'cancelled', None)
+            if event is not None and event.is_set():
+                raise RuntimeError('Synthesis cancelled')
+        self._model.model.talker.register_forward_pre_hook(check_cancelled)
 
-    async def synthesize(self, text: str) -> bytes:
-        return await asyncio.to_thread(self._synthesize_blocking, text)
+    async def synthesize(self, text: str, cancelled: threading.Event | None = None) -> bytes:
+        def owned_call():
+            self._request.cancelled = cancelled
+            try:return self._synthesize_blocking(text, cancelled)
+            finally:self._request.cancelled = None
+        return await asyncio.to_thread(owned_call)
 
-    def _synthesize_blocking(self, text: str) -> bytes:
+    def _synthesize_blocking(self, text: str, cancelled: threading.Event | None = None) -> bytes:
         if self._model is None:
             raise RuntimeError("TTS model is not ready")
+        if cancelled is not None and cancelled.is_set():raise RuntimeError('Synthesis cancelled')
         waveforms, sample_rate = self._model.generate_custom_voice(
             text=text,
             language=self._settings.tts_language,
             speaker=self._settings.tts_voice,
         )
+        if cancelled is not None and cancelled.is_set():raise RuntimeError('Synthesis cancelled')
         if not waveforms:
             raise RuntimeError("TTS model returned no waveform")
         waveform = waveforms[0]

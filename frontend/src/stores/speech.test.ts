@@ -62,6 +62,33 @@ describe('speech store', () => {
     expect(store.autoReadEnabled).toBe(true)
   })
 
+  it('does not resume a paused queue when the next synthesized segment arrives', async () => {
+    const store = useSpeechStore(); await store.loadCapabilities()
+    const text = '道路通行正常，请保持安全车距。'.repeat(12)
+    const playing = store.speak('pause-boundary', text)
+    await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(1))
+    await store.toggleMessage('pause-boundary', text)
+    FakeAudio.instances[0]!.onended?.()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(FakeAudio.instances).toHaveLength(1); expect(store.playbackStatus).toBe('paused')
+    await store.toggleMessage('pause-boundary', text)
+    await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(2))
+    store.stop(); await playing
+  })
+
+  it('ignores a late audio play rejection after switching messages', async () => {
+    const store = useSpeechStore(); await store.loadCapabilities()
+    let rejectOld!: (error: Error) => void
+    const play = vi.spyOn(FakeAudio.prototype, 'play').mockImplementationOnce(() => new Promise<void>((_r, reject) => { rejectOld = reject }))
+    const old = store.speak('old-play', '原回答。')
+    await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(1))
+    const next = store.speak('new-play', '新回答。')
+    await vi.waitFor(() => expect(store.playbackStatus).toBe('playing'))
+    rejectOld(new Error('Old play rejected')); await old
+    expect(store.playbackMessageId).toBe('new-play'); expect(FakeAudio.instances[1]!.paused).toBe(false)
+    store.stop(); await next; play.mockRestore()
+  })
+
   it('supports pause, resume and completion for one message', async () => {
     const store = useSpeechStore()
     await store.loadCapabilities()

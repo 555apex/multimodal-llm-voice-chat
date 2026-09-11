@@ -23,6 +23,15 @@ models:
       max_seq_len: 1024
       chunk_size: 24
       stream_format: pcm_s16le_24000_mono
+    cosyvoice3_candidate:
+      release_approved: false
+      reason: mixed-load summary RTF 1.57 and dual-user RTF 3.40-3.59 exceed the 0.8 gate
+      model: FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+      model_revision: 29e01c4e8d000f4bcd70751be16fa94bf3d85a18
+      source_revision: 074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc
+      matcha_revision: dd9105b34bf2be2230f4aa1e4769fb586a3c824e
+      voice: upstream zero-shot reference (candidate only)
+      production_voice_unchanged: Serena
   asr:
     directory: /home/whtc/models/Systran--faster-whisper-small
     container_directory: /models/Systran--faster-whisper-small

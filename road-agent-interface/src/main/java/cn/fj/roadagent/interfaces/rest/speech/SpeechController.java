@@ -72,10 +72,11 @@ public final class SpeechController {
 
     @PostMapping(value = "/syntheses", produces = "audio/mpeg")
     public ResponseEntity<byte[]> synthesize(
-            @Valid @RequestBody SpeechSynthesisRequest body
+            @Valid @RequestBody SpeechSynthesisRequest body,
+            @org.springframework.web.bind.annotation.RequestHeader(value = "X-Speech-Request-Id", required = false) String requestId
     ) {
         SpeechAudio audio = synthesizeUseCase.synthesize(
-                new SynthesizeSpeechCommand(body.text())
+                new SynthesizeSpeechCommand(body.text(), requestId)
         );
         MediaType mediaType;
         try {
@@ -110,6 +111,12 @@ public final class SpeechController {
                         output.flush();
                     }
                 });
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/syntheses/{requestId}")
+    public ResponseEntity<Void> cancel(@org.springframework.web.bind.annotation.PathVariable String requestId) {
+        synthesizeUseCase.cancel(java.util.UUID.fromString(requestId).toString());
+        return ResponseEntity.noContent().build();
     }
 
     private String traceId(HttpServletRequest request) {

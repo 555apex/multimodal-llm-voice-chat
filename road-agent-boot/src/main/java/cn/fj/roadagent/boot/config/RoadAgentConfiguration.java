@@ -343,7 +343,8 @@ public class RoadAgentConfiguration {
         RoadAgentProperties.Speech speech = properties.getSpeech();
         Duration connectTimeout = Duration.ofSeconds(speech.getConnectTimeoutSeconds());
         Duration requestTimeout = Duration.ofSeconds(speech.getRequestTimeoutSeconds());
-        HttpClient client = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(connectTimeout).build();
         var requestFactory = new org.springframework.http.client.JdkClientHttpRequestFactory(client);
         requestFactory.setReadTimeout(requestTimeout);
         org.springframework.web.client.RestClient restClient =

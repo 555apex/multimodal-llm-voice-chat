@@ -6,9 +6,12 @@ import logging
 import os
 import base64
 import json
+from uuid import UUID
 from typing import AsyncIterator
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Request
+from .inference_queue import InferenceQueue
+from .engines import InvalidAudioError, AudioTooLongError
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -60,7 +63,11 @@ def create_app(
                 resolved_settings.asr_device,
                 resolved_settings.asr_compute_type,
             )
-            await load_asr(resolved_asr)
+            try:
+                await load_asr(resolved_asr)
+                application.state.asr_ready = True
+            except Exception:
+                LOGGER.exception('ASR loading failed')
             LOGGER.info(
                 "Loading Qwen3-TTS model=%s device=%s dtype=%s voice=%s",
                 resolved_settings.tts_model_path,
@@ -68,8 +75,15 @@ def create_app(
                 resolved_settings.tts_dtype,
                 resolved_settings.tts_voice,
             )
-            await load_tts(resolved_tts)
-        application.state.ready = True
+            try:
+                await load_tts(resolved_tts)
+                application.state.tts_ready = True
+            except Exception:
+                LOGGER.exception('TTS loading failed; ASR remains independently available')
+        if not load_model:
+            application.state.asr_ready = True
+            application.state.tts_ready = True
+        application.state.ready = application.state.asr_ready or application.state.tts_ready
         yield
         application.state.ready = False
         if hasattr(resolved_tts, 'close'): resolved_tts.close()
@@ -89,6 +103,10 @@ def create_app(
         resolved_settings.tts_max_concurrency
     )
     application.state.ready = False
+    application.state.asr_ready = False
+    application.state.tts_ready = False
+    application.state.asr_queue = InferenceQueue(resolved_settings.asr_max_concurrency)
+    application.state.tts_queue = InferenceQueue(resolved_settings.tts_max_concurrency)
 
     @application.get("/health/live")
     async def live() -> dict[str, str]:
@@ -96,21 +114,21 @@ def create_app(
 
     @application.get("/health/ready")
     async def ready() -> dict[str, object]:
-        if hasattr(resolved_tts, 'healthy') and not resolved_tts.healthy():
-            raise HTTPException(status_code=503, detail="TTS worker unavailable")
+        tts_ready = application.state.tts_ready and (not hasattr(resolved_tts, 'healthy') or resolved_tts.healthy())
         if not application.state.ready:
             raise HTTPException(status_code=503, detail="ASR model is loading")
         return {
             "status": "UP",
-            "asrAvailable": True,
-            "ttsAvailable": True,
-            "ttsStreamingAvailable": hasattr(resolved_tts, 'stream'),
+            "asrAvailable": application.state.asr_ready,
+            "ttsAvailable": tts_ready,
+            "ttsStreamingAvailable": tts_ready and hasattr(resolved_tts, 'stream'),
             "asrModel": resolved_settings.asr_model,
             "ttsVoice": resolved_settings.tts_voice,
         }
 
     @application.post("/v1/asr/transcriptions")
-    async def transcribe(audio: UploadFile = File(...)) -> dict[str, object]:
+    async def transcribe(request: Request, audio: UploadFile = File(...)) -> dict[str, object]:
+        if not application.state.asr_ready: raise HTTPException(503, "ASR is unavailable")
         media_type = (audio.content_type or "").split(";", 1)[0].lower()
         suffix = ALLOWED_MEDIA_TYPES.get(media_type)
         if suffix is None:
@@ -123,10 +141,14 @@ def create_app(
         if len(payload) > resolved_settings.max_audio_bytes:
             raise HTTPException(status_code=413, detail="Audio is too large")
         try:
-            async with application.state.asr_semaphore:
-                result = await asyncio.to_thread(
-                    resolved_asr.transcribe, payload, suffix
-                )
+            result = await application.state.asr_queue.run(
+                lambda cancelled: asyncio.to_thread(resolved_asr.transcribe, payload, suffix), request)
+        except HTTPException:
+            raise
+        except InvalidAudioError as exception:
+            raise HTTPException(415, 'Unable to decode recording') from exception
+        except AudioTooLongError as exception:
+            raise HTTPException(413, 'Recording exceeds 60 seconds') from exception
         except Exception as exception:
             LOGGER.exception("ASR transcription failed")
             raise HTTPException(status_code=503, detail="ASR transcription failed") from exception
@@ -139,15 +161,25 @@ def create_app(
         }
 
     @application.post("/v1/tts/speech")
-    async def synthesize(request: TtsRequest) -> Response:
-        text = request.text.strip()
+    async def synthesize(body: TtsRequest, request: Request) -> Response:
+        if not application.state.tts_ready: raise HTTPException(503, "TTS is unavailable")
+        text = body.text.strip()
         if not text:
             raise HTTPException(status_code=400, detail="Text is empty")
         if len(text) > resolved_settings.max_tts_characters:
             raise HTTPException(status_code=413, detail="Text is too long")
         try:
-            async with application.state.tts_semaphore:
-                audio = await resolved_tts.synthesize(text)
+            async def generate(cancelled):
+                if getattr(resolved_tts, 'supports_cancellation', False):
+                    return await resolved_tts.synthesize(text, cancelled=cancelled)
+                return await resolved_tts.synthesize(text)
+            request_id=request.headers.get('X-Speech-Request-Id')
+            if request_id:
+                try:request_id=str(UUID(request_id))
+                except ValueError:raise HTTPException(400,'Invalid speech request id')
+            audio = await application.state.tts_queue.run(generate, request, request_id)
+        except HTTPException:
+            raise
         except Exception as exception:
             LOGGER.exception("TTS synthesis failed")
             raise HTTPException(status_code=503, detail="TTS synthesis failed") from exception
@@ -156,6 +188,10 @@ def create_app(
             media_type="audio/mpeg",
             headers={"Cache-Control": "no-store"},
         )
+
+    @application.delete('/v1/tts/requests/{request_id}', status_code=204)
+    async def cancel_speech(request_id: UUID):
+        application.state.tts_queue.cancel(str(request_id))
 
     @application.post('/v1/tts/speech/stream')
     async def stream_speech(request: TtsRequest):

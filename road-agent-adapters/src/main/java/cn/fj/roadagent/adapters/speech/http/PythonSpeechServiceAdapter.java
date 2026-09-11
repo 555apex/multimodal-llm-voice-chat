@@ -19,6 +19,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 /** 通过内部HTTP访问Docker中的Python语音服务。 */
 public final class PythonSpeechServiceAdapter implements
@@ -80,7 +81,7 @@ public final class PythonSpeechServiceAdapter implements
             }
             return new SpeechTranscription(body.text(), body.language(), body.durationMs());
         } catch (RestClientException exception) {
-            throw unavailable("ASR_REQUEST_FAILED", "语音识别服务调用失败", exception);
+            throw speechFailure("ASR", exception);
         }
     }
 
@@ -89,6 +90,7 @@ public final class PythonSpeechServiceAdapter implements
         try {
             ResponseEntity<byte[]> response = restClient.post()
                     .uri(baseUrl + "/v1/tts/speech")
+                    .headers(headers -> { if (command.requestId() != null) headers.set("X-Speech-Request-Id", command.requestId()); })
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.valueOf("audio/mpeg"))
                     .body(new TtsRequest(command.text()))
@@ -98,7 +100,7 @@ public final class PythonSpeechServiceAdapter implements
                     ? "audio/mpeg" : response.getHeaders().getContentType().toString();
             return new SpeechAudio(response.getBody(), contentType);
         } catch (RestClientException exception) {
-            throw unavailable("TTS_REQUEST_FAILED", "语音合成服务调用失败", exception);
+            throw speechFailure("TTS", exception);
         }
     }
 
@@ -123,10 +125,43 @@ public final class PythonSpeechServiceAdapter implements
                 });
     }
 
+    @Override
+    public void cancel(String requestId) {
+        try {
+            restClient.delete().uri(baseUrl + "/v1/tts/requests/" + requestId).retrieve().toBodilessEntity();
+        } catch (RestClientException failure) {
+            throw speechFailure("TTS", failure);
+        }
+    }
+
     private ExternalServiceException unavailable(String code, String message, Throwable cause) {
         return cause == null
                 ? new ExternalServiceException("SPEECH", code, message)
                 : new ExternalServiceException("SPEECH", code, message, cause);
+    }
+
+    private ExternalServiceException speechFailure(String task, RestClientException failure) {
+        if (failure instanceof RestClientResponseException response) {
+            return switch (response.getStatusCode().value()) {
+                case 422 -> "ASR".equals(task)
+                        ? unavailable("ASR_NO_SPEECH", "未识别到清晰语音，请靠近麦克风重试", failure)
+                        : unavailable("TTS_INVALID_TEXT", "朗读内容无效，请修改后重试", failure);
+                case 400, 415 -> "ASR".equals(task)
+                        ? unavailable("ASR_INVALID_AUDIO", "录音格式无法解码，请重新录音", failure)
+                        : unavailable("TTS_INVALID_TEXT", "朗读内容无效，请修改后重试", failure);
+                case 413 -> unavailable(task + "_TOO_LARGE", "录音或朗读内容超过限制，请缩短后重试", failure);
+                case 429 -> unavailable(task + "_BUSY", "语音服务正忙，请稍后重试", failure);
+                case 499 -> unavailable(task + "_CANCELLED", "语音任务已取消", failure);
+                case 504 -> unavailable(task + "_TIMEOUT", "语音处理超时，请重试", failure);
+                default -> unavailable(task + "_UNAVAILABLE", "语音服务暂不可用，请稍后重试", failure);
+            };
+        }
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof java.net.http.HttpTimeoutException || cause instanceof java.net.SocketTimeoutException) {
+                return unavailable(task + "_TIMEOUT", "语音处理超时，请重试", failure);
+            }
+        }
+        return unavailable(task + "_UNAVAILABLE", "语音服务暂不可用，请稍后重试", failure);
     }
 
     private record ProviderCapabilities(

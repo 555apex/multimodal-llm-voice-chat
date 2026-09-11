@@ -96,7 +96,8 @@ public final class SpeechApplicationService implements
         if (result.text().isBlank()) {
             throw new IllegalArgumentException("没有识别到清晰语音，请重试");
         }
-        if (result.durationMs() > maxDurationMs) {
+        // Codec frame padding can extend a browser's 60-second stop by a few milliseconds.
+        if (result.durationMs() > maxDurationMs + 250) {
             throw new IllegalArgumentException("录音不能超过%d秒".formatted(maxRecordingSeconds));
         }
         return result;
@@ -114,7 +115,7 @@ public final class SpeechApplicationService implements
                     "单个朗读片段不能超过%d个字符".formatted(maxTtsCharacters)
             );
         }
-        SpeechAudio audio = synthesisPort.synthesize(new SynthesizeSpeechCommand(text));
+        SpeechAudio audio = synthesisPort.synthesize(new SynthesizeSpeechCommand(text, command.requestId()));
         if (audio.content().length == 0) {
             throw new ExternalServiceException(
                     "SPEECH", "TTS_EMPTY_AUDIO", "语音服务没有返回可播放音频"
@@ -131,6 +132,13 @@ public final class SpeechApplicationService implements
             throw new IllegalArgumentException("朗读文本为空或超过长度限制");
         }
         synthesisPort.stream(new SynthesizeSpeechCommand(command.text().trim()), output);
+    }
+
+    @Override
+    public void cancel(String requestId) {
+        requireEnabled();
+        new SynthesizeSpeechCommand("cancel", requestId);
+        synthesisPort.cancel(requestId);
     }
 
     private SpeechCapabilities unavailable() {

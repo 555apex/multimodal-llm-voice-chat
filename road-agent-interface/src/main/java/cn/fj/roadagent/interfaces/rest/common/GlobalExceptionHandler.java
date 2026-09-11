@@ -3,6 +3,8 @@ package cn.fj.roadagent.interfaces.rest.common;
 import cn.fj.roadagent.application.exception.ExternalServiceException;
 import cn.fj.roadagent.application.exception.BusinessRuleException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.MediaType;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -22,7 +24,7 @@ public final class GlobalExceptionHandler {
                 .findFirst()
                 .map(error -> error.getDefaultMessage() == null ? "请求参数不正确" : error.getDefaultMessage())
                 .orElse("请求参数不正确");
-        return ResponseEntity.badRequest().body(
+        return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
                 ApiResponse.error("INVALID_REQUEST", message, traceId(request))
         );
     }
@@ -32,7 +34,7 @@ public final class GlobalExceptionHandler {
             HttpMessageNotReadableException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.badRequest().body(
+        return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
                 ApiResponse.error("INVALID_REQUEST", "请求JSON格式或枚举值不正确", traceId(request))
         );
     }
@@ -42,7 +44,19 @@ public final class GlobalExceptionHandler {
             ExternalServiceException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(
+        HttpStatus status = HttpStatus.BAD_GATEWAY;
+        if ("SPEECH".equals(exception.service())) {
+            String code = exception.errorCode();
+            status = code.endsWith("_NO_SPEECH") ? HttpStatus.UNPROCESSABLE_ENTITY
+                    : code.endsWith("_INVALID_AUDIO") ? HttpStatus.UNSUPPORTED_MEDIA_TYPE
+                    : code.endsWith("_INVALID_TEXT") ? HttpStatus.BAD_REQUEST
+                    : code.endsWith("_TOO_LARGE") ? HttpStatus.PAYLOAD_TOO_LARGE
+                    : code.endsWith("_BUSY") ? HttpStatus.TOO_MANY_REQUESTS
+                    : code.endsWith("_CANCELLED") ? HttpStatus.CONFLICT
+                    : code.endsWith("_TIMEOUT") ? HttpStatus.GATEWAY_TIMEOUT
+                    : HttpStatus.SERVICE_UNAVAILABLE;
+        }
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(
                 ApiResponse.error(exception.errorCode(), exception.getMessage(), traceId(request))
         );
     }
@@ -64,7 +78,7 @@ public final class GlobalExceptionHandler {
         } else {
             status = HttpStatus.CONFLICT;
         }
-        return ResponseEntity.status(status).body(
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(
                 ApiResponse.error(exception.errorCode(), exception.getMessage(), traceId(request))
         );
     }
@@ -74,7 +88,7 @@ public final class GlobalExceptionHandler {
             IllegalArgumentException exception,
             HttpServletRequest request
     ) {
-        return ResponseEntity.badRequest().body(
+        return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(
                 ApiResponse.error("INVALID_REQUEST", exception.getMessage(), traceId(request))
         );
     }
@@ -82,9 +96,15 @@ public final class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUnexpected(
             Exception exception,
-            HttpServletRequest request
+            HttpServletRequest request,
+            HttpServletResponse response
     ) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+        // A binary/SSE response that has started cannot be replaced by a JSON body.
+        if (response.isCommitted()
+                || org.springframework.web.util.DisconnectedClientHelper.isClientDisconnectedException(exception)) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.APPLICATION_JSON).body(
                 ApiResponse.error("INTERNAL_ERROR", "系统处理请求时发生异常", traceId(request))
         );
     }

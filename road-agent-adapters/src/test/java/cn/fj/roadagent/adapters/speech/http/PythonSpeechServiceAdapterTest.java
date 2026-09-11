@@ -16,6 +16,8 @@ import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import cn.fj.roadagent.application.exception.ExternalServiceException;
 
 class PythonSpeechServiceAdapterTest {
     private HttpServer server;
@@ -76,5 +78,20 @@ class PythonSpeechServiceAdapterTest {
         exchange.sendResponseHeaders(200, body.length);
         exchange.getResponseBody().write(body);
         exchange.close();
+    }
+
+    @Test
+    void shouldPreserveNoSpeechBusyAndInvalidAudioInsteadOfReportingGatewayFailure() {
+        server.removeContext("/v1/asr/transcriptions");
+        for (var example : new Object[][]{{422, "ASR_NO_SPEECH"}, {415, "ASR_INVALID_AUDIO"}, {429, "ASR_BUSY"}, {504, "ASR_TIMEOUT"}, {503, "ASR_UNAVAILABLE"}}) {
+            server.createContext("/v1/asr/transcriptions", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                exchange.sendResponseHeaders((int) example[0], -1); exchange.close();
+            });
+            var failure = assertThrows(ExternalServiceException.class, () -> adapter.transcribe(
+                    new TranscribeSpeechCommand(new byte[]{1}, "audio/webm", "recording.webm", 1000)));
+            assertEquals(example[1], failure.errorCode());
+            server.removeContext("/v1/asr/transcriptions");
+        }
     }
 }

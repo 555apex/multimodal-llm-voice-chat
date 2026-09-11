@@ -91,3 +91,23 @@ def test_returns_mp3_from_local_tts_engine() -> None:
         assert response.status_code == 200
         assert response.headers["content-type"] == "audio/mpeg"
         assert response.content == b"ID3-fake-mp3"
+
+def test_tts_load_failure_keeps_asr_available():
+    class FailedTts(FakeTts):
+        def load(self):raise RuntimeError('TTS unavailable')
+    with TestClient(create_app(settings(),FakeAsr(),FailedTts())) as test_client:
+        health=test_client.get('/health/ready').json()
+        assert health['asrAvailable'] and not health['ttsAvailable']
+        response=test_client.post('/v1/asr/transcriptions',files={'audio':('recording.webm',b'fake-audio','audio/webm')})
+        assert response.status_code==200
+        assert test_client.post('/v1/tts/speech',json={'text':'测试'}).status_code==503
+
+def test_no_speech_and_decode_failure_have_distinct_statuses():
+    from app.engines import InvalidAudioError
+    class EmptyAsr(FakeAsr):
+        def transcribe(self,*args):return Transcription('', 'zh', 1)
+    class BrokenAsr(FakeAsr):
+        def transcribe(self,*args):raise InvalidAudioError('bad bytes')
+    for engine,status in [(EmptyAsr(),422),(BrokenAsr(),415)]:
+        with TestClient(create_app(settings(),engine,FakeTts(),load_model=False)) as test_client:
+            assert test_client.post('/v1/asr/transcriptions',files={'audio':('recording.webm',b'fake-audio','audio/webm')}).status_code==status

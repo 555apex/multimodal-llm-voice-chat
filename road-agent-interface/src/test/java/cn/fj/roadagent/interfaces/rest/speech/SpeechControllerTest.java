@@ -18,6 +18,22 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class SpeechControllerTest {
+    @Test
+    void shouldReturnJsonForSpeechErrorsEvenWhenClientAcceptsMp3() throws Exception {
+        MockMvc failing = MockMvcBuilders.standaloneSetup(new SpeechController(
+                () -> new SpeechCapabilities(true, true, "small", "Serena", 60, 10485760),
+                command -> { throw new cn.fj.roadagent.application.exception.ExternalServiceException("SPEECH", "ASR_NO_SPEECH", "未识别到清晰语音"); },
+                command -> { throw new cn.fj.roadagent.application.exception.ExternalServiceException("SPEECH", "TTS_BUSY", "语音服务正忙"); }
+        )).setControllerAdvice(new GlobalExceptionHandler()).build();
+        failing.perform(post("/api/v1/speech/syntheses").accept("audio/mpeg")
+                .contentType("application/json").content("{\"text\":\"测试\"}"))
+                .andExpect(status().isTooManyRequests()).andExpect(content().contentTypeCompatibleWith("application/json"))
+                .andExpect(jsonPath("$.code").value("TTS_BUSY"));
+        failing.perform(multipart("/api/v1/speech/transcriptions")
+                .file(new MockMultipartFile("audio", "recording.webm", "audio/webm", new byte[]{1}))
+                .param("durationMs", "1000"))
+                .andExpect(status().isUnprocessableEntity()).andExpect(jsonPath("$.code").value("ASR_NO_SPEECH"));
+    }
     private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new SpeechController(
                     () -> new SpeechCapabilities(true, true, "small", "Xiaoxiao", 60, 10485760),
                     command -> new SpeechTranscription("五四路现在拥堵吗", "zh", 1200),

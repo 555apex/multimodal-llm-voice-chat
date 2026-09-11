@@ -14,6 +14,7 @@ let activePlaybackCompletion: {
   reject: (reason: Error) => void
 } | null = null
 let playbackGeneration = 0
+let resumeWaiters: Array<() => void> = []
 const audioCache = new Map<string, Blob>()
 
 type CapturableAudio = HTMLAudioElement & { captureStream?: () => MediaStream }
@@ -183,12 +184,21 @@ export const useSpeechStore = defineStore('speech', {
           this.playbackStatus = 'playing'
           return
         }
+        if (this.playbackStatus === 'paused' && !activeAudio) {
+          this.playbackStatus = 'loading'
+          resumeWaiters.splice(0).forEach(resolve => resolve())
+          return
+        }
         if (this.playbackStatus === 'paused' && activeAudio) {
+          const audio = activeAudio, generation = playbackGeneration
           try {
-            await activeAudio.play()
+            await audio.play()
+            if (generation !== playbackGeneration || activeAudio !== audio) return
             this.playbackStatus = 'playing'
-            startAmplitudeTracking(activeAudio, (level) => { this.playbackAmplitude = level })
+            resumeWaiters.splice(0).forEach(resolve => resolve())
+            startAmplitudeTracking(audio, (level) => { this.playbackAmplitude = level })
           } catch {
+            if (generation !== playbackGeneration || activeAudio !== audio) return
             this.playbackStatus = 'failed'
             this.playbackError = '浏览器阻止了音频播放，请再次点击播放'
           }
@@ -207,7 +217,8 @@ export const useSpeechStore = defineStore('speech', {
       if (!segments.length || !this.capabilities?.ttsAvailable || !this.surfaceActive) return
       this.stop(false)
       const generation = playbackGeneration
-      activeAbort = new AbortController()
+      const controller = new AbortController()
+      activeAbort = controller
       this.playbackMessageId = messageId
       this.playbackStatus = 'loading'
       this.playbackError = ''
@@ -223,7 +234,7 @@ export const useSpeechStore = defineStore('speech', {
           await player.open()
           if (generation !== playbackGeneration) { player.close(); return }
           for (const text of streamingSpeechSegments(speechText)) {
-            await receiveSpeech(text, player, activeAbort.signal)
+            await receiveSpeech(text, player, controller.signal)
             if (generation !== playbackGeneration) return
           }
           player.end()
@@ -231,14 +242,16 @@ export const useSpeechStore = defineStore('speech', {
           if (generation === playbackGeneration) this.finishPlayback()
           return
         }
-        let nextAudio = this.loadSegment(messageId, 0, segments[0], activeAbort.signal)
+        let nextAudio = this.loadSegment(messageId, 0, segments[0], controller.signal)
         for (let index = 0; index < segments.length; index += 1) {
           const blob = await nextAudio
           if (generation !== playbackGeneration) return
           nextAudio = index + 1 < segments.length
-            ? this.loadSegment(messageId, index + 1, segments[index + 1], activeAbort.signal)
+            ? this.loadSegment(messageId, index + 1, segments[index + 1], controller.signal)
             : Promise.resolve(new Blob())
           void nextAudio.catch(() => undefined)
+          await this.waitForResume()
+          if (generation !== playbackGeneration) return
           await this.playBlob(blob, generation)
         }
         if (generation === playbackGeneration) {
@@ -254,6 +267,10 @@ export const useSpeechStore = defineStore('speech', {
       }
     },
 
+    async waitForResume() {
+      if (this.playbackStatus === 'paused') await new Promise<void>(resolve => resumeWaiters.push(resolve))
+    },
+
     async loadSegment(
       messageId: string,
       index: number,
@@ -264,6 +281,8 @@ export const useSpeechStore = defineStore('speech', {
       const cached = audioCache.get(key)
       if (cached) return cached
       const blob = await synthesizeSpeech(text, signal)
+      if (signal.aborted) throw new DOMException('Cancelled', 'AbortError')
+      if (audioCache.size >= 32) audioCache.delete(audioCache.keys().next().value!)
       audioCache.set(key, blob)
       return blob
     },
@@ -280,17 +299,20 @@ export const useSpeechStore = defineStore('speech', {
         activeAudio = audio
         activePlaybackCompletion = { resolve, reject }
         audio.onended = () => {
+          if (activeAudio !== audio || generation !== playbackGeneration) return
           this.releaseActiveAudio()
         }
         audio.onerror = () => {
+          if (activeAudio !== audio || generation !== playbackGeneration) return
           this.releaseActiveAudio(new Error('合成音频无法播放'))
         }
         void audio.play().then(() => {
-          if (generation === playbackGeneration) {
+          if (generation === playbackGeneration && activeAudio === audio && this.playbackStatus !== 'paused') {
             this.playbackStatus = 'playing'
             startAmplitudeTracking(audio, (level) => { this.playbackAmplitude = level })
           }
         }).catch((error) => {
+          if (generation !== playbackGeneration || activeAudio !== audio) return
           this.releaseActiveAudio(
             error instanceof Error ? error : new Error('浏览器阻止了音频播放'),
           )
@@ -300,6 +322,7 @@ export const useSpeechStore = defineStore('speech', {
 
     stop(clearError = true) {
       playbackGeneration += 1
+      resumeWaiters.splice(0).forEach(resolve => resolve())
       activeAbort?.abort()
       activeAbort = null
       this.releaseActiveAudio()
