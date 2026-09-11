@@ -4,6 +4,7 @@ import cn.fj.roadagent.application.agent.AgentDecision;
 import cn.fj.roadagent.domain.traffic.FujianCity;
 import cn.fj.roadagent.domain.traffic.HighwayRoute;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
+import cn.fj.roadagent.core.traffic.VehicleAnalysisDateParser;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -69,12 +70,14 @@ final class KnownTrafficQuestionClassifier {
         if (vehicleType.isPresent()) {
             List<String> cities = mentionedCities(normalized);
             String analysisCity = cities.size() == 1 ? cities.get(0) : null;
+            String analysisDate = VehicleAnalysisDateParser.parse(normalized)
+                    .map(java.time.LocalDate::toString).orElse(null);
             String clarification = cities.isEmpty()
                     ? "请选择福州或厦门进行车型出行特征分析。"
                     : cities.size() > 2
                     ? "车型分析当前支持福州和厦门，请调整城市范围。"
                     : null;
-            return Optional.of(decision(vehicleType.get(), cities, analysisCity, clarification));
+            return Optional.of(decision(vehicleType.get(), cities, analysisCity, clarification, analysisDate));
         }
 
         Optional<TrafficQueryType> capacityType = capacityType(normalized);
@@ -123,8 +126,8 @@ final class KnownTrafficQuestionClassifier {
         if (routeCode(text) != null || routeName != null) {
             return Optional.of(TrafficQueryType.CAPACITY_ROUTE_DETAIL);
         }
-        if (containsAny(text, "哪些瓶颈", "能力瓶颈", "瓶颈路线", "严重瓶颈", "利用率最低", "能力最低", "瓶颈排行", "瓶颈排名",
-                "低利用率", "利用率较低", "利用率偏低", "哪些路线利用率低")) {
+        if (containsAny(text, "哪些瓶颈", "能力瓶颈", "瓶颈路线", "严重瓶颈", "利用率最高", "能力压力最大", "瓶颈排行", "瓶颈排名",
+                "高利用率", "利用率较高", "利用率偏高", "哪些路线利用率高")) {
             return Optional.of(TrafficQueryType.CAPACITY_BOTTLENECKS);
         }
         return Optional.of(TrafficQueryType.CAPACITY_OVERVIEW);
@@ -260,11 +263,14 @@ final class KnownTrafficQuestionClassifier {
         if (containsAny(text, "拥堵状况指数", "拥堵指数0到1", "拥堵指数0至1")) {
             return Optional.of("拥堵状况指数取值为0至1，数值越大表示相对拥堵程度越高；具体路况状态仍以数据库status字段为权威，指数只作为排序和研判辅助。 ");
         }
-        if (text.contains("利用率等于80%") || text.contains("利用率等于80％")) {
-            return Optional.of("按本项目口径，通行能力利用率等于80%时判定为正常。 ");
+        if (text.contains("利用率等于15%") || text.contains("利用率等于15％")) {
+            return Optional.of("按当前项目口径，通行能力利用率等于15%时判定为正常；严格高于20%才进入瓶颈等级。 ");
+        }
+        if (text.contains("利用率等于20%") || text.contains("利用率等于20％")) {
+            return Optional.of("按当前项目口径，通行能力利用率等于20%时仍判定为正常，严格高于20%才判定为瓶颈。 ");
         }
         if (text.contains("利用率等于30%") || text.contains("利用率等于30％")) {
-            return Optional.of("按本项目口径，通行能力利用率等于30%时判定为严重瓶颈。 ");
+            return Optional.of("按本项目口径，通行能力利用率等于30%时判定为瓶颈，严格高于30%才判定为严重瓶颈。 ");
         }
         if (containsAny(text, "实际通行能力为0", "实际能力为0")) {
             return Optional.of("实际通行能力为0是有效数据库值，应按0辆/小时展示；瓶颈等级采用数据库利用率并按项目阈值判定，不把0当作缺失值。 ");
@@ -356,10 +362,20 @@ final class KnownTrafficQuestionClassifier {
             String analysisCity,
             String clarification
     ) {
+        return decision(type, selectedCities, analysisCity, clarification, null);
+    }
+
+    private static AgentDecision decision(
+            TrafficQueryType type,
+            List<String> selectedCities,
+            String analysisCity,
+            String clarification,
+            String analysisDate
+    ) {
         return new AgentDecision(
                 "TRAFFIC_QUERY", type.name(), null, null, null, null,
                 selectedCities, analysisCity, null, null, null, null,
-                null, null, null, null, List.of(), clarification
+                null, null, null, null, List.of(), clarification, false, analysisDate
         );
     }
 }

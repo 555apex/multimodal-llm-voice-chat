@@ -48,6 +48,14 @@ class EmergencyWorkflowControllerTest {
             public WorkflowHistoryPage history(int page, int size) {
                 return new WorkflowHistoryPage(List.of(view), page, size, 1);
             }
+
+            @Override
+            public cn.fj.roadagent.application.dispatch.NoticePage notices(String completionStatus, int page, int size) {
+                return new cn.fj.roadagent.application.dispatch.NoticePage(List.of(
+                        new cn.fj.roadagent.application.dispatch.NoticePage.Item(
+                                "WF-1", event.eventId(), event.eventType(), "福州", null,
+                                "NT-1", now, "PUBLISHED", completionStatus)), page, size, 1, 1, 0);
+            }
         };
         EmergencyWorkflowController controller = new EmergencyWorkflowController(
                 stage -> new WorkflowInbox(view, new WorkflowCounts(3, 2, 1)),
@@ -68,6 +76,17 @@ class EmergencyWorkflowControllerTest {
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addFilter(new TraceIdFilter())
                 .build();
+    }
+
+    @Test
+    void shouldReturnNoticeSummariesWithoutLoadingFullPlan() throws Exception {
+        mockMvc.perform(get("/api/v1/emergency-workflows/notices").param("completionStatus", "PENDING"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.pendingCount").value(1))
+                .andExpect(jsonPath("$.data.items[0].eventId").value("202607280000000001"))
+                .andExpect(jsonPath("$.data.items[0].completionStatus").value("PENDING"))
+                .andExpect(jsonPath("$.data.items[0].timeline").doesNotExist())
+                .andExpect(jsonPath("$.data.items[0].currentPlan").doesNotExist());
     }
 
     @Test

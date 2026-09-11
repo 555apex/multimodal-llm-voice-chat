@@ -10,6 +10,17 @@ const speechErrors: Record<string, string> = {
   ASR_UNAVAILABLE: '语音识别暂不可用，请稍后重试',
 }
 
+export class SpeechApiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly traceId: string,
+  ) {
+    super(message)
+    this.name = 'SpeechApiError'
+  }
+}
+
 async function parseJson<T>(response: Response, fallback: string): Promise<T> {
   let body: ApiResponse<T>
   try {
@@ -17,7 +28,13 @@ async function parseJson<T>(response: Response, fallback: string): Promise<T> {
   } catch {
     throw new Error(fallback)
   }
-  if (!response.ok) throw new Error(speechErrors[body.code] || body.message || fallback)
+  if (!response.ok) {
+    throw new SpeechApiError(
+      speechErrors[body.code] || body.message || fallback,
+      body.code,
+      body.traceId,
+    )
+  }
   return body.data
 }
 

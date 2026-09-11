@@ -123,7 +123,6 @@ function selectAlarmLevel(event: Event) {
     </header>
 
     <div class="facility-warning-scroll">
-      <p v-if="actionError" class="facility-query-state error" role="alert">{{ actionError }}</p>
       <div v-if="errorMessage && !pageData && !report && !focusItems.length" class="facility-query-state error" role="alert">
         <strong>设施预警暂时无法加载</strong>
         <p>{{ errorMessage }}</p>
@@ -173,6 +172,7 @@ function selectAlarmLevel(event: Event) {
                 {{ actionKind === 'confirm' ? '处理说明' : actionKind === 'resolved' ? '处置结果' : '忽略原因' }}
                 <textarea v-model="actionRemark" rows="3" maxlength="200" required></textarea>
               </label>
+              <p v-if="actionError" class="facility-action-error" role="alert">{{ actionError }}</p>
               <p v-if="actionKind !== 'confirm'">提交后告警将结束且不能在本页面恢复。</p>
               <div>
                 <button type="button" :disabled="actionBusy" @click="cancelAction">取消</button>

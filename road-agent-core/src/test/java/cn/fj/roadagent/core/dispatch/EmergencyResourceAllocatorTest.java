@@ -63,6 +63,36 @@ class EmergencyResourceAllocatorTest {
     }
 
     @Test
+    void shouldUseNearestCityWhenNoLocalResourceExists() {
+        Map<String, GeoPoint> centers = Map.of(
+                "350100", new GeoPoint(0, 0),
+                "350200", new GeoPoint(2.1, 0),
+                "350500", new GeoPoint(1.5, 0),
+                "350600", new GeoPoint(2.4, 0)
+        );
+        EmergencyResourceAllocator allocator = new EmergencyResourceAllocator(
+                (from, to) -> to.longitude() * 100
+        );
+
+        ResourceAllocationResult result = allocator.allocate(
+                EVENT,
+                List.of(requirement(1)),
+                List.of(
+                        resource("XM", "350200", "厦门", 5, 2),
+                        resource("QZ", "350500", "泉州", 3, 1),
+                        resource("ZZ", "350600", "漳州", 6, 1)
+                ),
+                centers,
+                "WF-1", "DP-1", 1, NOW
+        );
+
+        assertEquals("QZ", result.allocations().get(0).resource().resourceId());
+        assertEquals(DispatchScope.CROSS_CITY,
+                result.allocations().get(0).resource().dispatchScope());
+        assertTrue(result.shortages().isEmpty());
+    }
+
+    @Test
     void shouldReportProvincialShortageInsteadOfOverselling() {
         EmergencyResourceAllocator allocator = new EmergencyResourceAllocator(
                 (from, to) -> 100D

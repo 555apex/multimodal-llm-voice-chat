@@ -5,7 +5,7 @@ import ChatMessage from './ChatMessage.vue'
 import DigitalHumanPanel from './DigitalHumanPanel.vue'
 import EmergencyAlertCard from './EmergencyAlertCard.vue'
 import FacilityWarningPanel from './FacilityWarningPanel.vue'
-import WorkflowHistoryPanel from './WorkflowHistoryPanel.vue'
+import NoticePanel from './NoticePanel.vue'
 import VoiceInputButton from './VoiceInputButton.vue'
 import { useAgentStore } from '../stores/agent'
 import { useEmergencyStore } from '../stores/emergency'
@@ -27,7 +27,6 @@ const {
   counts: emergencyCounts,
   selectedStage: emergencyStage,
   viewMode: emergencyViewMode,
-  history: emergencyHistory,
   totalPending,
   actionBusy: emergencyActionBusy,
   queryStatus: emergencyQueryStatus,
@@ -274,16 +273,23 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
 
       <section v-show="activeTab === 'emergency'" class="emergency-workspace" role="tabpanel">
         <div class="workflow-stage-toolbar">
-          <label>事件处理层次
+          <label v-if="emergencyViewMode === 'inbox'">事件处理层次
             <select :value="emergencyStage" :disabled="emergencyActionBusy" @change="selectEmergencyStage">
               <option value="LEVEL_1">一级现场处置（{{ emergencyCounts.level1 }}）</option>
               <option value="LEVEL_2">二级专业复核（{{ emergencyCounts.level2 }}）</option>
               <option value="LEVEL_3">三级省级决策（{{ emergencyCounts.level3 }}）</option>
             </select>
           </label>
+          <label v-else>办理状态
+            <select :value="emergencyStore.completionStatus"
+              @change="emergencyStore.selectCompletion(($event.target as HTMLSelectElement).value as 'PENDING' | 'COMPLETED')">
+              <option value="PENDING">未办结（{{ emergencyStore.notices?.pendingCount ?? 0 }}）</option>
+              <option value="COMPLETED">已办结（{{ emergencyStore.notices?.completedCount ?? 0 }}）</option>
+            </select>
+          </label>
           <div>
             <button type="button" :class="{ active: emergencyViewMode === 'inbox' }" @click="emergencyStore.showInbox">待办</button>
-            <button type="button" :class="{ active: emergencyViewMode === 'history' }" @click="emergencyStore.showHistory">流程记录</button>
+            <button type="button" :class="{ active: emergencyViewMode === 'history' }" @click="emergencyStore.showHistory">下发通告</button>
           </div>
         </div>
 
@@ -314,13 +320,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             @review="emergencyStore.review"
             @command="emergencyStore.decideCommand"
           />
-          <WorkflowHistoryPanel
-            v-else-if="emergencyViewMode === 'history' && emergencyHistory"
-            :history="emergencyHistory"
-            :busy="emergencyActionBusy || emergencyStore.polling"
-            @page="emergencyStore.loadHistory"
-            @release-resources="emergencyStore.releaseResources"
-          />
+          <NoticePanel v-else-if="emergencyViewMode === 'history'" />
           <div v-else-if="emergencyError" class="emergency-query-state error" role="alert">
             <span aria-hidden="true">!</span>
             <div><strong>待处理事件暂时无法加载</strong><p>{{ emergencyError }}</p></div>
@@ -332,7 +332,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
           </div>
           <div v-else class="emergency-query-state empty" aria-live="polite">
             <span aria-hidden="true">✓</span>
-            <div><strong>{{ emergencyViewMode === 'history' ? '当前没有已办结记录' : '当前层次没有待处理事件' }}</strong><p>系统会继续在后台自动查询</p></div>
+            <div><strong>当前层次没有待处理事件</strong><p>系统会继续在后台自动查询</p></div>
             <button type="button" @click="emergencyStore.refresh">重新查询</button>
           </div>
         </div>

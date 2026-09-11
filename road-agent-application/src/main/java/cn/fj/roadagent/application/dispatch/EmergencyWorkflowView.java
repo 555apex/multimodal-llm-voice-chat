@@ -17,10 +17,17 @@ public record EmergencyWorkflowView(
         ProfessionalReview professionalReview,
         CommandDecision commandDecision,
         List<WorkflowAction> timeline,
-        boolean resourcesReleased
+        boolean resourcesReleased,
+        boolean canReleaseResources
 ) {
     public EmergencyWorkflowView {
         timeline = timeline == null ? List.of() : List.copyOf(timeline);
+    }
+
+    public EmergencyWorkflowView(EmergencyWorkflow workflow, EmergencyEvent event,
+            DispatchPlan currentPlan, ProfessionalReview professionalReview,
+            CommandDecision commandDecision, List<WorkflowAction> timeline, boolean resourcesReleased) {
+        this(workflow, event, currentPlan, professionalReview, commandDecision, timeline, resourcesReleased, false);
     }
 
     public EmergencyWorkflowView(

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_ENV_FILE="$ROOT/.env"
+BASE_ENV_FILE="${ROADAGENT_BASE_ENV_FILE:-$ROOT/.env}"
 ADMIN_ENV_FILE="$ROOT/.env.db-admin"
 DB_ADMIN_ENV_FILE="${ROADAGENT_DB_ADMIN_ENV_FILE:-$ADMIN_ENV_FILE}"
 PUBLIC_CONFIG_DIR="${ROADAGENT_PUBLIC_CONFIG_DIR:-/home/whtc/.config/road-agent}"
@@ -93,6 +93,8 @@ ensure_public_environment() {
       die "public database access file must have mode 600: $PUBLIC_DB_ACCESS_FILE"
     [[ "$(env_value "$PUBLIC_DB_ACCESS_FILE" ROADAGENT_DB_USERNAME)" == "$PUBLIC_DB_USERNAME" ]] || \
       die "unexpected public database username in $PUBLIC_DB_ACCESS_FILE"
+    [[ "$(env_value "$PUBLIC_DB_ACCESS_FILE" ROADAGENT_DB_URL)" == "$(env_value "$BASE_ENV_FILE" ROADAGENT_DB_URL)" ]] || \
+      die "public database URL does not match the active runtime database; stage both files together"
     return
   fi
 
@@ -175,6 +177,11 @@ ensure_access() {
 }
 
 case "${1:-}" in
+  provision)
+    require_files
+    ensure_public_environment
+    apply_grants
+    ;;
   ensure)
     ensure_access
     ;;
@@ -189,7 +196,7 @@ case "${1:-}" in
     db_client "$PUBLIC_DB_ACCESS_FILE" info
     ;;
   *)
-    echo "usage: public-db-access [ensure|verify|grants]" >&2
+    echo "usage: public-db-access [provision|ensure|verify|grants]" >&2
     exit 2
     ;;
 esac

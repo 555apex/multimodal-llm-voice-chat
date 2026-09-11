@@ -22,7 +22,10 @@ public record EmergencyWorkflowResponse(
         ProfessionalReview professionalReview,
         CommandDecision commandDecision,
         List<WorkflowAction> timeline,
-        boolean resourcesReleased
+        boolean resourcesReleased,
+        boolean canReleaseResources,
+        String completionStatus,
+        String resourceReleaseUnavailableReason
 ) {
     public static EmergencyWorkflowResponse from(EmergencyWorkflowView view) {
         return new EmergencyWorkflowResponse(
@@ -35,7 +38,11 @@ public record EmergencyWorkflowResponse(
                 EmergencyEventResponse.from(view.event()),
                 view.currentPlan() == null ? null : DispatchResponse.from(view.currentPlan()),
                 view.professionalReview(), view.commandDecision(), view.timeline(),
-                view.resourcesReleased()
+                view.resourcesReleased(), view.canReleaseResources(),
+                view.workflow() == null || (view.workflow().status() != WorkflowStatus.PUBLISHED
+                        && view.workflow().status() != WorkflowStatus.NO_DISPATCH) ? null
+                        : view.canReleaseResources() ? "PENDING" : "COMPLETED",
+                view.canReleaseResources() ? null : (view.resourcesReleased() ? "资源已全部归还" : "没有需要归还的已调度资源")
         );
     }
 }

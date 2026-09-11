@@ -167,7 +167,7 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
                     decision.routeCode(), decision.routeName(), List.of(city), city,
                     decision.city(), decision.areaName(), decision.roadName(), decision.direction(),
                     decision.eventType(), decision.location(), decision.severity(), decision.eventDescription(),
-                    decision.resourceTypes(), decision.clarification(), decision.includeTrend()
+                    decision.resourceTypes(), decision.clarification(), decision.includeTrend(), decision.analysisDate()
             );
             AgentSkillResult result = skill.execute(new AgentExecutionContext(command, cityDecision, history), sink);
             if (!combined.isEmpty()) combined.append("\n\n");

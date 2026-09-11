@@ -5,6 +5,7 @@ import cn.fj.roadagent.application.model.ModelRequest;
 import cn.fj.roadagent.application.model.ModelResponse;
 import cn.fj.roadagent.application.model.ModelStreamListener;
 import cn.fj.roadagent.application.port.ChatModelPort;
+import cn.fj.roadagent.application.port.VehicleTravelPatternPort;
 import cn.fj.roadagent.application.traffic.HighwayTrafficQuery;
 import cn.fj.roadagent.application.traffic.TrafficSummaryResponse;
 import cn.fj.roadagent.domain.traffic.TrafficQueryType;
@@ -59,6 +60,49 @@ class VehiclePatternServiceTest {
     }
 
     @Test
+    void keepsAvailableHourlyPointsWhenTheirDateDiffersFromRecordDate() {
+        VehicleTravelPatternSnapshot mismatched = new VehicleTravelPatternSnapshot(
+                "福州市", volumes(900, 200, 100),
+                List.of(new VehicleHourlyFlow(LocalDateTime.of(2026, 8, 26, 10, 0), volumes(165, 20, 10))),
+                volumes(150, 50, 20), LocalDate.of(2026, 8, 27),
+                Instant.parse("2026-08-27T08:00:01Z")
+        );
+        VehiclePatternService service = service(mismatched);
+
+        var facts = service.collectFacts(query(TrafficQueryType.VEHICLE_HOURLY_PATTERN, "福州"));
+
+        assertEquals(165, facts.hourlySeries().get(10).car());
+        assertEquals(LocalDate.of(2026, 8, 26), facts.hourlyDataDate());
+        assertEquals(23, facts.missingHourCount());
+    }
+
+    @Test
+    void explicitHistoricalDateUsesDateAwareRepositoryQuery() {
+        class RecordingPort implements VehicleTravelPatternPort {
+            LocalDate requestedDate;
+            @Override public Optional<VehicleTravelPatternSnapshot> latestForCity(String cityName) {
+                throw new AssertionError("历史查询不应读取无日期最新记录");
+            }
+            @Override public Optional<VehicleTravelPatternSnapshot> forCityOnDate(String cityName, LocalDate date) {
+                requestedDate = date;
+                return Optional.of(snapshot());
+            }
+        }
+        RecordingPort port = new RecordingPort();
+        VehiclePatternService service = new VehiclePatternService(port, new NoopModel());
+        HighwayTrafficQuery historical = new HighwayTrafficQuery(
+                TrafficQueryType.VEHICLE_PATTERN_OVERVIEW, null, null, null, null,
+                List.of(), "福州", "trace", false, false, LocalDate.of(2026, 8, 27)
+        );
+
+        var facts = service.collectFacts(historical);
+
+        assertEquals(LocalDate.of(2026, 8, 27), port.requestedDate);
+        assertEquals(LocalDate.of(2026, 8, 27), facts.analysisDate());
+        assertTrue(facts.title().contains("2026年8月27日"));
+    }
+
+    @Test
     void requiresExactlyOneSupportedAnalysisCity() {
         VehiclePatternService service = service(snapshot());
         assertEquals("VEHICLE_PATTERN_CITY_REQUIRED", assertThrows(BusinessRuleException.class, () ->
@@ -105,6 +149,7 @@ class VehiclePatternServiceTest {
 
         assertTrue(!result.summary().contains("999999"));
         assertTrue(result.summary().contains("最新记录"));
+        assertTrue(result.summary().contains("缺失时段统一按0展示"));
     }
 
     private VehiclePatternService service(VehicleTravelPatternSnapshot snapshot) {

@@ -18,24 +18,32 @@ import cn.fj.roadagent.domain.traffic.VehicleHourlyFlow;
 import cn.fj.roadagent.domain.traffic.VehicleTravelPatternSnapshot;
 import cn.fj.roadagent.domain.traffic.VehicleType;
 
-import java.time.LocalDateTime;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-/** 需求1-6：直接使用某城市create_time最新记录完成车型与时间特征分析。 */
+/** 需求1-6：按城市和记录日期完成车型与时间特征分析。 */
 public final class VehiclePatternService {
-    private static final DateTimeFormatter HOUR_LABEL = DateTimeFormatter.ofPattern("HH:mm");
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+    private static final DateTimeFormatter DATE_LABEL = DateTimeFormatter.ofPattern("yyyy年M月d日");
     private final VehicleTravelPatternPort dataPort;
     private final ChatModelPort chatModelPort;
+    private final Clock clock;
 
     public VehiclePatternService(VehicleTravelPatternPort dataPort, ChatModelPort chatModelPort) {
+        this(dataPort, chatModelPort, Clock.system(BUSINESS_ZONE));
+    }
+
+    VehiclePatternService(VehicleTravelPatternPort dataPort, ChatModelPort chatModelPort, Clock clock) {
         this.dataPort = dataPort;
         this.chatModelPort = chatModelPort;
+        this.clock = clock.withZone(BUSINESS_ZONE);
     }
 
     public VehiclePatternFacts collectFacts(HighwayTrafficQuery query) {
@@ -43,19 +51,26 @@ public final class VehiclePatternService {
             throw new BusinessRuleException("VEHICLE_PATTERN_QUERY_TYPE_REQUIRED", "请说明车型出行特征查询类型");
         }
         FujianCity city = requireSupportedCity(resolveAnalysisCity(query));
-        VehicleTravelPatternSnapshot snapshot = dataPort.latestForCity(city.displayName())
+        boolean explicitDate = query.analysisDate() != null;
+        LocalDate analysisDate = explicitDate ? query.analysisDate() : LocalDate.now(clock);
+        java.util.Optional<VehicleTravelPatternSnapshot> selected = explicitDate
+                ? dataPort.forCityOnDate(city.displayName(), analysisDate)
+                : dataPort.latestForCity(city.displayName());
+        VehicleTravelPatternSnapshot snapshot = selected
                 .orElseThrow(() -> new BusinessRuleException(
-                        "VEHICLE_PATTERN_NOT_FOUND", city.displayName() + "市暂无车型出行特征数据"
+                        "VEHICLE_PATTERN_NOT_FOUND",
+                        city.displayName() + "市在" + analysisDate.format(DATE_LABEL) + "暂无车型出行特征数据"
                 ));
 
-        List<HourlyVehicleFlowResultItem> allHours = normalizeHours(snapshot);
+        LocalDate hourlyDataDate = resolveHourlyDataDate(snapshot, analysisDate);
+        List<HourlyVehicleFlowResultItem> allHours = normalizeHours(snapshot, hourlyDataDate);
         List<VehicleStructureResultItem> allStructure = structure(snapshot);
         List<VehicleTimeFeatureResultItem> allTimeFeatures = timeFeatures(allHours);
         List<VehicleDayTypeResultItem> allDayTypes = dayTypes(snapshot);
 
         TrafficQueryType type = query.queryType();
         return new VehiclePatternFacts(
-                type, title(type, city), city.displayName() + "市",
+                type, title(type, city, analysisDate, explicitDate), city.displayName() + "市",
                 type == TrafficQueryType.VEHICLE_PATTERN_OVERVIEW || type == TrafficQueryType.VEHICLE_STRUCTURE
                         ? allStructure : List.of(),
                 type == TrafficQueryType.VEHICLE_PATTERN_OVERVIEW || type == TrafficQueryType.VEHICLE_HOURLY_PATTERN
@@ -64,8 +79,8 @@ public final class VehiclePatternService {
                         || type == TrafficQueryType.VEHICLE_DAY_TYPE_COMPARISON ? allDayTypes : List.of(),
                 type == TrafficQueryType.VEHICLE_PATTERN_OVERVIEW || type == TrafficQueryType.VEHICLE_HOURLY_PATTERN
                         ? allHours : List.of(),
-                snapshot.acquiredAt(),
-                missingHourCount(snapshot)
+                analysisDate, hourlyDataDate, snapshot.acquiredAt(),
+                missingHourCount(snapshot, hourlyDataDate)
         );
     }
 
@@ -81,6 +96,7 @@ public final class VehiclePatternService {
         } catch (IllegalArgumentException ignored) {
             summary = deterministicSummary(facts);
         }
+        summary = appendCompletenessNotice(summary, facts);
         String traceId = query.traceId() == null || query.traceId().isBlank()
                 ? UUID.randomUUID().toString() : query.traceId();
         return HighwayTrafficResult.fromVehicleFacts(facts, summary, traceId);
@@ -117,10 +133,23 @@ public final class VehiclePatternService {
         return analysisCity;
     }
 
-    private List<HourlyVehicleFlowResultItem> normalizeHours(VehicleTravelPatternSnapshot snapshot) {
+    private LocalDate resolveHourlyDataDate(VehicleTravelPatternSnapshot snapshot, LocalDate analysisDate) {
+        boolean hasRequestedDate = snapshot.hourlyFlows().stream()
+                .anyMatch(row -> row.hour().toLocalDate().equals(analysisDate));
+        if (hasRequestedDate) return analysisDate;
+        return snapshot.hourlyFlows().stream()
+                .map(row -> row.hour().toLocalDate())
+                .max(LocalDate::compareTo)
+                .orElse(null);
+    }
+
+    private List<HourlyVehicleFlowResultItem> normalizeHours(
+            VehicleTravelPatternSnapshot snapshot,
+            LocalDate hourlyDataDate
+    ) {
         Map<Integer, VehicleHourlyFlow> source = new LinkedHashMap<>();
         snapshot.hourlyFlows().stream()
-                .filter(row -> row.hour().toLocalDate().equals(snapshot.dataDate()))
+                .filter(row -> hourlyDataDate != null && row.hour().toLocalDate().equals(hourlyDataDate))
                 .forEach(row -> {
                     VehicleHourlyFlow old = source.putIfAbsent(row.hour().getHour(), row);
                     if (old != null) {
@@ -138,9 +167,9 @@ public final class VehiclePatternService {
         }).toList();
     }
 
-    private int missingHourCount(VehicleTravelPatternSnapshot snapshot) {
+    private int missingHourCount(VehicleTravelPatternSnapshot snapshot, LocalDate hourlyDataDate) {
         long distinctHours = snapshot.hourlyFlows().stream()
-                .filter(row -> row.hour().toLocalDate().equals(snapshot.dataDate()))
+                .filter(row -> hourlyDataDate != null && row.hour().toLocalDate().equals(hourlyDataDate))
                 .map(row -> row.hour().getHour())
                 .distinct()
                 .count();
@@ -212,7 +241,7 @@ public final class VehiclePatternService {
                 必须输出严格JSON对象，且只能包含summary字段。summary必须是3至5句、80至600字的连贯中文。
                 先概括所选城市的车型结构或时间规律，再点出占比最高车型、峰值时段或工作日周末差异中与本次查询有关的重点，最后给出简洁监测建议。
                 工作日字段表示5天合计，周末字段表示2天合计，不得将二者改写成日均值。
-                缺失小时在图表中由Java补0，补0仅表示源数据未提供，不代表该小时实际没有车辆。
+                缺失小时和小时明细日期由Java在最终摘要中追加说明，模型不得把补0解释成该小时实际没有车辆。
                 必须直接采用结构化事实，不得重新计算、修正或补充数值，不推测事故、天气、道路原因，不输出数据异常分析，不讨论数据限制和系统实现，不使用Markdown。
                 """.strip();
         return new ModelRequest(prompt, serializeFacts(facts), List.of(), 0.1);
@@ -223,6 +252,8 @@ public final class VehiclePatternService {
         out.append("queryType=").append(facts.queryType()).append('\n');
         out.append("title=").append(facts.title()).append('\n');
         out.append("analysisCity=").append(facts.analysisCity()).append('\n');
+        out.append("analysisDate=").append(facts.analysisDate()).append('\n');
+        out.append("hourlyDataDate=").append(facts.hourlyDataDate()).append('\n');
         out.append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n');
         out.append("calculationPolicy=车型3类；24小时；工作日5天合计；周末2天合计；早高峰07至09；晚高峰17至19；缺失小时补0不代表实际无车\n");
         out.append("missingHourCount=").append(facts.missingHourCount()).append('\n');
@@ -244,7 +275,8 @@ public final class VehiclePatternService {
     }
 
     String deterministicSummary(VehiclePatternFacts facts) {
-        String first = "已完成" + facts.analysisCity() + "当前车型出行特征分析，相关统计按该城市最新记录形成。";
+        String first = "已完成" + facts.analysisCity() + facts.analysisDate().format(DATE_LABEL)
+                + "车型出行特征分析，相关统计按该日期最新记录形成。";
         String second;
         if (!facts.structureRows().isEmpty()) {
             VehicleStructureResultItem top = facts.structureRows().stream()
@@ -265,8 +297,23 @@ public final class VehiclePatternService {
         return first + second + "建议持续跟踪后续批次变化，为重点时段交通组织提供参考。";
     }
 
-    private String title(TrafficQueryType type, FujianCity city) {
-        String prefix = city.displayName() + "市";
+    private String appendCompletenessNotice(String summary, VehiclePatternFacts facts) {
+        if (facts.hourlySeries().isEmpty()) return summary;
+        StringBuilder result = new StringBuilder(summary == null ? "" : summary.trim());
+        if (facts.hourlyDataDate() != null && !facts.hourlyDataDate().equals(facts.analysisDate())) {
+            result.append(" 本次24小时折线采用所选记录内")
+                    .append(facts.hourlyDataDate().format(DATE_LABEL))
+                    .append("的最新可用分时数据。");
+        }
+        if (facts.missingHourCount() > 0) {
+            result.append(" 该分时数据尚缺少").append(facts.missingHourCount())
+                    .append("个小时，图表缺失时段统一按0展示，不代表实际无车。");
+        }
+        return result.toString();
+    }
+
+    private String title(TrafficQueryType type, FujianCity city, LocalDate analysisDate, boolean explicitDate) {
+        String prefix = city.displayName() + "市" + (explicitDate ? analysisDate.format(DATE_LABEL) : "");
         return switch (type) {
             case VEHICLE_STRUCTURE -> prefix + "车型结构分析";
             case VEHICLE_HOURLY_PATTERN -> prefix + "24小时分车型出行规律";

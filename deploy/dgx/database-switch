@@ -1,0 +1,330 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$ROOT/../.." && pwd)"
+RUNTIME_ENV="$ROOT/.env"
+PUBLIC_ENV="${ROADAGENT_PUBLIC_DB_ACCESS_FILE:-/home/whtc/.config/road-agent/public-original-db.env}"
+STATE_DIR="${ROADAGENT_DB_SWITCH_STATE_DIR:-/home/whtc/.config/road-agent/db-switch}"
+BACKUP_ROOT="${ROADAGENT_DB_SWITCH_BACKUP_ROOT:-/home/whtc/workspace/backups/road-agent-db-switch}"
+CANDIDATE_RUNTIME="$STATE_DIR/runtime.env"
+CANDIDATE_PUBLIC="$STATE_DIR/public.env"
+VERIFIED_MARKER="$STATE_DIR/verified.sha256"
+PREPARED_MARKER="$STATE_DIR/prepared-backup"
+CLIENT="$ROOT/mysql-client-entrypoint"
+
+REQUIRED_TABLES=(
+  w_highway_network w_road_network_status w_congestion_detection_result w_road_capacity
+  w_transport_hubs w_region_code w_vehicletravelpatternanalyzer w_abnormal_event
+  w_emergency_dispatch_order w_emergency_dispatch_workflow w_emergency_professional_review
+  w_emergency_command_decision w_emergency_dispatch_action_log w_emergency_resource
+  w_emergency_resource_allocation w_lw_incident w_emergency_event_classification
+  w_emergency_response_plan w_festival_data w_realtime_abnormal
+)
+
+die() { echo "$*" >&2; exit 1; }
+
+env_value() {
+  local file="$1" key="$2"
+  awk -F= -v key="$key" '$1 == key { sub(/^[^=]*=/, ""); print; exit }' "$file"
+}
+
+require_secret_file() {
+  local file="$1"
+  [[ -f "$file" ]] || die "missing secure environment file: $file"
+  [[ "$(stat -c '%a' "$file")" == "600" ]] || die "environment file must have mode 600: $file"
+  local key
+  for key in ROADAGENT_DB_URL ROADAGENT_DB_USERNAME ROADAGENT_DB_PASSWORD; do
+    grep -Eq "^${key}=.+" "$file" || die "missing $key in $file"
+  done
+}
+
+validate_url() {
+  local value
+  value="$(env_value "$1" ROADAGENT_DB_URL)"
+  [[ "$value" =~ ^jdbc:mysql://[^/]+/[A-Za-z0-9_]+([?].*)?$ ]] || \
+    die "ROADAGENT_DB_URL must use jdbc:mysql://host[:port]/schema format"
+}
+
+client_image() {
+  local configured
+  configured="$(env_value "$RUNTIME_ENV" MYSQL_CLIENT_IMAGE)"
+  printf '%s\n' "${configured:-dockerproxy.net/library/mysql:8.4.11-oraclelinux9}"
+}
+
+db_client() {
+  local environment_file="$1"
+  shift
+  docker run --rm --network host --env-file "$environment_file" \
+    --volume "$CLIENT:/db-tool:ro" --entrypoint /db-tool "$(client_image)" "$@"
+}
+
+merge_runtime_environment() {
+  local supplied="$1"
+  python3 - "$RUNTIME_ENV" "$supplied" "$CANDIDATE_RUNTIME" <<'PY'
+from pathlib import Path
+import os, sys
+
+base, supplied, output = map(Path, sys.argv[1:])
+keys = {"ROADAGENT_DB_URL", "ROADAGENT_DB_USERNAME", "ROADAGENT_DB_PASSWORD"}
+values = {}
+for line in supplied.read_text().splitlines():
+    if "=" in line and not line.lstrip().startswith("#"):
+        key, value = line.split("=", 1)
+        if key in keys:
+            values[key] = value
+if set(values) != keys or any(not value for value in values.values()):
+    raise SystemExit("candidate database environment is incomplete")
+lines = []
+seen = set()
+for line in base.read_text().splitlines():
+    key = line.split("=", 1)[0] if "=" in line else ""
+    if key in keys:
+        lines.append(key + "=" + values[key])
+        seen.add(key)
+    else:
+        lines.append(line)
+for key in sorted(keys - seen):
+    lines.append(key + "=" + values[key])
+temporary = output.with_suffix(".tmp")
+temporary.write_text("\n".join(lines) + "\n")
+os.chmod(temporary, 0o600)
+temporary.replace(output)
+PY
+}
+
+merge_public_environment() {
+  python3 - "$PUBLIC_ENV" "$CANDIDATE_RUNTIME" "$CANDIDATE_PUBLIC" <<'PY'
+from pathlib import Path
+import os, sys
+
+current, runtime, output = map(Path, sys.argv[1:])
+def values(path):
+    return dict(line.split("=", 1) for line in path.read_text().splitlines()
+                if "=" in line and not line.lstrip().startswith("#"))
+old, new = values(current), values(runtime)
+required = ["ROADAGENT_DB_USERNAME", "ROADAGENT_DB_PASSWORD"]
+if any(not old.get(key) for key in required):
+    raise SystemExit("current public database credentials are incomplete")
+temporary = output.with_suffix(".tmp")
+temporary.write_text(
+    "ROADAGENT_DB_URL=" + new["ROADAGENT_DB_URL"] + "\n" +
+    "ROADAGENT_DB_USERNAME=" + old["ROADAGENT_DB_USERNAME"] + "\n" +
+    "ROADAGENT_DB_PASSWORD=" + old["ROADAGENT_DB_PASSWORD"] + "\n"
+)
+os.chmod(temporary, 0o600)
+temporary.replace(output)
+PY
+}
+
+stage() {
+  local supplied="${1:-}"
+  [[ -n "$supplied" ]] || die "usage: database-switch stage /secure/new-db.env"
+  require_secret_file "$RUNTIME_ENV"
+  require_secret_file "$PUBLIC_ENV"
+  require_secret_file "$supplied"
+  validate_url "$supplied"
+  mkdir -p "$STATE_DIR" "$BACKUP_ROOT"
+  chmod 700 "$STATE_DIR" "$BACKUP_ROOT"
+  merge_runtime_environment "$supplied"
+  merge_public_environment
+  rm -f "$VERIFIED_MARKER" "$PREPARED_MARKER"
+  echo "Candidate database configuration staged without changing the running services."
+}
+
+verify_readonly() {
+  require_secret_file "$CANDIDATE_RUNTIME"
+  require_secret_file "$CANDIDATE_PUBLIC"
+  validate_url "$CANDIDATE_RUNTIME"
+  local schema table missing compact inventory grants count_sql baseline
+  schema="$(db_client "$CANDIDATE_RUNTIME" schema | tr -d '\r')"
+  [[ "$schema" =~ ^[A-Za-z0-9_]+$ ]] || die "candidate schema is invalid"
+  echo "Database server and session:"
+  db_client "$CANDIDATE_RUNTIME" query \
+    "SELECT VERSION(),DATABASE(),@@session.time_zone,@@character_set_database,@@collation_database,@@transaction_isolation,@@max_connections"
+  missing=0
+  for table in "${REQUIRED_TABLES[@]}"; do
+    if ! db_client "$CANDIDATE_RUNTIME" query "SELECT 1 FROM \`$schema\`.\`$table\` LIMIT 0" >/dev/null; then
+      echo "missing or unreadable table: $table" >&2
+      missing=1
+    fi
+  done
+  (( missing == 0 )) || die "candidate database schema is incomplete"
+  compact="$(db_client "$CANDIDATE_RUNTIME" query \
+    "SELECT COUNT(DISTINCT event_type) FROM w_emergency_response_plan WHERE plan_status=1 AND source_document='compact-20260910'" | tr -d '\r')"
+  [[ "$compact" == "16" ]] || die "candidate database does not have 16 active compact-20260910 plans"
+  inventory="$(db_client "$CANDIDATE_RUNTIME" query "SELECT COUNT(*) FROM w_emergency_resource r LEFT JOIN (SELECT resource_id,SUM(IF(allocation_status=0,allocated_quantity,0)) reserved,SUM(IF(allocation_status=1,allocated_quantity,0)) dispatched FROM w_emergency_resource_allocation GROUP BY resource_id) a ON a.resource_id=r.resource_id WHERE r.available_quantity<0 OR r.reserved_quantity<>COALESCE(a.reserved,0) OR r.dispatched_quantity<>COALESCE(a.dispatched,0) OR r.available_quantity+r.reserved_quantity+r.dispatched_quantity>r.total_quantity" | tr -d '\r')"
+  [[ "$inventory" == "0" ]] || die "candidate database inventory and allocation ledgers are inconsistent"
+  count_sql=""
+  for table in "${REQUIRED_TABLES[@]}"; do
+    [[ -z "$count_sql" ]] || count_sql+=" UNION ALL "
+    count_sql+="SELECT '$table',COUNT(*) FROM \`$schema\`.\`$table\`"
+  done
+  baseline="$STATE_DIR/candidate-baseline.tsv"
+  db_client "$CANDIDATE_RUNTIME" query "$count_sql" > "$baseline"
+  db_client "$CANDIDATE_RUNTIME" query \
+    "SELECT TABLE_NAME,COLUMN_NAME,COLUMN_TYPE,IS_NULLABLE,COLUMN_KEY,EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='$schema' ORDER BY TABLE_NAME,ORDINAL_POSITION" \
+    > "$STATE_DIR/candidate-columns.tsv"
+  db_client "$CANDIDATE_RUNTIME" query \
+    "SELECT TABLE_NAME,INDEX_NAME,NON_UNIQUE,SEQ_IN_INDEX,COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA='$schema' ORDER BY TABLE_NAME,INDEX_NAME,SEQ_IN_INDEX" \
+    > "$STATE_DIR/candidate-indexes.tsv"
+  db_client "$CANDIDATE_RUNTIME" query \
+    "SELECT TABLE_NAME,CONSTRAINT_NAME,CONSTRAINT_TYPE FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA='$schema' ORDER BY TABLE_NAME,CONSTRAINT_NAME" \
+    > "$STATE_DIR/candidate-constraints.tsv"
+  chmod 600 "$STATE_DIR"/candidate-*.tsv
+  for table in "${REQUIRED_TABLES[@]}"; do
+    db_client "$CANDIDATE_PUBLIC" query "SELECT 1 FROM \`$schema\`.\`$table\` LIMIT 0" >/dev/null || \
+      die "public application account cannot read required table: $table"
+  done
+  grants="$STATE_DIR/public-grants.txt"
+  db_client "$CANDIDATE_PUBLIC" info > "$grants"
+  chmod 600 "$grants"
+  sha256sum "$CANDIDATE_RUNTIME" "$CANDIDATE_PUBLIC" "$STATE_DIR"/candidate-*.tsv > "$VERIFIED_MARKER"
+  chmod 600 "$VERIFIED_MARKER"
+  rm -f "$PREPARED_MARKER"
+  echo "Candidate database passed read-only schema, compact-plan, inventory and public-read checks."
+}
+
+prepare_backup() {
+  require_secret_file "$CANDIDATE_RUNTIME"
+  require_secret_file "$CANDIDATE_PUBLIC"
+  [[ -f "$VERIFIED_MARKER" ]] || die "candidate database has not passed verify"
+  (cd / && sha256sum --check "$VERIFIED_MARKER" >/dev/null) || die "candidate verification artifacts changed"
+  local schema stamp backup dump container deadline restored_counts
+  schema="$(db_client "$CANDIDATE_RUNTIME" schema | tr -d '\r')"
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  backup="$BACKUP_ROOT/candidate-$stamp"
+  dump="$backup/candidate.sql"
+  container="road-agent-db-restore-$stamp"
+  mkdir -p "$backup"
+  chmod 700 "$backup"
+  cp -p "$STATE_DIR"/candidate-*.tsv "$backup/"
+  db_client "$CANDIDATE_RUNTIME" dump-safe "${REQUIRED_TABLES[@]}" > "$dump"
+  [[ -s "$dump" ]] || die "candidate logical backup is empty"
+  chmod 600 "$backup"/*
+
+  docker run -d --name "$container" --network none \
+    --env MYSQL_ALLOW_EMPTY_PASSWORD=yes --env "MYSQL_DATABASE=$schema" \
+    "$(client_image)" >/dev/null
+  deadline=$((SECONDS + 180))
+  while ! docker exec "$container" mysqladmin --protocol=socket --user=root ping --silent >/dev/null 2>&1; do
+    if (( SECONDS >= deadline )); then
+      docker logs "$container" >&2 || true
+      docker rm -f "$container" >/dev/null 2>&1 || true
+      die "isolated MySQL did not become ready"
+    fi
+    sleep 3
+  done
+  if ! docker exec -i "$container" mysql --protocol=socket --user=root "$schema" < "$dump"; then
+    docker rm -f "$container" >/dev/null 2>&1 || true
+    die "candidate backup could not be restored into isolated MySQL"
+  fi
+  restored_counts="$backup/restored-counts.tsv"
+  docker exec "$container" mysql --protocol=socket --user=root --batch --raw --skip-column-names \
+    "$schema" --execute "$(python3 - "$schema" "${REQUIRED_TABLES[@]}" <<'PY'
+import sys
+schema, *tables = sys.argv[1:]
+print(" UNION ALL ".join(f"SELECT '{table}',COUNT(*) FROM `{schema}`.`{table}`" for table in tables))
+PY
+)" | tr -d '\r' > "$restored_counts"
+  docker rm -f "$container" >/dev/null
+  cmp -s "$STATE_DIR/candidate-baseline.tsv" "$restored_counts" || \
+    die "isolated restore row counts differ from the candidate backup"
+  sha256sum "$backup"/* > "$backup/SHA256SUMS"
+  chmod 600 "$backup/SHA256SUMS"
+  printf '%s\n' "$backup" > "$PREPARED_MARKER"
+  chmod 600 "$PREPARED_MARKER"
+  echo "Candidate database backup restored and verified in isolated MySQL: $backup"
+}
+
+provision_public() {
+  local admin="${1:-}"
+  [[ -n "$admin" ]] || die "usage: database-switch provision-public /secure/new-db-admin.env"
+  require_secret_file "$CANDIDATE_RUNTIME"
+  require_secret_file "$CANDIDATE_PUBLIC"
+  require_secret_file "$admin"
+  validate_url "$admin"
+  ROADAGENT_BASE_ENV_FILE="$CANDIDATE_RUNTIME" \
+  ROADAGENT_DB_ADMIN_ENV_FILE="$admin" \
+  ROADAGENT_PUBLIC_DB_ACCESS_FILE="$CANDIDATE_PUBLIC" \
+    "$ROOT/public-db-access" provision
+  rm -f "$VERIFIED_MARKER" "$PREPARED_MARKER"
+  echo "Public application grants were provisioned on the candidate database; run verify again."
+}
+
+compose_all() {
+  ROADAGENT_PUBLIC_DB_ACCESS_FILE="$PUBLIC_ENV" docker compose --env-file "$RUNTIME_ENV" \
+    --project-directory "$PROJECT_ROOT" -f "$ROOT/compose.yaml" -f "$ROOT/compose.public.yaml" \
+    --profile public "$@"
+}
+
+wait_healthy() {
+  local container="$1" deadline=$((SECONDS + 180)) status
+  while (( SECONDS < deadline )); do
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
+    [[ "$status" == "healthy" ]] && return 0
+    [[ "$status" =~ ^(unhealthy|exited|dead)$ ]] && die "$container failed during database switch: $status"
+    sleep 5
+  done
+  die "$container did not become healthy after database switch"
+}
+
+activate() {
+  require_secret_file "$CANDIDATE_RUNTIME"
+  require_secret_file "$CANDIDATE_PUBLIC"
+  [[ -f "$VERIFIED_MARKER" ]] || die "candidate database has not passed verify"
+  [[ -f "$PREPARED_MARKER" && -d "$(cat "$PREPARED_MARKER")" ]] || \
+    die "candidate database backup has not passed an isolated restore; run prepare"
+  (cd / && sha256sum --check "$VERIFIED_MARKER" >/dev/null) || die "candidate environment changed after verification"
+  (cd "$(cat "$PREPARED_MARKER")" && sha256sum --check SHA256SUMS >/dev/null) || \
+    die "candidate database backup changed after preparation"
+  local stamp backup temporary
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  backup="$BACKUP_ROOT/$stamp"
+  mkdir -p "$backup"
+  chmod 700 "$backup"
+  cp -p "$RUNTIME_ENV" "$backup/runtime.env"
+  cp -p "$PUBLIC_ENV" "$backup/public.env"
+  docker inspect road-agent-dgx-backend road-agent-dgx-public-backend \
+    road-agent-dgx-frontend road-agent-dgx-public-frontend > "$backup/containers.json"
+  chmod 600 "$backup/containers.json"
+  compose_all stop frontend public-frontend backend public-backend
+  temporary="$RUNTIME_ENV.switch"
+  install -m 600 "$CANDIDATE_RUNTIME" "$temporary"
+  mv "$temporary" "$RUNTIME_ENV"
+  temporary="$PUBLIC_ENV.switch"
+  install -m 600 "$CANDIDATE_PUBLIC" "$temporary"
+  mv "$temporary" "$PUBLIC_ENV"
+  compose_all up -d --no-build --force-recreate backend public-backend
+  wait_healthy road-agent-dgx-backend
+  wait_healthy road-agent-dgx-public-backend
+  compose_all up -d --no-build --force-recreate frontend public-frontend
+  printf '%s\n' "$backup" > "$STATE_DIR/active-backup"
+  chmod 600 "$STATE_DIR/active-backup"
+  echo "Database switch complete. Previous configuration backup: $backup"
+}
+
+rollback() {
+  local backup="${1:-}"
+  [[ -n "$backup" ]] || backup="$(cat "$STATE_DIR/active-backup" 2>/dev/null || true)"
+  [[ -f "$backup/runtime.env" && -f "$backup/public.env" ]] || die "database-switch backup is incomplete: $backup"
+  compose_all stop frontend public-frontend backend public-backend
+  install -m 600 "$backup/runtime.env" "$RUNTIME_ENV.switch"
+  mv "$RUNTIME_ENV.switch" "$RUNTIME_ENV"
+  install -m 600 "$backup/public.env" "$PUBLIC_ENV.switch"
+  mv "$PUBLIC_ENV.switch" "$PUBLIC_ENV"
+  compose_all up -d --no-build --force-recreate backend public-backend frontend public-frontend
+  wait_healthy road-agent-dgx-backend
+  wait_healthy road-agent-dgx-public-backend
+  echo "Previous database configuration restored from $backup"
+}
+
+case "${1:-}" in
+  stage) shift; stage "$@" ;;
+  verify) verify_readonly ;;
+  prepare) prepare_backup ;;
+  provision-public) shift; provision_public "$@" ;;
+  activate) activate ;;
+  rollback) shift; rollback "$@" ;;
+  *) echo "usage: database-switch [stage FILE|verify|prepare|provision-public ADMIN_FILE|activate|rollback [BACKUP_DIR]]" >&2; exit 2 ;;
+esac

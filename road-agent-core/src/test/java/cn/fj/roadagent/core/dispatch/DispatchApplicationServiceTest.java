@@ -101,12 +101,14 @@ class DispatchApplicationServiceTest {
                 fixture.allocations.values.get(0).status());
         assertEquals(1, fixture.resources.resources.get("ER-FZ-ROAD").dispatchedQuantity());
         assertEquals(5, published.timeline().size());
+        assertTrue(published.canReleaseResources());
 
         var released = fixture.service.releaseResources(new ReleaseResourcesCommand(
                 workflow.workflowId(), "演练结束，资源归队",
                 published.workflow().lockVersion(), "release-all"
         ));
         assertTrue(released.resourcesReleased());
+        assertFalse(released.canReleaseResources());
         assertEquals(ResourceAllocationStatus.RELEASED,
                 fixture.allocations.values.get(0).status());
         assertEquals(5, fixture.resources.resources.get("ER-FZ-ROAD").availableQuantity());
@@ -191,6 +193,32 @@ class DispatchApplicationServiceTest {
         assertEquals(1L, retried.version());
         assertEquals(DispatchStatus.WAITING_APPROVAL, retried.status());
         assertEquals(2, model.calls);
+    }
+
+    @Test
+    void interruptedStaleGenerationShouldRecoverSamePlanAndKeepAuditTrail() {
+        Fixture fixture = fixture(new FixedModel());
+        Instant interruptedAt = NOW.minus(Duration.ofMinutes(10));
+        DispatchPlan stuckPlan = DispatchPlan.generating(
+                "DP-STUCK", event(), 1L, interruptedAt
+        );
+        EmergencyWorkflow stuckWorkflow = EmergencyWorkflow.generating(
+                "WF-STUCK", event().eventId(), stuckPlan.planId(), stuckPlan.version(),
+                interruptedAt
+        );
+        assertTrue(fixture.plans.insert(stuckPlan));
+        assertTrue(fixture.workflows.insertWorkflow(stuckWorkflow));
+
+        DispatchPlan recovered = fixture.service.generate(event().eventId());
+
+        assertEquals("DP-STUCK", recovered.planId());
+        assertEquals(1L, recovered.version());
+        assertEquals(DispatchStatus.WAITING_APPROVAL, recovered.status());
+        assertEquals(WorkflowStatus.WAITING_LEVEL_1_SUBMISSION,
+                fixture.workflows.findWorkflow("WF-STUCK").orElseThrow().status());
+        assertTrue(fixture.workflows.findActions("WF-STUCK").stream()
+                .anyMatch(action -> action.actionType()
+                        == cn.fj.roadagent.domain.dispatch.WorkflowActionType.GENERATION_RETRIED));
     }
 
     @Test

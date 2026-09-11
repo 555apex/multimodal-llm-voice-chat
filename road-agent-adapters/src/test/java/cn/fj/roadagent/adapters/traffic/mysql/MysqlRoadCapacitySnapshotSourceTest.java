@@ -54,7 +54,7 @@ class MysqlRoadCapacitySnapshotSourceTest {
 
         assertEquals(1, snapshot.capacities().size());
         assertEquals(0, snapshot.capacities().get(0).actualCapacityVph());
-        assertEquals(CapacityLevel.SEVERE_BOTTLENECK, snapshot.capacities().get(0).level());
+        assertEquals(CapacityLevel.NORMAL, snapshot.capacities().get(0).level());
     }
 
     @Test
@@ -91,7 +91,7 @@ class MysqlRoadCapacitySnapshotSourceTest {
     }
 
     @Test
-    void rejectsNullNegativeAndOutOfRangeValues() {
+    void rejectsNullAndNegativeValuesButAllowsOverCapacityUtilization() {
         insertRoute(1, "G104", "北京-平潭", null);
         jdbc.update("""
                 INSERT INTO w_road_capacity
@@ -102,8 +102,11 @@ class MysqlRoadCapacitySnapshotSourceTest {
         jdbc.update("UPDATE w_road_capacity SET avg_previous_hour=-1 WHERE id=1");
         assertUnavailable();
 
-        jdbc.update("UPDATE w_road_capacity SET avg_previous_hour=10, utilization_perc=1.01 WHERE id=1");
+        jdbc.update("UPDATE w_road_capacity SET avg_previous_hour=10, utilization_perc=-0.01 WHERE id=1");
         assertUnavailable();
+
+        jdbc.update("UPDATE w_road_capacity SET utilization_perc=1.01 WHERE id=1");
+        assertEquals(CapacityLevel.SEVERE_BOTTLENECK, source.loadCandidate().capacities().get(0).level());
     }
 
     private void assertRefreshing() {

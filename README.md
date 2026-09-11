@@ -1,8 +1,14 @@
 # 福建应急交通 Agent
 
-> **DGX 合并部署版本（业务基准 `61e64d4`）**：运行配置、发布和回滚见 [合并记录](docs/DGX_MERGE_20260908.md)，模型依赖见 [configs/models.yaml](configs/models.yaml)。
-> DGX 使用本地 Qwen3.6、Qwen3-TTS 和 faster-whisper small，保留数字人动作与口型。公网入口与登录凭据沿用 DGX。
-> 下方通用开发说明继承上游版本，其中申请云端 API Key、Edge-TTS、首次数据库初始化及旧容器资源估算不适用于本次 DGX 部署。原文另存于 [上游 README](docs/UPSTREAM_README_61e64d4.md)，供业务设计查阅；现有 DGX 不应执行初始化脚本。
+> **DGX 合并部署版本（业务基准 `53498de`）**：DGX 继续使用本地 Qwen3.6、Qwen3-TTS 和 faster-whisper small，并保留数字人动作、口型、公网入口和登录方式。数据库切换只通过受保护的运行环境文件完成，禁止执行演示数据重置脚本。
+
+## 2026-09-10 应急界面与简明预案升级
+
+- 应急页面的“流程记录”改为“下发通告”。左侧按资源是否仍在调度中选择“未办结 / 已办结”；无需调度记录也归入已办结。这是资源归还视角，不改变三级审批的终态。
+- 通告先展示摘要，点击加载详情。后台轮询不锁定归还按钮；归还仍需原因和二次确认，失败保留输入及错误，同一请求重试复用幂等键。
+- 16类简明预案按约350字编写，新模板填充后校验300–400字；旧工单、返工预案版本和正式通告快照不改写。
+- 数据库负责人暂停所有后端实例的方案生成任务后，在共享库**统一执行一次** [简明预案发布脚本](docs/sql/20260910_publish_compact_response_plans.sql)，再重启更新后的后端。脚本继承当前资源基线、发布下一版本，可重复核验；不重置任何事件或库存。需要临时表及存储过程相关权限。普通协作者不要执行该脚本。
+- 本次交付只修改代码和脚本，未执行共享库发布、未打开浏览器。若尚未发布SQL，数据库仍使用旧预案内容；界面修复只需更新前后端。
 
 这是一个不依赖 LangChain 的教学型 Agent 项目，当前已经打通三条纵向闭环：
 
@@ -54,6 +60,85 @@ git fetch origin
 git switch version/roadagent-v1
 git pull --ff-only origin version/roadagent-v1
 ```
+
+### 2.1 已部署 `61e64d4` 版本服务器的快速修复与升级
+
+服务器如果当前运行的是提交 `61e64d4`，本版需要重点修复下面两组问题：
+
+| 业务 | 旧版问题 | 本版修改方法 |
+|---|---|---|
+| 基础设施数据预警 | `w_realtime_abnormal.id` 是 MySQL `BIGINT`，旧接口把它作为 JSON 数字返回，超过 JavaScript 安全整数范围后浏览器会舍入，处置请求可能找不到记录；逻辑删除记录也可能进入列表、统计或更新；轮询旧响应还可能覆盖用户刚切换的筛选，提交失败时表单输入可能丢失 | Java REST、OpenAPI 和前端统一把告警 ID 当十进制字符串；所有设施查询、统计、详情和条件更新增加 `del_flag='N'` 过滤；前端以请求版本丢弃过期响应，处置表单打开时锁定筛选切换，并在表单内保留失败信息和原输入 |
+| 应急工作流 | 模型生成方案期间若 Java 进程、模型服务或网络中断，数据库可能长期停留在 `GENERATING/REVISING`，页面只有“生成中”而没有恢复入口 | 前端发现同一方案版本超过120秒未更新时只自动恢复一次，并提供“恢复生成”按钮；仍调用原生成接口，由后端已有的超时认领、条件更新和乐观锁复用原方案版本并写入 `GENERATION_RETRIED` 审计，不新增工单或公共接口 |
+
+上述两项2026-09-09修复本身不需要执行 SQL，也不需要重建或重启语音 Docker 容器。设施修复必须同时更新 Java 后端和前端，不能只复制某一个页面文件；应急修复同样应整体拉取本分支，避免前后端恢复时限和并发语义不一致。当前分支又增加了2026-09-10简明预案数据库版本，更新到分支最新提交后还必须按第4.1节确认数据库是否已由负责人统一发布；普通协作者仍不得自行执行 SQL。
+
+更新前先进入服务器上的项目目录，确认分支、提交和工作区：
+
+```bash
+git status --short --branch
+git rev-parse HEAD
+git fetch origin
+git log --oneline --decorate HEAD..origin/version/roadagent-v1
+```
+
+如果 `git status --short` 有输出，先停止更新并确认这些改动是谁维护的；不要用 `git reset --hard` 或强制拉取覆盖服务器配置。工作区干净时，为当前提交建立一个不会改动文件的本地备份分支，再执行快进更新：
+
+```bash
+git branch backup/roadagent-server-before-fixes HEAD
+git switch version/roadagent-v1
+git pull --ff-only origin version/roadagent-v1
+```
+
+本地配置 `config/api-test.env`、`config/api-test.ps1` 和根目录 `.env` 都被 Git 忽略，更新后仍要确认文件存在且权限合适，不要打印、提交或发送其中的密钥。随后重新构建后端和前端：
+
+```bash
+./mvnw package -DskipTests
+cd frontend
+npm ci
+npm run build
+```
+
+Windows 后端构建使用 `.\mvnw.cmd package -DskipTests`。如果服务器已有与当前 `frontend/package-lock.json` 完全一致的依赖缓存，可以只运行 `npm run build`；干净部署优先使用 `npm ci`。构建后沿用服务器现有的 systemd、Nginx、容器编排或启动脚本替换产物并重启，先检查现有部署方式，不要凭空创建第二套 Java 进程或覆盖 Nginx 配置。
+
+可以把下面的工作计划直接交给服务器上的 Codex 执行：
+
+```text
+目标：把服务器上基于提交61e64d4的roadagent-v1安全更新到
+origin/version/roadagent-v1最新版本，修复设施预警和应急生成中断问题。
+
+约束：
+1. 先只读检查项目路径、当前分支、HEAD、git status以及服务器实际采用的
+   Java和前端部署方式；不得显示或修改API Key、数据库密码和.env内容。
+2. 工作区不干净、当前分支不是version/roadagent-v1、远程历史不能快进，
+   或部署方式无法确认时停止并报告，不使用reset --hard、force push或覆盖配置。
+3. 不执行docs/sql下的脚本，不修改共享数据库，不重建语音Docker镜像。
+
+执行步骤：
+1. 确认当前版本包含基线61e64d4，并为当前HEAD建立本地backup分支。
+2. git fetch origin，再用git pull --ff-only更新version/roadagent-v1。
+3. 核对设施修复：告警ID从Java响应到TypeScript均为string；
+   MysqlFacilityAlertRepository所有读取、统计和更新均过滤逻辑删除；
+   facility store能丢弃过期请求，并在处置失败时保留表单。
+4. 核对应急修复：emergency store只对超过120秒的同一方案版本自动恢复一次；
+   EmergencyAlertCard提供人工恢复按钮；恢复继续使用原generate接口和原方案版本。
+5. 用仓库Maven Wrapper执行./mvnw package -DskipTests；进入frontend执行
+   npm ci和npm run build。任一步失败都停止，不部署半成品。
+6. 按服务器原有方式替换后端JAR和前端dist并重启；不要启动重复端口进程。
+7. 只读检查GET /api/v1/facility-alerts、facility-alerts/health-report和
+   emergency-workflows/inbox；确认返回的alertId带引号且逻辑删除告警不出现。
+   在页面确认设施筛选不会被旧轮询覆盖、失败表单仍保留，以及生成中卡片有
+   “恢复生成”按钮。不要为验收故意修改共享数据库状态。
+8. 报告更新前后提交、构建结果、重启对象和检查结果；失败时保留现场，
+   可切回之前创建的backup分支重新构建，禁止删除真实配置或数据库数据。
+```
+
+如果更新后要回退，切换到上述 `backup/roadagent-server-before-fixes` 分支并用同样的 Maven/前端构建流程重新生成产物即可；不要通过删除数据库数据回退代码。确认新版本稳定后，备份分支可以继续保留一段时间。
+
+### 2.2 当前“数据库更改”版本的协作者拉取流程
+
+第一次在本地运行的协作者直接按第2节克隆最新分支；已经有项目的协作者使用 `git pull --ff-only`。代码拉取完成后不要扫描执行 `docs/sql/`：先向负责人确认共享库的简明预案是否已经发布。负责人会单独提供 `ROADAGENT_DB_URL`、`ROADAGENT_DB_USERNAME`、`ROADAGENT_DB_PASSWORD`，以及校园网、VPN或IP白名单要求；这些信息只能写入第3节所述的本地忽略配置。
+
+数据库尚未发布时，新代码仍可构建和启动，也能继续读取原已发布预案，但新生成工单仍使用旧版长预案；“下发通告”、车型历史日期和容量查询不要求新增表字段。数据库负责人完成第4.1节后，所有连接同一共享库的协作者会统一读到简明预案，不需要分别执行迁移。
 
 以下内容不会上传到 GitHub：
 
@@ -186,6 +271,61 @@ docs/sql/20260904_verify_festival_data.sql
 
 本版脚本依次完成 `w_lw_incident` 事件迁移、事件编号排序规则统一、Demo事件整理、16类资源适用关系、版本化预案与资源坐标、16类v1预案和节假日/模拟活动数据。三个 `verify_*.sql` 只读核验对应结果。`seed_lw_incident_emergency_demo.sql`、`extend_emergency_resource_types.sql` 和 `festival_data.sql` 都会写入或更新Demo数据；如果负责人只升级表结构而不需要仓库自带Demo数据，应先审阅脚本并按实际环境取舍，不能机械执行整段清单。协作者不要对 `docs/sql/` 批量导入。
 
+### 4.1 2026-09-10“数据库更改”：发布简明预案
+
+本次数据库变更只操作现有 `w_emergency_response_plan` 的预案版本数据，不创建新的业务表或字段。脚本要求当前库已经完成前述2026-09-04迁移，并且16种事件类型各有一个 `plan_status=1` 的已发布版本。脚本在事务中把旧发布版转为历史版，为每类事件插入 `MAX(plan_version)+1` 的简明版本，继承 `required_facts` 和 `resource_baseline`，并写入 `source_document='compact-20260910'`。旧工单、工作流、通告快照、事件、库存和资源占用均不修改。
+
+普通协作者只需连接负责人准备好的共享库，**不要执行本节 SQL**。数据库负责人执行时按以下顺序操作：
+
+1. 确认目标连接是项目共享 Demo schema，不是生产库或其他项目库，并创建可恢复的数据库快照或至少备份 `w_emergency_response_plan`；
+2. 暂停所有连接该库且可能生成或返工应急方案的后端实例，避免发布切换期间产生跨版本工单；
+3. 用只读查询确认当前有16种事件类型、每类恰好一个已发布版本，并确认是否已经存在 `compact-20260910`；
+4. 使用负责人批准的数据库客户端执行 `docs/sql/20260910_publish_compact_response_plans.sql`，不要把密码写在命令行、README或终端共享记录中；
+5. 执行账号需要具备该脚本涉及的 `SELECT`、`INSERT`、`UPDATE`、临时表以及创建、调用和删除存储过程的权限；权限不足时由数据库管理员提供一次性迁移账号，不扩大普通应用账号权限；
+6. 核验成功后再启动更新后的 Java 后端；失败时脚本会回滚数据变更，应保留错误现场并由负责人处理，不执行重置脚本。
+
+执行前可使用以下只读查询检查基线：
+
+```sql
+SELECT event_type, COUNT(*) AS active_count
+FROM w_emergency_response_plan
+WHERE plan_status = 1
+GROUP BY event_type
+ORDER BY event_type;
+
+SELECT COUNT(DISTINCT event_type) AS compact_type_count
+FROM w_emergency_response_plan
+WHERE source_document = 'compact-20260910';
+```
+
+第一条应返回16行且每行 `active_count=1`。第二条返回16表示该版本已经发布，不要再次人工改状态；直接执行下面的发布后核验即可。负责人统一执行：
+
+```text
+docs/sql/20260910_publish_compact_response_plans.sql
+```
+
+发布后使用只读查询确认结果：
+
+```sql
+SELECT
+  COUNT(*) AS active_count,
+  COUNT(DISTINCT event_type) AS active_type_count,
+  SUM(source_document = 'compact-20260910') AS compact_active_count,
+  SUM(CHAR_LENGTH(REPLACE(REPLACE(rescue_plan_template, CHAR(10), ''), CHAR(13), ''))
+      BETWEEN 300 AND 400) AS compact_length_valid_count
+FROM w_emergency_response_plan
+WHERE plan_status = 1;
+
+SELECT event_type, plan_version, plan_status, source_document, activation_time, content_hash
+FROM w_emergency_response_plan
+WHERE plan_status = 1
+ORDER BY event_type;
+```
+
+四个计数都应为16，明细应全部带有 `compact-20260910` 标记。脚本包含重复发布保护；即使如此，也只应由负责人统一执行一次，后续人员只做只读核验。
+
+数据库回退不能通过删除工单、事件或库存实现。需要回退时先停止方案生成，由负责人根据执行前备份恢复预案表，或在事务中重新发布指定旧版本，并在恢复后确认每种事件仍只有一个 `plan_status=1`。仓库不提供自动回退脚本，避免协作者在共享库误切版本。
+
 `docs/sql/20260819_reset_demo_events.sql` 是旧 Demo 的永久重置脚本，不创建备份且面向旧 `w_abnormal_event`；当前应用已经切换到 `w_lw_incident`，普通协作者和本版升级均不应执行它。
 
 协作者连接共享数据库时不需要重复执行此脚本，也不需要 `CREATE`、`ALTER` 或 `DROP` 权限。正常运行至少需要：
@@ -206,6 +346,7 @@ docs/sql/20260904_verify_festival_data.sql
 如果协作者完全没有数据库连接或上述读写权限，后端将无法查询告警或保存工单，项目的数据库应急调度功能不能运行。当前工作流使用：
 
 - `w_realtime_abnormal`：设施预警的唯一数据源；项目读取异常值和阈值快照，处置时仅更新 `status/remark`；
+- 设施告警 `id` 是 MySQL `BIGINT`，接口以十进制字符串返回，前端不得转换为 JavaScript `number`；所有查询和处置均忽略 `del_flag='Y'` 的逻辑删除记录；
 - `w_lw_incident`：唯一事件数据源，业务使用 `c_no`；
 - `w_emergency_event_classification`：规则、模型和人工分类的只增不改留痕；
 - `w_emergency_dispatch_order`：按版本保存模型生成的应急调度方案和当时事件快照；
@@ -244,6 +385,7 @@ docs/sql/20260904_verify_festival_data.sql
 - `event_type` 为空时由后台每5秒按规则优先、模型兜底分类，失败留痕后退避重试；
 - 三级批准或确认无需调度后回写 `status='2', completed=1`；
 - 无需调度原因保存在工作流 `terminal_reason` 和动作流水，不污染贴源事件表。
+- 模型调用期间若服务或网络中断，生成状态超过120秒后由可见页面自动安全恢复一次；一级卡片也保留“恢复生成”按钮。多实例同时恢复由数据库条件更新和工作流乐观锁去重。
 
 `c_no` 是全链路字符串ID，`w_lw_incident.id` 仅保留给贴源表自身使用。展示和模型使用的事件事实字段范围止于 `route_name`，`post`、处置人员和管理单位字段不进入领域对象、模型提示或前端响应；`status/completed/deleted` 仅作为系统待办过滤及完成状态回写字段。`content` 中带有明确“联系人/联系电话”等标签的片段也会在适配层清理，贴源原文保持不变。城市不回写事件表，依次从来源、所属单位、县区地点、清理后的描述和经纬度推导，并冻结到工单快照。`w_abnormal_event` 只保留一个版本周期供回滚，应用不再读取。
 
@@ -370,8 +512,8 @@ npm run dev
 - 趋势研判以数据库 `status` 为权威状态，均速和 `severity` 仅作辅助；不输出未来具体速度、流量、概率或解除时间，也不推测事故、施工、天气等未验证原因；当 `status>=20` 且交通快照时间、城市或路线范围命中 `w_festival_data` 时，Java会增加“可能受某节假日或重大活动叠加影响”的谨慎原因提示；
 - `w_festival_data` 采用按请求即时只读，不进入30秒交通快照等待。2026年使用国务院正式放假区间，2027—2028只维护法规确定的法定日期；模拟演出和赛事以 `DEMO` 标记，可通过 `enabled=0` 停用。城市活动未配置受影响路线时不会被归因到无关的全省或单路线查询；
 - 通行能力总览直接采用 `w_road_capacity.avg_previous_hour` 作为项目定义的实际通行能力（辆/小时）、`design_flow` 作为设计通行能力、`utilization_perc` 作为实际/设计利用率，Java 和模型均不重新计算这些数值；
-- 通行能力采用三级项目口径：利用率 `>=0.80` 为正常，`0.30<利用率<0.80` 为瓶颈，`<=0.30` 为严重瓶颈；数据库中的 0 是有效值并判定为严重瓶颈；
-- 瓶颈路线按利用率、实际通行能力升序稳定排序，默认展示前 10 条；当前容量表是一条路线一条记录，因此只称“瓶颈路线”，不虚构路段位置；
+- 通行能力采用高利用率瓶颈口径：利用率 `<=0.20` 为正常，`0.20<利用率<=0.30` 为瓶颈，`>0.30` 为严重瓶颈；利用率越高表示通行能力压力越大；
+- 瓶颈路线按利用率、实际通行能力降序稳定排序，默认展示前 10 条；当前容量表是一条路线一条记录，因此只称“瓶颈路线”，不虚构路段位置；
 - 路况与通行能力快照每 5 秒检查一次；每次通过 MySQL 只读一致性事务获得一个原子视图，不再要求读取前后数据库停止写入。后端冷启动会立即发布首份合法数据；运行期发现变化时继续使用上一已发布快照，候选内容连续稳定 30 秒后再原子切换。区域压力、车型分析及 OD 采用按请求读取，不经过这段稳定等待；
 - 路况与通行能力业务表允许只覆盖当前批次有数据的部分活动路线，有多少条展示多少条；仍会拒绝重复路线、非活动路线、跨表名称冲突和非法数值。`w_road_capacity` 使用独立内存快照，其更新异常不会影响已有路况查询；
 - Java 先完成状态映射、统计、排序、截断和当前预警事实；路况模型据此生成当前态势摘要和 1 句未来 1–2 小时定性趋势，容量模型生成专业研判。模型首次只出现JSON、句数、标点或趋势时间写法偏差时会静默修复一次；摘要不再依赖“表格”等固定词或固定句式。模型引用结构化事实之外的数字时改用Java事实摘要，真正的模型服务失败仍不发布文字、表格或语音半成品；
@@ -387,8 +529,8 @@ npm run dev
 - 结果用于识别哪些城市对、路线和卡口承担较高的跨区域交通压力，不区分方向，不推断真实OD、净流入净流出、车辆来源或途经城市。单市或两市的区域联系问法会追问补充至至少三个城市；两城市当前路况仍进入 `CITY_PAIR`；
 - 区域和路线日总流量均为范围内对应卡口 `daily_avg_flow` 之和，路线均速为对应卡口 `average_speed` 算术平均值，不构造额外压力指数；
 - 城市表解读仍优先使用模型内容；模型遗漏某个城市、返回重复代码或解读格式不合格时，Java按已统计的活跃卡口事实补齐安全解读，不再因此中断整次回答；
-- 车型出行特征单份结果按福州或厦门生成；同时询问福州和厦门时，Agent依次执行两次并在同一回答中保留两张独立结果卡。每次执行 `create_time DESC, id DESC` 选取该城市最新有效记录；
-- `car/bus/truck` 分别展示为小型客车、中型客车和大型货车。24小时缺失时间点补0时同步警告“补0不代表实际无车”；工作日5天合计为 `result1-result3`，周末2天合计直接使用 `result3`；
+- 车型出行特征单份结果按福州或厦门生成；同时询问福州和厦门时，Agent依次执行两次并在同一回答中保留两张独立结果卡。未指定日期时按当天语境读取该城市最新有效记录；询问昨天、前天或明确年月日时，按 `create_time` 日期筛选后再以 `create_time DESC, id DESC` 选择当天最新记录；
+- `car/bus/truck` 分别展示为小型客车、中型客车和大型货车。24小时折线不再因 `result2` 时间键与记录日期不同而丢弃有效点：优先采用查询日期的数据，否则采用所选记录内最新可用的分时日期；缺失时间点补0并在摘要和警告中明确“补0不代表实际无车”。工作日5天合计为 `result1-result3`，周末2天合计直接使用 `result3`；
 - 前端使用固定 ECharts 模板绘制车型占比饼图、24小时折线图和工作日/周末柱状图；模型不生成图表配置，语音只朗读3–5句总结，不朗读表格和图表。
 
 ### 6.2.1 城市目的地联系倾向（需求1-7）
@@ -485,6 +627,7 @@ POST /api/v1/emergency-workflows/{workflowId}/professional-reviews
 POST /api/v1/emergency-workflows/{workflowId}/command-decisions
 POST /api/v1/emergency-workflows/{workflowId}/resource-releases
 GET  /api/v1/emergency-workflows/{workflowId}
+GET  /api/v1/emergency-workflows/notices?completionStatus=PENDING&page=0&size=20
 GET  /api/v1/emergency-workflows/history
 GET  /api/v1/facility-alerts?status=PENDING&alarmLevel=EMERGENCY&page=0&size=20
 GET  /api/v1/facility-alerts/health-report
@@ -504,6 +647,12 @@ POST /api/v1/speech/syntheses
 {"queryType":"OD_DESTINATION_TENDENCY","selectedCities":["福州"]}
 ```
 
+车型历史日期同样使用该接口，例如查询厦门2026年9月9日当天最新记录：
+
+```json
+{"queryType":"VEHICLE_PATTERN_OVERVIEW","analysisCity":"厦门","analysisDate":"2026-09-09"}
+```
+
 此接口也会调用模型生成摘要，需要有效的模型配置，并非仅验证数据库连接的健康接口。
 
 ## 9. 推荐阅读顺序
@@ -512,7 +661,7 @@ POST /api/v1/speech/syntheses
 2. `AgentRuntime`：规划、选择 Skill、执行和记忆如何串联；
 3. `IntentPlanner` 与 `SkillRegistry`：模型选择和 Java 白名单的边界；
 4. `HighwayTrafficSkill`、`UnifiedTrafficQueryService` 与 `OdTrafficService`：17 种交通查询如何分流，目的地联系倾向如何按跨市路线确定性统计；
-5. `EmergencyWorkflowController` 与 `DispatchApplicationService`：三级状态机、版本返工、幂等和最终通告事务；
+5. `EmergencyWorkflowController`、`DispatchApplicationService` 与 `NoticePanel.vue`：三级状态机、版本返工、通告分页、资源归还、幂等和最终通告事务；
 6. `MysqlHighwayTrafficSnapshotSource`、`InMemoryHighwayTrafficSnapshotCache` 与 Port：一致性读取、完整性校验和原子发布；
 7. `EmergencyResourceAllocator`、`MysqlEmergencyResourceRepository`、`MysqlResourceAllocationRepository` 与 `FujianCityDistanceAdapter`：受限资源需求如何转成库存占用、跨市调度和缺口；
 8. `AbnormalEventRepository`、`EmergencyEventClassificationService`、`MysqlEmergencyResponsePlanRepository` 与 `SpringUnitOfWork`：事件贴源、自动分类、版本化预案和事务边界；
@@ -526,7 +675,7 @@ POST /api/v1/speech/syntheses
 
 ## 10. 可选开发验证（不是启动步骤）
 
-以下命令供后续开发按改动范围选用，协作者首次启动无需全部执行，本次版本整理也未重跑这些测试或构建。不要把历史验收记录当作每次推送的测试结果。
+以下命令供后续开发按改动范围选用，协作者首次启动无需全部执行。2026-09-09修复运行了前端51项、后端62项定向测试；2026-09-10“数据库更改”版本整理运行了通告、预案、车型日期和容量相关的前端33项、后端76项定向测试。两次均没有运行Docker、真实数据库或真实模型，本次也没有执行共享库发布脚本和浏览器验收。不要把历史验收记录当作每次推送的测试结果。
 
 未配置外部环境开关时，测试使用本地替身；设置 `ROADAGENT_DB_URL` 后会启用真实 MySQL 集成测试，设置 `ROADAGENT_MODEL_LIVE_TEST=true` 后会启用真实模型测试并可能产生 API 费用。仅在明确需要时使用相应配置，数据库测试应使用负责人认可的测试环境：
 

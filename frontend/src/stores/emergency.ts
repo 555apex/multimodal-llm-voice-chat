@@ -14,6 +14,7 @@ import {
   releaseWorkflowResources,
   correctWorkflowEventType,
   retryNextEventClassification,
+  fetchNotices,
 } from '../api/workflowApi'
 import type {
   EmergencyWorkflowItem,
@@ -21,6 +22,7 @@ import type {
   WorkflowCounts,
   WorkflowHistoryPage,
   WorkflowStage,
+  NoticePage,
 } from '../types/dispatch'
 
 export type EmergencyQueryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
@@ -30,6 +32,21 @@ const emptyCounts = (): WorkflowCounts => ({
   level1: 0, level2: 0, level3: 0, pendingClassification: 0, classificationFailed: 0,
 })
 
+const STALE_GENERATION_MILLIS = 600_000
+
+function staleGeneration(item: EmergencyWorkflowItem | null) {
+  if (!item?.currentPlan?.updatedAt) return false
+  const generating = ['GENERATING', 'REVISING'].includes(item.workflowStatus)
+    || item.currentPlan.status === 'GENERATING'
+  const updatedAt = Date.parse(item.currentPlan.updatedAt)
+  return generating && Number.isFinite(updatedAt)
+    && Date.now() - updatedAt >= STALE_GENERATION_MILLIS
+}
+
+function generationKey(item: EmergencyWorkflowItem) {
+  return `${item.currentPlan?.planId ?? item.event.eventId}:${item.currentPlan?.version ?? 0}`
+}
+
 export const useEmergencyStore = defineStore('emergency', {
   state: () => ({
     selectedStage: 'LEVEL_1' as WorkflowStage,
@@ -37,6 +54,12 @@ export const useEmergencyStore = defineStore('emergency', {
     item: null as EmergencyWorkflowItem | null,
     counts: emptyCounts(),
     history: null as WorkflowHistoryPage | null,
+    notices: null as NoticePage | null,
+    completionStatus: 'PENDING' as 'PENDING' | 'COMPLETED',
+    noticePage: 0,
+    noticeQueryId: 0,
+    noticeLoading: false,
+    noticeError: '',
     polling: false,
     requestSequence: 0,
     actionBusy: false,
@@ -46,6 +69,7 @@ export const useEmergencyStore = defineStore('emergency', {
     queryStatus: 'idle' as EmergencyQueryStatus,
     errorMessage: '',
     timerId: 0,
+    automaticRecoveryAttempts: {} as Record<string, boolean>,
   }),
 
   getters: {
@@ -95,7 +119,7 @@ export const useEmergencyStore = defineStore('emergency', {
 
     async showHistory() {
       this.viewMode = 'history'
-      await this.loadHistory()
+      await this.loadNotices()
     },
 
     async showInbox() {
@@ -107,13 +131,14 @@ export const useEmergencyStore = defineStore('emergency', {
     async refresh() {
       if (this.polling || (this.actionBusy && !this.generationPending)) return
       if (this.viewMode === 'history') {
-        await this.loadHistory(this.history?.page ?? 0)
+        if (!this.noticeLoading) await this.loadNotices()
         return
       }
       this.polling = true
       const sequence = ++this.requestSequence
       const stage = this.selectedStage
       if (!this.item) this.queryStatus = 'loading'
+      let shouldRecover = false
       try {
         if ((this.generationPending || this.serverGenerating) && this.item?.workflowId) {
           const id = this.item.workflowId
@@ -122,15 +147,29 @@ export const useEmergencyStore = defineStore('emergency', {
             this.item = item
             this.queryStatus = 'ready'
             if (!this.actionBusy && !this.serverGenerating) this.operationStartedAt = 0
+            if (staleGeneration(item)) {
+              const key = generationKey(item)
+              if (!this.automaticRecoveryAttempts[key]) {
+                this.automaticRecoveryAttempts[key] = true
+                shouldRecover = true
+              }
+            }
           }
-          return
+        } else {
+          const inbox = await fetchWorkflowInbox(stage)
+          if (sequence !== this.requestSequence || this.selectedStage !== stage || this.viewMode !== 'inbox') return
+          this.item = inbox.item
+          this.counts = inbox.counts
+          this.queryStatus = inbox.item ? 'ready' : 'empty'
+          this.errorMessage = ''
+          if (staleGeneration(inbox.item)) {
+            const key = generationKey(inbox.item!)
+            if (!this.automaticRecoveryAttempts[key]) {
+              this.automaticRecoveryAttempts[key] = true
+              shouldRecover = true
+            }
+          }
         }
-        const inbox = await fetchWorkflowInbox(stage)
-        if (sequence !== this.requestSequence || this.selectedStage !== stage || this.viewMode !== 'inbox') return
-        this.item = inbox.item
-        this.counts = inbox.counts
-        this.queryStatus = inbox.item ? 'ready' : 'empty'
-        this.errorMessage = ''
       } catch (error) {
         if (sequence !== this.requestSequence) return
         // 单次网络波动时保留当前待办，避免用户正在填写的表单消失。
@@ -138,6 +177,32 @@ export const useEmergencyStore = defineStore('emergency', {
         this.errorMessage = error instanceof Error ? error.message : '应急工作流查询失败'
       } finally {
         if (sequence === this.requestSequence) this.polling = false
+      }
+      if (shouldRecover) await this.generate()
+    },
+
+    async selectCompletion(status: 'PENDING' | 'COMPLETED') {
+      this.completionStatus = status
+      this.notices = null
+      await this.loadNotices(0)
+    },
+
+    async loadNotices(page?: number): Promise<void> {
+      page = page ?? this.noticePage
+      const queryId = ++this.noticeQueryId
+      this.noticePage = page
+      this.noticeLoading = true
+      try {
+        const result = await fetchNotices(this.completionStatus, page)
+        if (queryId !== this.noticeQueryId) return
+        this.notices = result
+        this.noticeError = ''
+        if (!result.items.length && page > 0) await this.loadNotices(page - 1)
+      } catch (error) {
+        if (queryId === this.noticeQueryId)
+          this.noticeError = error instanceof Error ? error.message : '下发通告查询失败'
+      } finally {
+        if (queryId === this.noticeQueryId) this.noticeLoading = false
       }
     },
 
@@ -163,7 +228,8 @@ export const useEmergencyStore = defineStore('emergency', {
     },
 
     async generate() {
-      if (!this.item || this.actionBusy || ['GENERATING', 'REVISING'].includes(this.item.workflowStatus)) return
+      if (!this.item || this.actionBusy) return
+      if (['GENERATING', 'REVISING'].includes(this.item.workflowStatus) && !staleGeneration(this.item)) return
       let failure = ''
       this.invalidateQuery()
       this.generationPending = true

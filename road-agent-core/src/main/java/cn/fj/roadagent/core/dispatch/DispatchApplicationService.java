@@ -251,6 +251,30 @@ public final class DispatchApplicationService implements
     }
 
     @Override
+    public cn.fj.roadagent.application.dispatch.NoticePage notices(String completionStatus, int page, int size) {
+        if (!Set.of("PENDING", "COMPLETED").contains(completionStatus))
+            throw new IllegalArgumentException("办理状态必须为PENDING或COMPLETED");
+        if (page < 0 || size < 1 || size > 100 || (long) page * size > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("分页参数不合法");
+        boolean pending = completionStatus.equals("PENDING");
+        var items = workflowRepository.findNotices(pending, page * size, size).stream().map(workflow -> {
+            var decision = workflowRepository.findLatestDecision(workflow.workflowId()).orElse(null);
+            var snapshot = decision == null ? null : decision.noticeSnapshot();
+            var event = snapshot == null ? eventPort.findById(workflow.eventId())
+                    .orElseThrow(() -> eventNotFound("异常事件不存在")) : snapshot.event();
+            return new cn.fj.roadagent.application.dispatch.NoticePage.Item(
+                    workflow.workflowId(), event.eventId(), event.eventType(), event.cityName(), event.place(),
+                    snapshot == null ? null : snapshot.noticeNumber(),
+                    snapshot == null ? workflow.updatedAt() : snapshot.publishedAt(),
+                    workflow.status().name(), completionStatus);
+        }).toList();
+        long pendingCount = workflowRepository.countNotices(true);
+        long completedCount = workflowRepository.countNotices(false);
+        return new cn.fj.roadagent.application.dispatch.NoticePage(items, page, size,
+                pending ? pendingCount : completedCount, pendingCount, completedCount);
+    }
+
+    @Override
     public DispatchPlan generate(String eventId) {
         EmergencyEvent event = requirePendingEvent(eventId);
         requireStructuredCity(event);
@@ -811,7 +835,6 @@ public final class DispatchApplicationService implements
                 : generating.responsePlan();
         DispatchPlan generatingWithPlan = generating.responsePlan() == null
                 ? generating.withResponsePlan(responsePlan) : generating;
-        String supplementalAdvice;
         String renderedPlan;
         try {
             proposal = chatModelPort.generateStructured(
@@ -821,12 +844,27 @@ public final class DispatchApplicationService implements
             if (proposal == null) {
                 throw new IllegalArgumentException("模型返回的工单内容为空");
             }
+            String rendered;
+            try {
+                rendered = responsePlanRenderer.render(responsePlan, generating.event(),
+                        responsePlanRenderer.expandModelFields(responsePlan, generating.event(),
+                                proposal.templateVariables()),
+                        proposal.supplementalAdviceText());
+            } catch (IllegalArgumentException invalid) {
+                if (!responsePlanRenderer.placeholders(responsePlan.rescuePlanTemplate()).contains("现场事实简述"))
+                    throw invalid;
+                proposal = chatModelPort.generateStructured(proposalRequest(generating.event(), previous,
+                        (feedback == null ? "" : feedback) + "\n请修正填充内容：" + invalid.getMessage()
+                                + "。现场事实简述最多50字，补充建议最多50字，无必要请留空，不要截断句子。",
+                        catalog, responsePlan), DispatchPlanProposal.class);
+                if (proposal == null) throw new IllegalArgumentException("模型修正内容为空");
+                rendered = responsePlanRenderer.render(responsePlan, generating.event(),
+                        responsePlanRenderer.expandModelFields(responsePlan, generating.event(),
+                                proposal.templateVariables()),
+                        proposal.supplementalAdviceText());
+            }
+            renderedPlan = rendered;
             requirements = enrichRequirements(proposal, catalog, responsePlan);
-            supplementalAdvice = optionalLength(
-                    proposal.supplementalAdviceText(), "模型补充建议", 1500);
-            renderedPlan = responsePlanRenderer.render(responsePlan, generating.event(),
-                    responsePlanRenderer.expandModelFields(responsePlan, generating.event(), proposal.templateVariables()),
-                    supplementalAdvice);
         } catch (IllegalArgumentException exception) {
             ExternalServiceException wrapped = new ExternalServiceException(
                     "CHAT_MODEL", "MODEL_INVALID_OUTPUT",
@@ -1092,7 +1130,9 @@ public final class DispatchApplicationService implements
                 workflowRepository.findLatestReview(workflow.workflowId()).orElse(null),
                 workflowRepository.findLatestDecision(workflow.workflowId()).orElse(null),
                 workflowRepository.findActions(workflow.workflowId()),
-                resourcesReleased
+                resourcesReleased,
+                workflow.status() == WorkflowStatus.PUBLISHED && allocations.stream()
+                        .anyMatch(item -> item.status() == ResourceAllocationStatus.DISPATCHED)
         );
     }
 
@@ -1145,8 +1185,11 @@ public final class DispatchApplicationService implements
                 quantity必须是大于0的整数。不得输出资源ID、资源名称、来源城市、距离、库存或到达时间。
                 即使当前库存可能不足，也只能提出白名单内资源的真实需求，缺口由系统计算。
                 supplementalAdvice只写预案模板未覆盖且由事件事实支持的补充建议，没有则返回空字符串；不得重写或删改预案。
-                表述简洁，supplementalAdvice最多180字；purpose最多40字。系统可填的事件编号、地点和数据库资源清单不必重复输出。
-                输出结构示例：{"templateVariables":{},"resourceRequirements":[],"supplementalAdvice":""}。实际资源需求仍须遵守上述预案基线规则。
+                若模板包含“现场事实简述”，该项须为自然通顺的完整陈述，最多50字，不重复事件编号或标题。
+                未知事实写“现场影响范围及人员情况尚待核实”，不得拼凑缺失数量、联系人或时点。补充建议最多50字，purpose最多40字。
+                简明版正文含填充内容和补充建议须为300至400字；不要在填充项末尾重复模板已有标点。
+                系统可填的事件编号、地点和数据库资源清单不必重复输出。
+                输出格式示例：{"templateVariables":{"F1":"现场影响范围及人员情况尚待核实"},"resourceRequirements":[{"resourceTypeCode":"ROAD_RESCUE_TEAM","quantity":1,"purpose":"现场抢通"}],"supplementalAdvice":""}
                 """.strip();
         StringBuilder user = new StringBuilder("""
                 事件ID：%s
@@ -1174,6 +1217,9 @@ public final class DispatchApplicationService implements
                 responsePlan.resourceBaseline(), responsePlan.rescuePlanTemplate(),
                 catalogPrompt(catalog)
         ));
+        if (previous == null && feedback != null && !feedback.isBlank()) {
+            user.append("\n填充校验修正要求：").append(feedback);
+        }
         if (previous != null) {
             user.append("\n上一版资源需求：").append(previous.resourceRequirements());
             user.append("\n上一版实际分配：").append(previous.allocatedResources());

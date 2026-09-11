@@ -15,6 +15,7 @@ PUBLIC_AUTH_FILE="${ROADAGENT_PUBLIC_AUTH_FILE:-$PUBLIC_CONFIG_DIR/public.htpass
 PUBLIC_DB_ACCESS_FILE="${ROADAGENT_PUBLIC_DB_ACCESS_FILE:-$PUBLIC_CONFIG_DIR/public-original-db.env}"
 PUBLIC_ENABLED_FILE="$PUBLIC_CONFIG_DIR/public.enabled"
 PUBLIC_DB_ACCESS_TOOL="$ROOT/public-db-access"
+DATABASE_SWITCH_TOOL="$ROOT/database-switch"
 PUBLIC_LOCAL_URL="http://127.0.0.1:18081"
 
 compose() {
@@ -278,6 +279,27 @@ case "${1:-status}" in
   db-preflight|db-backup|db-migrate|db-verify|db-restore)
     "$ROOT/db-maintenance" "$@"
     ;;
+  db-switch-stage)
+    shift
+    "$DATABASE_SWITCH_TOOL" stage "$@"
+    ;;
+  db-switch-verify)
+    "$DATABASE_SWITCH_TOOL" verify
+    ;;
+  db-switch-prepare)
+    "$DATABASE_SWITCH_TOOL" prepare
+    ;;
+  db-switch-provision-public)
+    shift
+    "$DATABASE_SWITCH_TOOL" provision-public "$@"
+    ;;
+  db-switch-activate)
+    "$DATABASE_SWITCH_TOOL" activate
+    ;;
+  db-switch-rollback)
+    shift
+    "$DATABASE_SWITCH_TOOL" rollback "$@"
+    ;;
   logs)
     if [[ -n "${2:-}" ]]; then
       case "$2" in
@@ -335,7 +357,7 @@ case "${1:-status}" in
     compose down --remove-orphans
     ;;
   *)
-    echo "usage: $0 [preflight|download-models|build|up|status|smoke|db-preflight|db-backup|db-migrate|db-verify|db-restore|logs|serve|serve-off|public-auth-set|public-on|public-off|public-status|public-db-access-verify|public-db-access-grants|down]" >&2
+    echo "usage: $0 [preflight|download-models|build|up|status|smoke|db-preflight|db-backup|db-migrate|db-verify|db-restore|db-switch-stage|db-switch-verify|db-switch-prepare|db-switch-provision-public|db-switch-activate|db-switch-rollback|logs|serve|serve-off|public-auth-set|public-on|public-off|public-status|public-db-access-verify|public-db-access-grants|down]" >&2
     exit 2
     ;;
 esac

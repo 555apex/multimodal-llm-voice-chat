@@ -172,3 +172,44 @@ deploy/dgx/dgx-stack public-off
 ```
 
 完整操作与安全说明见项目根目录 `Road_Agent_DGX公网测试使用文档.md`。
+
+## 8. 切换到新的共享数据库
+
+原数据库不需要删除。准备一个权限为 `600`、只包含以下三项的新库凭据文件，并放在 DGX 的项目目录之外：
+
+```text
+ROADAGENT_DB_URL=jdbc:mysql://host:port/schema?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+ROADAGENT_DB_USERNAME=...
+ROADAGENT_DB_PASSWORD=...
+```
+
+先暂存并只读核验。暂存不会修改运行中的容器或当前数据库连接：
+
+```bash
+deploy/dgx/dgx-stack db-switch-stage /secure/new-roadagent-db.env
+deploy/dgx/dgx-stack db-switch-verify
+deploy/dgx/dgx-stack db-switch-prepare
+```
+
+`db-switch-prepare` 会对新版应用涉及的表执行一致性逻辑备份，并将备份恢复到一次性隔离 MySQL 容器中；只有表级行数核对一致后才允许正式切换。
+
+公网数据库账号继续使用 `roadagent_public_app`。如果该账号尚未在新库创建，由数据库负责人提供临时管理员凭据文件后执行授权，再重新只读核验：
+
+```bash
+deploy/dgx/dgx-stack db-switch-provision-public /secure/new-roadagent-db-admin.env
+deploy/dgx/dgx-stack db-switch-verify
+```
+
+核验通过后，在维护窗口原子切换内外网后端。工具只替换数据库三项配置，保留本地模型和语音参数，并在 `/home/whtc/workspace/backups/road-agent-db-switch/` 保存旧配置：
+
+```bash
+deploy/dgx/dgx-stack db-switch-activate
+```
+
+需要恢复旧连接时执行：
+
+```bash
+deploy/dgx/dgx-stack db-switch-rollback
+```
+
+切换前后均不得运行演示数据重置脚本。旧库停止应用写入后保留七天，由负责人另行决定归档或删除。

@@ -336,6 +336,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .no-dispatch-confirmation { margin: 8px 0 0; padding: 8px 10px; color: #f2aaa3; border-radius: 7px; background: rgba(130, 37, 38, .3); font-size: 11px; }
 .dispatch-generating-state, .dispatch-failed-state { margin-top: 10px; padding: 10px; border-radius: 9px; background: rgba(7, 24, 44, .64); }
 .dispatch-generating-state { display: flex; align-items: center; gap: 8px; color: #c19a97; font-size: 12px; }
+.dispatch-generating-state > span:nth-child(2) { flex: 1; }
+.recover-generation-button { flex: 0 0 auto; border: 1px solid rgba(64, 203, 255, .46); border-radius: 7px; padding: 6px 10px; color: #bdeeff; background: rgba(14, 91, 128, .38); cursor: pointer; }
+.recover-generation-button:disabled { cursor: not-allowed; opacity: .55; }
 .dispatch-failed-state { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .dispatch-failed-state p { margin: 0; color: #ffaca5; font-size: 12px; }
 .dispatch-failed-state button { color: #fff; border: 0; background: #ad3b34; }
@@ -455,6 +458,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .facility-warning-toolbar select { padding: 0 9px; }
 .facility-warning-toolbar button { padding: 0 9px; }
 .facility-warning-toolbar button.active { color: #fff; border-color: #1b9dbc; background: #12667e; }
+.facility-warning-toolbar select:disabled, .facility-warning-toolbar button:disabled { cursor: not-allowed; opacity: .5; }
 .facility-warning-scroll { flex: 1; min-height: 0; padding: 15px 18px 20px; overflow-y: auto; }
 .facility-alert-list { display: grid; gap: 11px; }
 .facility-alert-card { position: relative; padding: 15px; overflow: hidden; border: 1px solid rgba(45, 126, 176, .42); border-radius: 13px; background: linear-gradient(145deg, rgba(8, 40, 71, .9), rgba(7, 28, 54, .94)); box-shadow: 0 9px 24px rgba(0, 5, 21, .22); }
@@ -490,6 +494,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .facility-action-form label { display: grid; gap: 6px; color: #b7cfda; font-weight: 700; }
 .facility-action-form textarea { width: 100%; padding: 9px 10px; resize: vertical; color: #e0edf3; border: 1px solid rgba(55, 133, 176, .38); border-radius: 8px; outline: 0; background: #092d4f; font: inherit; line-height: 1.5; }
 .facility-action-form > p { margin: 7px 0 0; color: #e7b867; font-size: 12px; }
+.facility-action-form > .facility-action-error { color: #ffaaa3; }
 .facility-action-form > div { margin-top: 8px; display: flex; justify-content: flex-end; gap: 6px; }
 .facility-action-form button { color: #b8cfda; border: 1px solid rgba(55, 133, 176, .36); background: #0a3559; }
 .facility-action-form button[type='submit'] { color: #fff; border-color: #178b9f; background: #126c81; }

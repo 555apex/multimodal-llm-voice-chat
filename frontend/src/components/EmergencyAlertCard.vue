@@ -148,6 +148,13 @@ function formatTime(value?: string) {
     dateStyle: 'medium', timeStyle: 'short',
   }).format(new Date(value))
 }
+
+function canRecoverGeneration() {
+  const updatedAt = props.item.currentPlan?.updatedAt
+  if (!updatedAt || !generationBusy.value) return false
+  const parsed = Date.parse(updatedAt)
+  return Number.isFinite(parsed) && Date.now() - parsed >= 600_000
+}
 </script>
 
 <template>
@@ -210,6 +217,9 @@ function formatTime(value?: string) {
       <div v-if="generationBusy || (busy && elapsedSeconds !== undefined)" class="dispatch-generating-state">
         <span>已等待 {{ elapsedSeconds ?? 0 }} 秒。</span>
         <span class="progress-dot"></span>大模型正在提出受限资源需求，系统将按库存和距离完成匹配，您可以继续使用聊天功能。
+        <span>若服务中断，系统会在十分钟后自动尝试恢复。</span>
+        <button v-if="canRecoverGeneration()" type="button" class="recover-generation-button"
+          :disabled="busy" @click="emit('generate')">{{ busy ? '恢复中…' : '恢复生成' }}</button>
       </div>
 
       <div v-if="generationFailed && !busy" class="dispatch-failed-state">

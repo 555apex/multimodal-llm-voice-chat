@@ -1,5 +1,6 @@
 package cn.fj.roadagent.adapters.speech.http;
 
+import cn.fj.roadagent.application.exception.ExternalServiceException;
 import cn.fj.roadagent.application.speech.SynthesizeSpeechCommand;
 import cn.fj.roadagent.application.speech.TranscribeSpeechCommand;
 import com.sun.net.httpserver.HttpExchange;
@@ -15,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import cn.fj.roadagent.application.exception.ExternalServiceException;
@@ -46,6 +48,10 @@ class PythonSpeechServiceAdapterTest {
             assertTrue(body.contains("道路通行正常"));
             send(exchange, "audio/mpeg", new byte[]{1, 2, 3});
         });
+        server.createContext("/silent/v1/asr/transcriptions", exchange -> send(
+                exchange, 422, "application/json",
+                "{\"detail\":\"No speech was recognized\"}".getBytes(StandardCharsets.UTF_8)
+        ));
         server.start();
         adapter = new PythonSpeechServiceAdapter(
                 RestClient.create(), "http://127.0.0.1:" + server.getAddress().getPort()
@@ -73,9 +79,31 @@ class PythonSpeechServiceAdapterTest {
         assertArrayEquals(new byte[]{1, 2, 3}, audio.content());
     }
 
+    @Test
+    void shouldDistinguishNoSpeechFromServiceFailure() {
+        var silentAdapter = new PythonSpeechServiceAdapter(
+                RestClient.create(),
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/silent"
+        );
+
+        ExternalServiceException exception = assertThrows(
+                ExternalServiceException.class,
+                () -> silentAdapter.transcribe(new TranscribeSpeechCommand(
+                        new byte[]{1, 2}, "audio/webm", "recording.webm", 1400
+                ))
+        );
+
+        assertEquals("ASR_NO_SPEECH", exception.errorCode());
+        assertEquals("未检测到有效语音", exception.getMessage());
+    }
+
     private void send(HttpExchange exchange, String contentType, byte[] body) throws IOException {
+        send(exchange, 200, contentType, body);
+    }
+
+    private void send(HttpExchange exchange, int status, String contentType, byte[] body) throws IOException {
         exchange.getResponseHeaders().set("Content-Type", contentType);
-        exchange.sendResponseHeaders(200, body.length);
+        exchange.sendResponseHeaders(status, body.length);
         exchange.getResponseBody().write(body);
         exchange.close();
     }

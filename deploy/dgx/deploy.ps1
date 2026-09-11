@@ -23,6 +23,9 @@ try {
         --exclude=node_modules `
         --exclude=dist `
         --exclude=.npm-cache `
+        --exclude=.pytest_cache `
+        --exclude=pytest-of-* `
+        --exclude=__pycache__ `
         --exclude=.env `
         --exclude=.env.db-admin `
         --exclude=config/api-test.ps1 `
@@ -54,6 +57,7 @@ tar -xzf "`$archive" -C "`$stage"
 if [ -d "`$remote" ]; then
   timestamp=`$(date -u +%Y%m%dT%H%M%SZ)
   tar --exclude='./deploy/dgx/.env' --exclude='./deploy/dgx/.env.db-admin' \
+      --exclude='./.releases' --exclude='./.releases/*' \
       --exclude='*/target' --exclude='*/target/*' \
       --exclude='*/node_modules' --exclude='*/node_modules/*' \
       --exclude='*/dist' --exclude='*/dist/*' \
@@ -77,10 +81,11 @@ if [ -d "`$previous" ]; then
   fi
 fi
 rm -f "`$archive"
-chmod +x "`$remote/deploy/dgx/dgx-stack" "`$remote/deploy/dgx/db-maintenance" "`$remote/deploy/dgx/public-db-access" "`$remote/deploy/dgx/mysql-client-entrypoint" "`$remote/deploy/dgx/download-speech-models" "`$remote/deploy/dgx/smoke.py"
+chmod +x "`$remote/deploy/dgx/dgx-stack" "`$remote/deploy/dgx/db-maintenance" "`$remote/deploy/dgx/database-switch" "`$remote/deploy/dgx/public-db-access" "`$remote/deploy/dgx/mysql-client-entrypoint" "`$remote/deploy/dgx/download-speech-models" "`$remote/deploy/dgx/smoke.py"
 if [ -f "`$remote/deploy/dgx/.env" ]; then chmod 600 "`$remote/deploy/dgx/.env"; fi
 if [ -f "`$remote/deploy/dgx/.env.db-admin" ]; then chmod 600 "`$remote/deploy/dgx/.env.db-admin"; fi
 "@
+    $RemoteInstall = $RemoteInstall -replace "`r", ""
     & ssh -i $ResolvedIdentity -o IdentitiesOnly=yes $HostName $RemoteInstall
     if ($LASTEXITCODE -ne 0) { throw "remote extraction failed" }
 

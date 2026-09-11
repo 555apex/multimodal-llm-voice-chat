@@ -52,12 +52,20 @@ case "${1:-}" in
       --triggers --hex-blob --set-gtid-purged=OFF --no-tablespaces \
       "$schema" "$@"
     ;;
+  dump-safe)
+    shift
+    [[ $# -gt 0 ]] || { echo "dump-safe requires at least one table" >&2; exit 2; }
+    mysqldump --default-character-set=utf8mb4 --protocol=tcp --host="$host" --port="$port" \
+      --user="$ROADAGENT_DB_USERNAME" --single-transaction --skip-lock-tables \
+      --skip-triggers --hex-blob --set-gtid-purged=OFF --no-tablespaces \
+      "$schema" "$@"
+    ;;
   restore)
     [[ $# -eq 2 && -r "$2" ]] || { echo "backup SQL file is missing: ${2:-}" >&2; exit 2; }
     mysql "${mysql_args[@]}" --show-warnings < "$2"
     ;;
   *)
-    echo "usage: mysql-client-entrypoint [schema|info|query SQL|file PATH|dump TABLE...|restore PATH]" >&2
+    echo "usage: mysql-client-entrypoint [schema|info|query SQL|file PATH|dump TABLE...|dump-safe TABLE...|restore PATH]" >&2
     exit 2
     ;;
 esac

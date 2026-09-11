@@ -80,6 +80,11 @@ public final class PythonSpeechServiceAdapter implements
                 throw unavailable("ASR_EMPTY_RESPONSE", "语音识别没有返回结果", null);
             }
             return new SpeechTranscription(body.text(), body.language(), body.durationMs());
+        } catch (RestClientResponseException exception) {
+            if (exception.getStatusCode().value() == 422) {
+                throw unavailable("ASR_NO_SPEECH", "未检测到有效语音", exception);
+            }
+            throw unavailable("ASR_REQUEST_FAILED", "语音识别服务调用失败", exception);
         } catch (RestClientException exception) {
             throw speechFailure("ASR", exception);
         }

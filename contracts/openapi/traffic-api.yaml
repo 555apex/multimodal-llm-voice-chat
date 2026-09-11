@@ -117,29 +117,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/speech/syntheses/stream:
-    post:
-      summary: 本地语音的连续 PCM 音频流
-      operationId: streamSpeechSynthesis
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SpeechSynthesisRequest'
-      responses:
-        '200':
-          description: |
-            SSE 依次发送 audio.start（sampleRate=24000、channels=1、format=s16le）、
-            audio.chunk（从零递增的 sequence、Base64 pcm）、audio.completed（chunks 总数）。
-            失败发送 audio.failed（message）；缺少完成事件的断流不可视为成功。
-            响应关闭缓存与代理缓冲。
-          content:
-            text/event-stream:
-              schema: { type: string }
-        '400':
-          $ref: '#/components/responses/BadRequest'
-
   /api/v1/emergency-events/pending/next:
     get:
       summary: 查询最早发生的未处理异常事件
@@ -425,6 +402,53 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
 
+  /api/v1/emergency-workflows/notices:
+    get:
+      summary: 按资源归还状态分页查询通告摘要（含无需调度记录）
+      operationId: getEmergencyNotices
+      parameters:
+        - in: query
+          name: completionStatus
+          schema: { type: string, enum: [PENDING, COMPLETED], default: PENDING }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 0, default: 0 }
+        - in: query
+          name: size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: 分页摘要及全量筛选计数，详情通过单工作流接口按需加载
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      page: { type: integer }
+                      size: { type: integer }
+                      total: { type: integer, format: int64 }
+                      pendingCount: { type: integer, format: int64 }
+                      completedCount: { type: integer, format: int64 }
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            workflowId: { type: string }
+                            eventId: { type: string }
+                            eventType: { type: string }
+                            cityName: { type: [string, 'null'] }
+                            place: { type: [string, 'null'] }
+                            noticeNumber: { type: [string, 'null'] }
+                            publishedAt: { type: string, format: date-time }
+                            workflowStatus: { type: string, enum: [PUBLISHED, NO_DISPATCH] }
+                            completionStatus: { type: string, enum: [PENDING, COMPLETED] }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   /api/v1/emergency-workflows/history:
     get:
       summary: 分页查询已通告和无需调度记录
@@ -698,6 +722,10 @@ components:
           type: [string, 'null']
           maxLength: 20
           description: 车型出行特征查询城市，本期为福州市或厦门市
+        analysisDate:
+          type: [string, 'null']
+          format: date
+          description: 车型出行特征记录日期；未提供时默认查询当天，Agent支持今天、昨天、前天及明确年月日
         includeTrend:
           type: [boolean, 'null']
           description: 是否在普通路况摘要中附加未来1至2小时定性趋势；容量、压力和车型查询忽略此字段
@@ -734,7 +762,7 @@ components:
 
     CapacityLevel:
       type: string
-      description: 项目三级评估口径：利用率不低于0.80正常，大于0.30且低于0.80瓶颈，不高于0.30严重瓶颈
+      description: 当前项目三级评估口径：利用率不高于0.20正常，高于0.20且不高于0.30瓶颈，高于0.30严重瓶颈；利用率越高压力越大
       enum: [NORMAL, BOTTLENECK, SEVERE_BOTTLENECK]
 
     RoadCapacityRow:
@@ -1347,6 +1375,15 @@ components:
         resourcesReleased:
           type: boolean
           description: 当前最终方案的实际调度资源是否已整单归还
+        canReleaseResources:
+          type: boolean
+          description: 后端依据最终方案实时DISPATCHED分配记录判断，不能从通告快照推断
+        completionStatus:
+          type: [string, 'null']
+          enum: [PENDING, COMPLETED, null]
+          description: 非终态为null，未归还为PENDING，无资源或已归还或无需调度为COMPLETED
+        resourceReleaseUnavailableReason:
+          type: [string, 'null']
 
     WorkflowCounts:
       type: object
@@ -1396,7 +1433,10 @@ components:
       type: object
       required: [alertId, facilityName, metricName, alarmLevel, alarmLevelName, collectTime, triggerTime, status, statusName, thresholdAssessment, sourceConsistent]
       properties:
-        alertId: { type: string, pattern: '^[0-9]+$', example: '2097166786449965057' }
+        alertId:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          description: BIGINT十进制文本，避免浏览器对大整数做精度截断
         facilityName: { type: string }
         metricName: { type: string }
         actualValue: { type: [number, 'null'] }

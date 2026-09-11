@@ -184,6 +184,9 @@ export interface EmergencyWorkflowItem {
   commandDecision?: CommandDecisionRecord
   timeline: WorkflowAction[]
   resourcesReleased?: boolean
+  canReleaseResources?: boolean
+  completionStatus?: 'PENDING' | 'COMPLETED'
+  resourceReleaseUnavailableReason?: string
 }
 
 export interface WorkflowCounts {
@@ -204,6 +207,26 @@ export interface WorkflowHistoryPage {
   page: number
   size: number
   total: number
+}
+
+export interface NoticeSummary {
+  workflowId: string
+  eventId: string
+  eventType: string
+  cityName?: string
+  place?: string
+  noticeNumber?: string
+  publishedAt?: string
+  workflowStatus: WorkflowStatus
+  completionStatus: 'PENDING' | 'COMPLETED'
+}
+export interface NoticePage {
+  items: NoticeSummary[]
+  page: number
+  size: number
+  total: number
+  pendingCount: number
+  completedCount: number
 }
 
 export interface ProfessionalReviewInput {

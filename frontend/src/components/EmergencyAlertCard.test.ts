@@ -66,6 +66,23 @@ describe('EmergencyAlertCard', () => {
     expect(wrapper.emitted('generate')).toHaveLength(1)
   })
 
+  it('offers a safe recovery action while generation is stuck', async () => {
+    const wrapper = mount(EmergencyAlertCard, {
+      props: {
+        item: {
+          ...item,
+          workflowStatus: 'GENERATING',
+          currentPlan: { ...plan, status: 'GENERATING' },
+        },
+        stage: 'LEVEL_1', busy: false, errorMessage: '',
+      },
+    })
+
+    expect(wrapper.text()).toContain('十分钟后自动尝试恢复')
+    await wrapper.find('.recover-generation-button').trigger('click')
+    expect(wrapper.emitted('generate')).toHaveLength(1)
+  })
+
   it('requires a feasible structured review before level two can pass', async () => {
     const level2 = {
       ...item, workflowId: 'WF-1', currentStage: 'LEVEL_2' as const,

@@ -312,6 +312,30 @@ public class MysqlEmergencyWorkflowRepository implements EmergencyWorkflowReposi
         return count == null ? 0 : count;
     }
 
+    private String noticeFilter(boolean pending) {
+        String dispatched = """
+                EXISTS (SELECT 1 FROM w_emergency_resource_allocation a
+                  WHERE a.plan_id = w_emergency_dispatch_workflow.plan_id
+                    AND a.plan_version = w_emergency_dispatch_workflow.plan_version
+                    AND a.allocation_status = 1)
+                """;
+        return pending ? " workflow_status = 7 AND " + dispatched
+                : " (workflow_status = 8 OR (workflow_status = 7 AND NOT " + dispatched + ")) ";
+    }
+
+    @Override
+    public List<EmergencyWorkflow> findNotices(boolean pending, int offset, int limit) {
+        return jdbcTemplate.query(WORKFLOW_COLUMNS + " WHERE " + noticeFilter(pending)
+                + " ORDER BY update_time DESC, id DESC LIMIT ? OFFSET ?", workflowMapper, limit, offset);
+    }
+
+    @Override
+    public long countNotices(boolean pending) {
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM w_emergency_dispatch_workflow WHERE "
+                + noticeFilter(pending), Long.class);
+        return count == null ? 0 : count;
+    }
+
     private EmergencyWorkflow mapWorkflow(ResultSet rs, int row) throws SQLException {
         return new EmergencyWorkflow(
                 rs.getString("workflow_id"), rs.getString("event_id"),

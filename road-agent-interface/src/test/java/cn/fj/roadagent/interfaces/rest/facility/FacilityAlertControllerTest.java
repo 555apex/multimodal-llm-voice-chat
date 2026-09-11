@@ -26,18 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class FacilityAlertControllerTest {
-    @Test
-    void shouldSerializeLargeIdentifiersAsDecimalStrings() {
-        var mapper = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
-        for (long id : new long[] {2097225926893142017L, 2097225926893142019L, Long.MAX_VALUE}) {
-            var alert = new FacilityAlert(id, "桥梁", "位移", BigDecimal.ONE, null,
-                    BigDecimal.ZERO, BigDecimal.TEN, AlarmLevel.EMERGENCY,
-                    Instant.EPOCH, Instant.EPOCH, FacilityAlertStatus.PENDING, null);
-            com.fasterxml.jackson.databind.JsonNode json = mapper.valueToTree(FacilityAlertResponse.from(alert));
-            org.junit.jupiter.api.Assertions.assertTrue(json.path("alertId").isTextual());
-            org.junit.jupiter.api.Assertions.assertEquals(Long.toString(id), json.path("alertId").asText());
-        }
-    }
+    private static final long ALERT_ID = 2_097_166_786_449_965_057L;
     private static final Instant NOW = Instant.parse("2026-09-08T02:00:00Z");
     private MockMvc mockMvc;
 
@@ -79,6 +68,7 @@ class FacilityAlertControllerTest {
         mockMvc.perform(get("/api/v1/facility-alerts"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.items[0].facilityName").value("闽江大桥"))
+                .andExpect(jsonPath("$.data.items[0].alertId").value(Long.toString(ALERT_ID)))
                 .andExpect(jsonPath("$.data.items[0].metricName").value("主梁应变"))
                 .andExpect(jsonPath("$.data.items[0].thresholdAssessment").value("超过上限"))
                 .andExpect(jsonPath("$.data.items[0].status").value("PENDING"))
@@ -87,7 +77,7 @@ class FacilityAlertControllerTest {
 
     @Test
     void shouldValidateAndReturnTransitionedAlert() throws Exception {
-        mockMvc.perform(post("/api/v1/facility-alerts/42/status-transitions")
+        mockMvc.perform(post("/api/v1/facility-alerts/" + ALERT_ID + "/status-transitions")
                         .contentType("application/json")
                         .content("""
                                 {
@@ -100,7 +90,7 @@ class FacilityAlertControllerTest {
                 .andExpect(jsonPath("$.data.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.data.remark").value("【已确认】已派员核查"));
 
-        mockMvc.perform(post("/api/v1/facility-alerts/42/status-transitions")
+        mockMvc.perform(post("/api/v1/facility-alerts/" + ALERT_ID + "/status-transitions")
                         .contentType("application/json")
                         .content("{\"expectedStatus\":\"PENDING\"}"))
                 .andExpect(status().isBadRequest());
@@ -108,7 +98,7 @@ class FacilityAlertControllerTest {
 
     private FacilityAlert alert(FacilityAlertStatus status, String remark) {
         return new FacilityAlert(
-                42, "闽江大桥", "主梁应变", new BigDecimal("12.5"), null,
+                ALERT_ID, "闽江大桥", "主梁应变", new BigDecimal("12.5"), null,
                 BigDecimal.ZERO, BigDecimal.TEN, AlarmLevel.EMERGENCY,
                 NOW.minusSeconds(30), NOW.minusSeconds(60), status, remark
         );

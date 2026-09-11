@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import type { WorkflowHistoryPage } from '../types/dispatch'
 import { rescuePlanForDisplay, resourceNameWithCityForDisplay } from '../utils/dispatchPlanText'
 
-defineProps<{ history: WorkflowHistoryPage; busy: boolean }>()
+defineProps<{ history: WorkflowHistoryPage; busy: boolean; errorMessage?: string }>()
 const emit = defineEmits<{
   page: [page: number]
   releaseResources: [workflowId: string, expectedVersion: number, reason: string]
@@ -28,7 +28,6 @@ function confirmRelease(workflowId: string, version: number) {
   const reason = releaseReason.value.trim()
   if (!reason) return
   emit('releaseResources', workflowId, version, reason)
-  cancelRelease()
 }
 
 function formatTime(value?: string) {
@@ -56,7 +55,7 @@ function actionText(type: string) {
 
 <template>
   <section class="workflow-history-panel">
-    <header><div><strong>已办结流程记录</strong><small>共 {{ history.total }} 条，通告快照和操作流水只读展示</small></div></header>
+    <p v-if="errorMessage" role="alert">{{ errorMessage }}</p>
     <article v-for="item in history.items" :key="item.workflowId" class="workflow-history-card">
       <header>
         <div><strong>{{ item.event.eventTypeName ?? item.event.eventType }}</strong>
@@ -64,6 +63,12 @@ function actionText(type: string) {
         <span>{{ item.workflowStatus === 'PUBLISHED' ? '已通告' : '无需调度' }}</span>
       </header>
       <p>{{ item.event.description }}</p>
+      <dl class="notice-event-facts">
+        <div><dt>发生时间</dt><dd>{{ formatTime(item.event.occurrenceTime) }}</dd></div>
+        <div v-if="item.event.place || item.event.cityName"><dt>发生地点</dt><dd>{{ item.event.place || item.event.cityName }}</dd></div>
+        <div v-if="item.event.sourceName"><dt>事件来源</dt><dd>{{ item.event.sourceName }}</dd></div>
+        <div v-if="item.event.routeNo || item.event.routeName"><dt>路线</dt><dd>{{ item.event.routeNo }} {{ item.event.routeName }}</dd></div>
+      </dl>
       <p v-if="item.workflowStatus === 'NO_DISPATCH' && item.terminalReason" class="no-dispatch-reason">
         无需调度原因：{{ item.terminalReason }}
       </p>
@@ -88,7 +93,7 @@ function actionText(type: string) {
           <div><dt>省级批示</dt><dd>{{ item.commandDecision.noticeSnapshot.commandOpinion || '同意按方案执行' }}</dd></div></dl>
       </section>
       <p v-if="item.resourcesReleased" class="resource-release-result">该工单实际调度资源已全部归还库存。</p>
-      <div v-else-if="item.workflowId && item.workflowStatus === 'PUBLISHED' && item.currentPlan?.allocatedResources?.length"
+      <div v-else-if="item.workflowId && item.canReleaseResources"
         class="resource-release-control">
         <button v-if="releaseWorkflowId !== item.workflowId" type="button" :disabled="busy"
           @click="openRelease(item.workflowId)">归还全部资源</button>
@@ -105,6 +110,7 @@ function actionText(type: string) {
           </div>
         </div>
       </div>
+      <p v-else-if="item.workflowStatus === 'PUBLISHED'">{{ item.resourceReleaseUnavailableReason || '无需归还资源' }}</p>
       <details class="workflow-timeline"><summary>查看完整留痕（{{ item.timeline.length }}）</summary>
         <ol><li v-for="action in item.timeline" :key="action.actionId"><strong>{{ actionText(action.actionType) }}</strong>
           <time>{{ formatTime(action.createdAt) }}</time><p v-if="action.comment">{{ action.comment }}</p></li></ol>

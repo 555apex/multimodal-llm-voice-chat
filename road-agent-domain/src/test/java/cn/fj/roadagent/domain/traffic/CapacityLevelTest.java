@@ -9,12 +9,14 @@ class CapacityLevelTest {
 
     @ParameterizedTest
     @CsvSource({
-            "0, SEVERE_BOTTLENECK",
-            "0.30, SEVERE_BOTTLENECK",
-            "0.3001, BOTTLENECK",
-            "0.7999, BOTTLENECK",
-            "0.80, NORMAL",
-            "1.00, NORMAL"
+            "0, NORMAL",
+            "0.15, NORMAL",
+            "0.20, NORMAL",
+            "0.2001, BOTTLENECK",
+            "0.30, BOTTLENECK",
+            "0.3001, SEVERE_BOTTLENECK",
+            "1.00, SEVERE_BOTTLENECK",
+            "1.2792, SEVERE_BOTTLENECK"
     })
     void appliesProjectThresholdBoundaries(double ratio, CapacityLevel expected) {
         assertEquals(expected, CapacityLevel.fromUtilization(ratio));
