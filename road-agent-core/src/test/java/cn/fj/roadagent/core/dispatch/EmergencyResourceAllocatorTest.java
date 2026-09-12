@@ -93,6 +93,26 @@ class EmergencyResourceAllocatorTest {
     }
 
     @Test
+    void shouldNotRejectAnActiveInventoryResourceBecauseOfLegacyEventTags() {
+        EmergencyResource lighting = new EmergencyResource(
+                "XM-LIGHT", "MOBILE_LIGHTING", "移动照明设备", "厦门移动照明设备",
+                "350200", "厦门", "套", "夜间连续照明", List.of("ET108"),
+                3, 3, 0, 0, 1, EmergencyResourceStatus.ACTIVE, 0
+        );
+        ResourceAllocationResult result = new EmergencyResourceAllocator((from, to) -> 200D)
+                .allocate(EVENT,
+                        List.of(new ResourceRequirement("MOBILE_LIGHTING", "移动照明设备",
+                                1, "套", "按现场意见补充照明")),
+                        List.of(lighting),
+                        Map.of("350100", new GeoPoint(119.2965, 26.0745),
+                                "350200", new GeoPoint(118.0894, 24.4798)),
+                        "WF-1", "DP-1", 1, NOW);
+
+        assertEquals(1, result.allocations().size());
+        assertTrue(result.shortages().isEmpty());
+    }
+
+    @Test
     void shouldReportProvincialShortageInsteadOfOverselling() {
         EmergencyResourceAllocator allocator = new EmergencyResourceAllocator(
                 (from, to) -> 100D

@@ -24,7 +24,6 @@ public record EmergencyResponsePlanSnapshot(
         if (rescuePlanTemplate == null || rescuePlanTemplate.isBlank()) throw new IllegalArgumentException("预案模板不能为空");
         rescuePlanTemplate = rescuePlanTemplate.trim();
         resourceBaseline = resourceBaseline == null ? List.of() : List.copyOf(resourceBaseline);
-        if (resourceBaseline.isEmpty()) throw new IllegalArgumentException("预案资源基线不能为空");
         if (contentHash == null || !contentHash.matches("[0-9a-fA-F]{64}")) {
             throw new IllegalArgumentException("预案内容摘要必须是64位SHA-256");
         }

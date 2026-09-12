@@ -55,7 +55,6 @@ public final class EmergencyResourceAllocator {
             List<EmergencyResource> candidates = current.values().stream()
                     .filter(EmergencyResource::available)
                     .filter(item -> item.typeCode().equals(requirement.resourceTypeCode()))
-                    .filter(item -> item.appliesTo(event.eventType()))
                     .sorted(candidateOrder(event.cityCode(), eventCenter, cityCenters))
                     .toList();
             for (EmergencyResource candidate : candidates) {
