@@ -21,7 +21,6 @@ public record EmergencyResponsePlan(
         requiredFacts = requiredFacts == null ? List.of() : List.copyOf(requiredFacts);
         rescuePlanTemplate = requireText(rescuePlanTemplate, "预案模板不能为空");
         resourceBaseline = resourceBaseline == null ? List.of() : List.copyOf(resourceBaseline);
-        if (resourceBaseline.isEmpty()) throw new IllegalArgumentException("预案资源基线不能为空");
         contentHash = requireText(contentHash, "预案内容摘要不能为空");
         if (!contentHash.matches("[0-9a-fA-F]{64}")) {
             throw new IllegalArgumentException("预案内容摘要必须是64位SHA-256");
@@ -29,7 +28,7 @@ public record EmergencyResponsePlan(
         long distinctCodes = resourceBaseline.stream()
                 .map(ResponsePlanResourceBaseline::resourceTypeCode).distinct().count();
         if (distinctCodes != resourceBaseline.size()) {
-            throw new IllegalArgumentException("预案资源基线不能包含重复类型");
+            throw new IllegalArgumentException("历史预案资源建议不能包含重复类型");
         }
     }
 

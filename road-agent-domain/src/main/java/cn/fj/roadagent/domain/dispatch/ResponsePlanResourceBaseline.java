@@ -1,6 +1,6 @@
 package cn.fj.roadagent.domain.dispatch;
 
-/** 一项可版本化的预案资源需求基线。 */
+/** 旧预案保留的资源建议快照；生成资源需求时不再作为允许清单或必选项。 */
 public record ResponsePlanResourceBaseline(
         String resourceTypeCode,
         int quantity,

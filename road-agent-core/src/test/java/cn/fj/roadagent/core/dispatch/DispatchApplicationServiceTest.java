@@ -152,7 +152,7 @@ class DispatchApplicationServiceTest {
 
     @Test
     void secondLevelReturnShouldKeepHistoryAndGenerateNextVersion() {
-        Fixture fixture = fixture(new FixedModel());
+        Fixture fixture = fixture(new LightingOnFeedbackModel());
         DispatchPlan version1 = fixture.service.generate(event().eventId());
         EmergencyWorkflow workflow = fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow();
         var level2 = fixture.service.decideLevel1(new Level1DecisionCommand(
@@ -170,6 +170,8 @@ class DispatchApplicationServiceTest {
         assertEquals(WorkflowStatus.WAITING_LEVEL_1_SUBMISSION, revised.workflow().status());
         assertEquals(2L, revised.currentPlan().version());
         assertEquals(DispatchStatus.WAITING_APPROVAL, revised.currentPlan().status());
+        assertEquals(List.of("MOBILE_LIGHTING"), revised.currentPlan().resourceRequirements()
+                .stream().map(item -> item.resourceTypeCode()).toList());
         assertEquals(DispatchStatus.REJECTED,
                 fixture.plans.findVersion(version1.planId(), 1L).orElseThrow().status());
         assertEquals(ReviewStatus.RETURNED,
@@ -306,6 +308,21 @@ class DispatchApplicationServiceTest {
                 fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow().status());
     }
 
+    @Test
+    void semanticResourceErrorShouldBeRepairedOnceWithoutLeavingFailedWorkflow() {
+        RepairingResourceModel model = new RepairingResourceModel();
+        Fixture fixture = fixture(model);
+
+        DispatchPlan plan = fixture.service.generate(event().eventId());
+
+        assertEquals(2, model.calls);
+        assertEquals(DispatchStatus.WAITING_APPROVAL, plan.status());
+        assertEquals(WorkflowStatus.WAITING_LEVEL_1_SUBMISSION,
+                fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow().status());
+        assertEquals("MOBILE_LIGHTING", plan.resourceRequirements().get(0).resourceTypeCode());
+        assertEquals(1, fixture.allocations.values.size());
+    }
+
     private Fixture fixture(ChatModelPort model) {
         TestEventPort events = new TestEventPort(event());
         TestDispatchRepository plans = new TestDispatchRepository();
@@ -408,6 +425,34 @@ class DispatchApplicationServiceTest {
         }
     }
 
+    private static final class LightingOnFeedbackModel extends FixedModel {
+        @Override
+        public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+            if (!request.userPrompt().contains("照明")) {
+                return super.generateStructured(request, resultType);
+            }
+            return resultType.cast(new DispatchPlanProposal(
+                    List.of(new DispatchPlanProposal.ProposedResource(
+                            "MOBILE_LIGHTING", 2, "夜间塌陷处置照明"
+                    )), "补充照明并减少运输车辆。"
+            ));
+        }
+    }
+
+    private static final class RepairingResourceModel extends FixedModel {
+        private int calls;
+
+        @Override
+        public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+            calls++;
+            String code = calls == 1 ? "MADE_UP_RESOURCE" : "MOBILE_LIGHTING";
+            return resultType.cast(new DispatchPlanProposal(
+                    List.of(new DispatchPlanProposal.ProposedResource(code, 1, "现场处置")),
+                    "设置警戒并组织现场处置。"
+            ));
+        }
+    }
+
     private static final class DirectUnitOfWork implements UnitOfWork {
         @Override
         public <T> T required(Supplier<T> operation) {
@@ -426,6 +471,13 @@ class DispatchApplicationServiceTest {
                     5, 5, 0, 0, 1, EmergencyResourceStatus.ACTIVE, 0
             );
             resources.put(resource.resourceId(), resource);
+            EmergencyResource lighting = new EmergencyResource(
+                    "ER-XM-LIGHT", "MOBILE_LIGHTING", "移动照明设备",
+                    "厦门市移动照明设备", "350200", "厦门", "套",
+                    "夜间救援和连续作业照明", List.of("ET108"),
+                    4, 4, 0, 0, 1, EmergencyResourceStatus.ACTIVE, 0
+            );
+            resources.put(lighting.resourceId(), lighting);
         }
 
         @Override
@@ -437,7 +489,7 @@ class DispatchApplicationServiceTest {
         public List<EmergencyResource> listActiveForPlanning(String eventType) {
             return resources.values().stream()
                     .filter(EmergencyResource::available)
-                    .filter(item -> item.appliesTo(eventType))
+                    .filter(item -> eventType == null || item.appliesTo(eventType))
                     .toList();
         }
 
@@ -459,7 +511,10 @@ class DispatchApplicationServiceTest {
 
         @Override
         public Map<String, GeoPoint> cityCenters() {
-            return Map.of("350100", new GeoPoint(119.2965, 26.0745));
+            return Map.of(
+                    "350100", new GeoPoint(119.2965, 26.0745),
+                    "350200", new GeoPoint(118.0894, 24.4798)
+            );
         }
 
         @Override

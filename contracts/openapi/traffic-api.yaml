@@ -1202,6 +1202,7 @@ components:
 
     ResponsePlanResourceBaseline:
       type: object
+      description: 旧预案保留的资源建议快照，不作为运行时资源白名单或必选项
       required: [resourceTypeCode, quantity, purpose, mode]
       properties:
         resourceTypeCode: { type: string }
@@ -1223,6 +1224,7 @@ components:
         rescuePlanTemplate: { type: string }
         resourceBaseline:
           type: array
+          description: 可为空；仅用于追溯旧预案资源建议，正式资源由启用的数据库资源目录和库存确定
           items: { $ref: '#/components/schemas/ResponsePlanResourceBaseline' }
         contentHash: { type: string, minLength: 64, maxLength: 64 }
 

@@ -725,6 +725,7 @@ public final class DispatchApplicationService implements
                 return new GenerationClaim(latest, locked, false);
             }
             EmergencyResponsePlanSnapshot retryPlan = latest.responsePlan() == null
+                    || !latest.responsePlan().eventType().equals(latest.event().eventType())
                     ? requireActiveResponsePlan(latest.event().eventType()).snapshot()
                     : latest.responsePlan();
             DispatchPlan retry = latest.retry(clock.instant(), retryPlan);
@@ -818,23 +819,27 @@ public final class DispatchApplicationService implements
             String feedback,
             EmergencyWorkflow workflow
     ) {
-        List<EmergencyResource> catalog = resourceDataPort
-                .listActiveForPlanning(generating.event().eventType());
+        // 预案只约束处置正文，不再限制资源类型。模型可从全部启用库存中按需选择，
+        // 后续仍由Java根据真实库存和距离完成分配。
+        List<EmergencyResource> catalog = resourceDataPort.listAllActiveForPlanning();
         if (catalog.isEmpty()) {
             ExternalServiceException exception = new ExternalServiceException(
                     "RESOURCE_INVENTORY", "RESOURCE_CATALOG_EMPTY",
-                    "当前没有可用于该事件类型的数据库应急资源"
+                    "当前没有已启用的数据库应急资源"
             );
             persistGenerationFailure(generating, workflow, exception);
             throw exception;
         }
         DispatchPlanProposal proposal;
         List<ResourceRequirement> requirements;
-        EmergencyResponsePlanSnapshot responsePlan = generating.responsePlan() == null
-                ? requireActiveResponsePlan(generating.event().eventType()).snapshot()
-                : generating.responsePlan();
-        DispatchPlan generatingWithPlan = generating.responsePlan() == null
-                ? generating.withResponsePlan(responsePlan) : generating;
+        EmergencyResponsePlanSnapshot responsePlan = generating.responsePlan();
+        if (responsePlan == null
+                || !responsePlan.eventType().equals(generating.event().eventType())) {
+            // 对升级前或异常中断留下的不匹配快照进行自愈，始终以事件类型选择预案。
+            responsePlan = requireActiveResponsePlan(generating.event().eventType()).snapshot();
+        }
+        DispatchPlan generatingWithPlan = generating.responsePlan() == responsePlan
+                ? generating : generating.withResponsePlan(responsePlan);
         String renderedPlan;
         try {
             proposal = chatModelPort.generateStructured(
@@ -844,32 +849,33 @@ public final class DispatchApplicationService implements
             if (proposal == null) {
                 throw new IllegalArgumentException("模型返回的工单内容为空");
             }
-            String rendered;
+            ProposalValidation validation;
             try {
-                rendered = responsePlanRenderer.render(responsePlan, generating.event(),
-                        proposal.templateVariables(), proposal.supplementalAdviceText());
+                validation = validateProposal(
+                        proposal, generating.event(), catalog, responsePlan);
             } catch (IllegalArgumentException invalid) {
-                if (!responsePlanRenderer.placeholders(responsePlan.rescuePlanTemplate()).contains("现场事实简述"))
-                    throw invalid;
+                String correction = (feedback == null || feedback.isBlank() ? "" : feedback + "\n")
+                        + "上次输出未通过系统校验：" + invalid.getMessage()
+                        + "。请完整重写JSON；资源编码只能从数据库可选资源目录中选择，"
+                        + "不得继续返回无效编码。";
                 proposal = chatModelPort.generateStructured(proposalRequest(generating.event(), previous,
-                        (feedback == null ? "" : feedback) + "\n请修正填充内容：" + invalid.getMessage()
-                                + "。现场事实简述最多50字，补充建议最多50字，无必要请留空，不要截断句子。",
+                        correction,
                         catalog, responsePlan), DispatchPlanProposal.class);
                 if (proposal == null) throw new IllegalArgumentException("模型修正内容为空");
-                rendered = responsePlanRenderer.render(responsePlan, generating.event(),
-                        proposal.templateVariables(), proposal.supplementalAdviceText());
+                validation = validateProposal(
+                        proposal, generating.event(), catalog, responsePlan);
             }
-            renderedPlan = rendered;
-            requirements = enrichRequirements(proposal, catalog, responsePlan);
+            renderedPlan = validation.renderedPlan();
+            requirements = validation.requirements();
         } catch (IllegalArgumentException exception) {
             ExternalServiceException wrapped = new ExternalServiceException(
                     "CHAT_MODEL", "MODEL_INVALID_OUTPUT",
                     "模型返回的调度工单内容不符合要求：" + exception.getMessage(), exception
             );
-            persistGenerationFailure(generating, workflow, wrapped);
+            persistGenerationFailure(generatingWithPlan, workflow, wrapped);
             throw wrapped;
         } catch (RuntimeException exception) {
-            persistGenerationFailure(generating, workflow, exception);
+            persistGenerationFailure(generatingWithPlan, workflow, exception);
             throw exception;
         }
 
@@ -915,10 +921,10 @@ public final class DispatchApplicationService implements
                     "RESOURCE_INVENTORY", "RESOURCE_ALLOCATION_INVALID",
                     "数据库资源匹配结果不符合要求：" + exception.getMessage(), exception
             );
-            persistGenerationFailure(generating, workflow, wrapped);
+            persistGenerationFailure(generatingWithPlan, workflow, wrapped);
             throw wrapped;
         } catch (RuntimeException exception) {
-            persistGenerationFailure(generating, workflow, exception);
+            persistGenerationFailure(generatingWithPlan, workflow, exception);
             throw exception;
         }
     }
@@ -1165,11 +1171,12 @@ public final class DispatchApplicationService implements
             EmergencyResponsePlanSnapshot responsePlan
     ) {
         String system = """
-                你是福建公路应急预案填充与资源需求分析器。数据库预案和资源库是唯一可信来源。
+                你是福建公路应急预案填充与资源需求分析器。事件类型对应预案和数据库资源库是可信来源。
                 必须输出严格JSON对象，仅包含templateVariables、resourceRequirements和supplementalAdvice。
                 templateVariables是对象，键必须逐字选自用户提供的待填项；事实不明时填“待核实”，不得臆测。
                 resourceRequirements是数组，每项仅包含resourceTypeCode、quantity、purpose。
-                resourceTypeCode必须逐字选自预案资源基线，不得创造其他类型。BASE项不得删除，CONDITIONAL项只在现场事实满足条件时选择。
+                resourceTypeCode必须逐字选自数据库可选资源目录，不得创造其他类型。
+                资源不受预案中的历史资源建议限制。请结合事件事实、处置需要和人工退回意见独立判断资源种类与数量。
                 quantity必须是大于0的整数。不得输出资源ID、资源名称、来源城市、距离、库存或到达时间。
                 即使当前库存可能不足，也只能提出白名单内资源的真实需求，缺口由系统计算。
                 supplementalAdvice只写预案模板未覆盖且由事件事实支持的补充建议，没有则返回空字符串；不得重写或删改预案。
@@ -1187,7 +1194,6 @@ public final class DispatchApplicationService implements
                 当前已发布预案：%s v%d（%s）
                 应核实现场事实：%s
                 预案待填项：%s
-                预案资源基线：%s
                 预案固定模板（只用于理解填充上下文，不得在输出中重写）：
                 %s
                 可选资源类型及当前城市库存摘要：
@@ -1201,7 +1207,7 @@ public final class DispatchApplicationService implements
                 responsePlan.contentHash(),
                 responsePlan.requiredFacts(),
                 responsePlanRenderer.placeholders(responsePlan.rescuePlanTemplate()),
-                responsePlan.resourceBaseline(), responsePlan.rescuePlanTemplate(),
+                responsePlan.rescuePlanTemplate(),
                 catalogPrompt(catalog)
         ));
         if (previous == null && feedback != null && !feedback.isBlank()) {
@@ -1218,28 +1224,32 @@ public final class DispatchApplicationService implements
         return new ModelRequest(system, user.toString(), List.of(), 0.1);
     }
 
-    private List<ResourceRequirement> enrichRequirements(
+    private ProposalValidation validateProposal(
             DispatchPlanProposal proposal,
+            EmergencyEvent event,
             List<EmergencyResource> catalog,
             EmergencyResponsePlanSnapshot responsePlan
+    ) {
+        String rendered = responsePlanRenderer.render(
+                responsePlan, event, proposal.templateVariables(),
+                proposal.supplementalAdviceText());
+        return new ProposalValidation(enrichRequirements(proposal, catalog), rendered);
+    }
+
+    private List<ResourceRequirement> enrichRequirements(
+            DispatchPlanProposal proposal,
+            List<EmergencyResource> catalog
     ) {
         Map<String, EmergencyResource> types = new LinkedHashMap<>();
         catalog.stream().sorted(java.util.Comparator.comparing(EmergencyResource::resourceId))
                 .forEach(item -> types.putIfAbsent(item.typeCode(), item));
-        Map<String, ResponsePlanResourceBaseline> baseline = responsePlan.resourceBaseline()
-                .stream().collect(java.util.stream.Collectors.toMap(
-                        ResponsePlanResourceBaseline::resourceTypeCode, item -> item,
-                        (left, right) -> left, LinkedHashMap::new));
         Map<String, ResourceRequirement> requirements = new LinkedHashMap<>();
         proposal.resourceRequirements().forEach(item -> {
             String code = requireLength(item.resourceTypeCode(), "资源类型编码", 40)
                     .toUpperCase(Locale.ROOT);
-            if (!baseline.containsKey(code) && !responsePlan.planId().startsWith("LEGACY-TEST-")) {
-                throw new IllegalArgumentException("模型使用了预案基线外的资源类型：" + code);
-            }
             EmergencyResource type = types.get(code);
             if (type == null) {
-                throw new IllegalArgumentException("模型使用了数据库不存在的资源类型：" + code);
+                throw new IllegalArgumentException("模型使用了数据库资源目录外的资源类型：" + code);
             }
             if (requirements.containsKey(code)) {
                 throw new IllegalArgumentException("同一资源类型不能重复提出：" + code);
@@ -1252,19 +1262,7 @@ public final class DispatchApplicationService implements
                     requireLength(item.purpose(), "资源用途", 300)
             ));
         });
-        baseline.values().stream()
-                .filter(item -> item.mode() == ResponsePlanResourceMode.BASE)
-                .forEach(item -> {
-                    EmergencyResource type = types.get(item.resourceTypeCode());
-                    if (type == null) {
-                        throw new IllegalArgumentException(
-                                "预案基线资源在当前资源库不可用：" + item.resourceTypeCode());
-                    }
-                    requirements.putIfAbsent(item.resourceTypeCode(), new ResourceRequirement(
-                            item.resourceTypeCode(), type.type(), item.quantity(), type.unit(),
-                            item.purpose()));
-                });
-        if (requirements.isEmpty()) throw new IllegalArgumentException("预案未形成资源需求");
+        if (requirements.isEmpty()) throw new IllegalArgumentException("模型未形成有效资源需求");
         return List.copyOf(requirements.values());
     }
 
@@ -1471,6 +1469,12 @@ public final class DispatchApplicationService implements
             DispatchPlan rejectedPlan,
             DispatchPlan nextPlan,
             EmergencyWorkflow workflow
+    ) {
+    }
+
+    private record ProposalValidation(
+            List<ResourceRequirement> requirements,
+            String renderedPlan
     ) {
     }
 }

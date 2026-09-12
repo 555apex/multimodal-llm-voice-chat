@@ -3,7 +3,7 @@ package cn.fj.roadagent.core.dispatch;
 import java.util.List;
 import java.util.Map;
 
-/** 模型只提出数据库资源类型白名单内的需求和处置文本。 */
+/** 模型从数据库实际资源目录中提出需求，并填充事件类型对应的处置预案。 */
 public record DispatchPlanProposal(
         Map<String, String> templateVariables,
         List<ProposedResource> resourceRequirements,

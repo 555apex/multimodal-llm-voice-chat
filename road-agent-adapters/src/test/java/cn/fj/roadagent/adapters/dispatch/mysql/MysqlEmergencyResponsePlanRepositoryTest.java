@@ -28,12 +28,21 @@ class MysqlEmergencyResponsePlanRepositoryTest {
                  '[{\"resourceTypeCode\":\"ROAD_RESCUE_TEAM\",\"quantity\":2,\"purpose\":\"抢通\",\"mode\":\"BASE\"}]',
                  'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
                 """);
+        jdbc.update("""
+                INSERT INTO w_emergency_response_plan VALUES
+                ('ERP-ET101','ET101','拥堵',3,1,'[\"排队长度\"]',
+                 '根据【现场情况】组织处置', '[]',
+                 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+                """);
         var repository = new MysqlEmergencyResponsePlanRepository(
                 jdbc, new ObjectMapper().findAndRegisterModules());
 
         var plan = repository.findActiveByEventType("DT01").orElseThrow();
         assertEquals("ERP-DT01", plan.planId());
         assertEquals(2, plan.resourceBaseline().get(0).quantity());
-        assertTrue(repository.findActiveByEventType("ET101").isEmpty());
+        var unboundPlan = repository.findActiveByEventType("ET101").orElseThrow();
+        assertEquals(3, unboundPlan.version());
+        assertTrue(unboundPlan.resourceBaseline().isEmpty());
+        assertTrue(repository.findActiveByEventType("ET102").isEmpty());
     }
 }
