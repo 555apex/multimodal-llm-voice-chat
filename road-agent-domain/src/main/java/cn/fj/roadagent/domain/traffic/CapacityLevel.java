@@ -7,9 +7,9 @@ public enum CapacityLevel {
     SEVERE_BOTTLENECK("严重瓶颈");
 
     /** 利用率严格大于该值时进入瓶颈等级。 */
-    public static final double BOTTLENECK_THRESHOLD = 0.20;
+    public static final double BOTTLENECK_THRESHOLD = 0.60;
     /** 利用率严格大于该值时进入严重瓶颈等级。 */
-    public static final double SEVERE_BOTTLENECK_THRESHOLD = 0.30;
+    public static final double SEVERE_BOTTLENECK_THRESHOLD = 0.80;
 
     private final String displayName;
 
