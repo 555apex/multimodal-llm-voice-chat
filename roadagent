@@ -7,7 +7,7 @@ frontends=(road-agent-dgx-frontend road-agent-dgx-public-frontend)
 all=("${models[@]}" "${backends[@]}" "${frontends[@]}")
 
 urls() {
-  printf '\nDGX 主界面：http://127.0.0.1:18080/\nDGX 数字人：http://127.0.0.1:18080/digital-human-demo.html\n公网主界面：https://spark-8a8d.taile1b178.ts.net/\n公网数字人：https://spark-8a8d.taile1b178.ts.net/digital-human-demo.html\n'
+  printf '\nDGX 主界面：http://127.0.0.1:18080/\nDGX 数字人：http://127.0.0.1:18080/digital-human-demo.html\n公网主界面：https://www-api-db.u4065293.nyat.app:16194/\n公网数字人：https://www-api-db.u4065293.nyat.app:16194/digital-human-demo.html\n'
 }
 status() {
   printf '%-36s %-12s %-12s\n' 'SERVICE' 'STATE' 'HEALTH'
@@ -17,7 +17,8 @@ status() {
       printf '%s missing\n' "$name"
     fi
   done
-  tailscale funnel status 2>/dev/null || true
+  printf '\nSakuraFrp ingress: '
+  systemctl --user is-active roadagent-sakura-test.service 2>/dev/null || printf 'unavailable\n'
 }
 start_group() {
   local name

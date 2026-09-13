@@ -112,7 +112,7 @@
       }
     },
     "Web": {
-      "spark-8a8d.taile1b178.ts.net:443": {
+      "retired-tailscale-funnel:443": {
         "Handlers": {
           "/": {
             "Proxy": "http://127.0.0.1:18081"
@@ -121,7 +121,7 @@
       }
     },
     "AllowFunnel": {
-      "spark-8a8d.taile1b178.ts.net:443": true
+      "retired-tailscale-funnel:443": true
     }
   },
   "loginUnchanged": true,

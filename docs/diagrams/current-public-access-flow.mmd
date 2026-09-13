@@ -1,0 +1,16 @@
+flowchart LR
+    A["公网用户浏览器"] -->|HTTPS :16194| B["www-api-db.u4065293.nyat.app"]
+    B --> C["SakuraFrp 公网节点<br/>自动 HTTPS"]
+    C --> D["DGX frpc<br/>roadagent-sakura-test.service"]
+    D --> E["127.0.0.1:18081"]
+    E --> F["公网 Nginx / 前端<br/>Basic Auth"]
+    F -->|/api/v1| G["公网后端<br/>road-agent-dgx-public-backend"]
+    H["DGX / Tailnet 内网用户"] -->|HTTP :18080| I["内网 Nginx / 前端"]
+    I -->|/api/v1| J["内网后端<br/>road-agent-dgx-backend"]
+    G --> R["共享后端依赖"]
+    J --> R
+    R --> K["共享业务数据库<br/>公网细粒度账号"]
+    R --> L["DGX 本地 Qwen3.6<br/>enable_thinking=false"]
+    R --> M["DGX 本地语音服务<br/>faster-whisper + Qwen3-TTS"]
+    G --> N["公网后端执行自动分类轮询"]
+    J --> O["内网后端不执行自动分类轮询"]

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Observe the opened release for a full 15 minutes, retaining local evidence."""
-import json,time,urllib.request,urllib.error
+import json,os,time,urllib.request,urllib.error
 from release_ops import RELEASE,CONTAINERS,run,write_json
+
+PUBLIC_URL=os.environ.get('ROADAGENT_PUBLIC_URL','https://www-api-db.u4065293.nyat.app:16194').rstrip('/')
 
 opened=json.loads((RELEASE/'opened.json').read_text())['time']
 for attempt in range(45):
@@ -25,8 +27,8 @@ while True:
        'health':c['State'].get('Health',{}).get('Status'),'restarts':c['RestartCount']} for c in containers}
     sample={'time':time.time(),'states':states,
        'private':status('http://127.0.0.1:18080/'),
-       'public_health':status('https://spark-8a8d.taile1b178.ts.net/healthz'),
-       'public_auth':status('https://spark-8a8d.taile1b178.ts.net/')}
+       'public_health':status(PUBLIC_URL+'/healthz'),
+       'public_auth':status(PUBLIC_URL+'/')}
     sample['passed']=(sample['private']==200 and sample['public_health']==200 and sample['public_auth']==401
        and all(s['running'] and s['health'] in (None,'healthy') and s['restarts']==0 for s in states.values()))
     samples.append(sample)

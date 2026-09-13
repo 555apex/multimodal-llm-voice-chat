@@ -159,10 +159,10 @@ deploy/dgx/dgx-stack public-status
 deploy/dgx/dgx-stack public-db-access-verify
 ```
 
-公网 HTTPS 地址固定为：
+当前公网 HTTPS 地址为：
 
 ```text
-https://spark-8a8d.taile1b178.ts.net/
+https://www-api-db.u4065293.nyat.app:16194/
 ```
 
 停用公网入口但保留账号哈希和原数据库备份：
