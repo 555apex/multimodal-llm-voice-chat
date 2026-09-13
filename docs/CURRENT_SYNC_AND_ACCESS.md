@@ -6,21 +6,47 @@
 
 ```mermaid
 flowchart TD
-    A["GitHub 上游业务分支<br/>version/roadagent-v1"] -->|拉取锁定提交| B["本地上游仓库<br/>multimodal-llm-voice-chat"]
-    B -->|业务差异审计与语义合并| C["本地合并工作区<br/>road-agent-merged"]
-    D["DGX 保留能力<br/>数字人、Qwen3.6、ASR、TTS、部署配置"] --> C
-    C --> E["业务后端、DGX 前端和本地模型适配"]
-    E --> F["构建、自动测试与隔离数据库验证"]
-    F -->|通过后同步| G["DGX 主项目<br/>/home/whtc/workspace/projects/road-agent-dgx"]
-    F -->|提交最终工程| H["GitHub roadagent-v2"]
-    G --> I["同一组前后端镜像"]
-    I --> J["内网运行实例"]
-    I --> K["公网运行实例"]
+    A["【Git 分支】version/roadagent-v1"] --> B["【Windows 文件夹】multimodal-llm-voice-chat"]
+    B --> C["【Windows 文件夹】road-agent-merged"]
+    D["【保留目录】frontend/、speech-service/、configs/、deploy/dgx/"] --> C
+    C --> E["【后端目录】road-agent-domain/、core/、application/、adapters/、interface/、boot/"]
+    C --> F["【前端目录】frontend/"]
+    C --> G["【语音与部署目录】speech-service/、configs/、deploy/dgx/"]
+    E --> H["构建与验证"]
+    F --> H
+    G --> H
+    H --> I["【DGX 文件夹】/home/whtc/workspace/projects/road-agent-dgx"]
+    H --> J["【Git 分支】roadagent-v2"]
+    I --> KB["Dockerfile.backend"] --> LB["【镜像】road-agent-dgx-backend:business-20260913"] --> MB["【容器】内网/公网 backend"]
+    I --> KF["Dockerfile.frontend"] --> LF["【镜像】road-agent-dgx-frontend:business-20260913"] --> MF["【容器】内网/公网 frontend"]
+    I --> KS["speech-service/Dockerfile"] --> LS["【镜像】road-agent-dgx-speech:speech-20260910"] --> MS["【容器】road-agent-dgx-speech"]
 ```
 
 可编辑 Mermaid 源文件：`docs/diagrams/current-sync-flow.mmd`。
 
 PNG 文件：`docs/diagrams/current-sync-flow.png`。
+
+## 名称、类型与实际位置
+
+| 图中名称 | 类型 | 实际目录或定义文件 |
+|---|---|---|
+| 上游业务仓库 | Windows 文件夹 | `C:\Users\ruixuanhu\Desktop\S534_DXG\multimodal-llm-voice-chat` |
+| 实际合并工作区 | Windows 文件夹 | `C:\Users\ruixuanhu\Desktop\S534_DXG\road-agent-merged` |
+| DGX 主项目 | DGX 文件夹 | `/home/whtc/workspace/projects/road-agent-dgx` |
+| 后端源码 | 项目内目录 | `road-agent-domain/`、`road-agent-core/`、`road-agent-application/`、`road-agent-adapters/`、`road-agent-interface/`、`road-agent-boot/` |
+| 前端及数字人 | 项目内目录 | `frontend/src/`、`frontend/public/`、`frontend/digital-human-demo.html` |
+| ASR/TTS 服务 | 项目内目录 | `speech-service/` |
+| 模型与部署配置 | 项目内文件/目录 | `configs/models.yaml`、`deploy/dgx/` |
+| 后端镜像 | Docker 镜像 | 由 `deploy/dgx/Dockerfile.backend` 构建；Java 产物来自 `road-agent-boot/target/*.jar` |
+| 前端镜像 | Docker 镜像 | 由 `deploy/dgx/Dockerfile.frontend` 构建；输入 `frontend/`，静态产物为 `frontend/dist/` |
+| 语音镜像 | Docker 镜像 | 由 `speech-service/Dockerfile` 构建 |
+| 内外网容器 | Docker 运行实例 | 由 `deploy/dgx/compose.yaml` 和 `deploy/dgx/compose.public.yaml` 定义 |
+| Qwen 模型服务 | 独立 DGX 项目 | `/home/whtc/workspace/projects/model-serving`；权重位于 `/home/whtc/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4` |
+| ASR/TTS 权重 | DGX 模型目录 | `/home/whtc/models/Systran--faster-whisper-small`、`/home/whtc/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice` |
+| `business-20260913` | Docker 镜像标签 | 不是目录，也不是单独项目 |
+| `public-backend`、`public-frontend` | Compose 服务名 | 不是目录；对应公网容器 |
+| `roadagent-business`、`roadagent-public` | 当前部署中不是源码根目录 | 当前唯一源码根目录是 `/home/whtc/workspace/projects/road-agent-dgx` |
+| `road_agent` | MySQL schema | 外部数据库，不是项目目录；连接来自 `deploy/dgx/.env` 和公网凭据文件 |
 
 ## 当前公网与内网访问
 

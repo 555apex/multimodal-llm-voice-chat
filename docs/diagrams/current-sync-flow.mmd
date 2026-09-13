@@ -1,20 +1,36 @@
 flowchart TD
-    A["GitHub 上游业务分支<br/>version/roadagent-v1"] -->|拉取锁定提交| B["本地上游仓库<br/>multimodal-llm-voice-chat"]
-    B -->|业务差异审计与语义合并| C["本地合并工作区<br/>road-agent-merged"]
-    D["DGX 保留能力<br/>数字人、Qwen3.6、ASR、TTS、部署配置"] --> C
-    C --> E["业务后端<br/>领域、CRUD、接口、数据库规则"]
-    C --> F["DGX 前端<br/>业务页面与数字人交互"]
-    C --> G["本地模型适配<br/>thinking=false、ASR、流式 TTS"]
-    E --> H["构建、自动测试与隔离数据库验证"]
+    A["【Git 分支，不是文件夹】<br/>GitHub version/roadagent-v1"] -->|拉取锁定提交| B["【Windows 文件夹：上游业务仓库】<br/>C:\Users\ruixuanhu\Desktop\S534_DXG\<br/>multimodal-llm-voice-chat"]
+    B -->|业务差异审计与语义合并| C["【Windows 文件夹：实际合并工作区】<br/>C:\Users\ruixuanhu\Desktop\S534_DXG\<br/>road-agent-merged"]
+    D["【从 DGX 保留的目录/配置】<br/>frontend/ 数字人<br/>speech-service/ ASR/TTS<br/>configs/models.yaml、deploy/dgx/"] --> C
+
+    C --> E["【后端源码目录】<br/>road-agent-domain/<br/>road-agent-core/<br/>road-agent-application/<br/>road-agent-adapters/<br/>road-agent-interface/<br/>road-agent-boot/"]
+    C --> F["【前端源码目录】<br/>frontend/src/<br/>frontend/public/<br/>frontend/digital-human-demo.html"]
+    C --> G["【语音与部署目录】<br/>speech-service/<br/>configs/<br/>deploy/dgx/"]
+
+    E --> H["【构建与验证文件】<br/>pom.xml、各模块 src/test/<br/>frontend/package.json<br/>speech-service/tests/"]
     F --> H
     G --> H
-    H -->|通过后同步| I["DGX 主项目<br/>/home/whtc/workspace/projects/road-agent-dgx"]
-    H -->|提交最终工程| J["GitHub 交付分支<br/>roadagent-v2"]
-    I --> K["统一后端镜像"]
-    I --> L["统一前端镜像"]
-    K --> M["内网后端容器"]
-    K --> N["公网后端容器"]
-    L --> O["内网前端容器"]
-    L --> P["公网前端容器"]
-    Q["共享业务数据库"] --> M
-    Q --> N
+
+    H -->|通过后同步| I["【DGX 文件夹：唯一主项目】<br/>/home/whtc/workspace/projects/<br/>road-agent-dgx"]
+    H -->|提交并推送| J["【Git 分支，不是文件夹】<br/>GitHub roadagent-v2"]
+
+    I --> KB["【后端构建文件】<br/>deploy/dgx/Dockerfile.backend<br/>产物 road-agent-boot/target/*.jar"]
+    I --> KF["【前端构建文件】<br/>deploy/dgx/Dockerfile.frontend<br/>输入 frontend/，产物 frontend/dist/"]
+    I --> KS["【语音构建文件】<br/>speech-service/Dockerfile<br/>输入 speech-service/app/"]
+    I --> KC["【运行编排文件】<br/>deploy/dgx/compose.yaml<br/>deploy/dgx/compose.public.yaml<br/>deploy/dgx/.env"]
+
+    KB --> LB["【Docker 镜像，不是文件夹】<br/>road-agent-dgx-backend:business-20260913"]
+    KF --> LF["【Docker 镜像，不是文件夹】<br/>road-agent-dgx-frontend:business-20260913"]
+    KS --> LS["【Docker 镜像，不是文件夹】<br/>road-agent-dgx-speech:speech-20260910"]
+
+    LB --> MB["【容器，不是文件夹】<br/>road-agent-dgx-backend<br/>road-agent-dgx-public-backend"]
+    LF --> MF["【容器，不是文件夹】<br/>road-agent-dgx-frontend :18080<br/>road-agent-dgx-public-frontend :18081"]
+    LS --> MS["【共享语音容器】<br/>road-agent-dgx-speech"]
+    KC --> MB
+    KC --> MF
+    KC --> MS
+
+    MQ["【独立 DGX 文件夹】<br/>/home/whtc/workspace/projects/model-serving<br/>权重：/home/whtc/models/NVIDIA--Qwen3.6-35B-A3B--NVFP4"] --> CQ["【独立容器】<br/>model-serving-qwen"]
+    CQ --> MB
+    MS --> MB
+    DB["【外部数据库，不是文件夹】<br/>road_agent schema<br/>连接由 deploy/dgx/.env 和公网凭据文件提供"] --> MB
