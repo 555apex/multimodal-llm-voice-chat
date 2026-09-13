@@ -173,8 +173,26 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         }
     }
 
+    @Override
+    public <T> T generateStructuredOnce(ModelRequest request, Class<T> resultType, Duration timeout) {
+        if (timeout.isZero() || timeout.isNegative()) {
+            throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型生成总预算已耗尽");
+        }
+        String content = complete(request, true, timeout.compareTo(requestTimeout) < 0 ? timeout : requestTimeout);
+        try {
+            return objectMapper.readValue(cleanJson(content), resultType);
+        } catch (JsonProcessingException exception) {
+            throw new ExternalServiceException("CHAT_MODEL", "MODEL_INVALID_JSON",
+                    "模型JSON结构不符合要求：" + abbreviate(exception.getOriginalMessage(), 400), exception);
+        }
+    }
+
     private String complete(ModelRequest request, boolean structured) {
-        HttpRequest httpRequest = buildHttpRequest(request, false, structured);
+        return complete(request, structured, requestTimeout);
+    }
+
+    private String complete(ModelRequest request, boolean structured, Duration timeout) {
+        HttpRequest httpRequest = buildHttpRequest(request, false, structured, timeout);
         long started = System.nanoTime();
         try {
             HttpResponse<String> response = httpClient.send(
@@ -214,6 +232,10 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     }
 
     private HttpRequest buildHttpRequest(ModelRequest request, boolean stream, boolean structured) {
+        return buildHttpRequest(request, stream, structured, requestTimeout);
+    }
+
+    private HttpRequest buildHttpRequest(ModelRequest request, boolean stream, boolean structured, Duration timeout) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", modelName);
         body.put("messages", buildMessages(request));
@@ -231,7 +253,7 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
             HttpRequest.Builder builder = HttpRequest.newBuilder(endpoint)
                     // DGX's vLLM ASGI server does not accept the JDK's cleartext h2c upgrade.
                     .version(HttpClient.Version.HTTP_1_1)
-                    .timeout(requestTimeout)
+                    .timeout(timeout)
                     .header("Content-Type", "application/json")
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(body)));
             if (authEnabled) {

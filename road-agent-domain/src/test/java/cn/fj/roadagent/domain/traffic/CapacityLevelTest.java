@@ -12,9 +12,13 @@ class CapacityLevelTest {
             "0, NORMAL",
             "0.15, NORMAL",
             "0.20, NORMAL",
-            "0.2001, BOTTLENECK",
-            "0.30, BOTTLENECK",
-            "0.3001, SEVERE_BOTTLENECK",
+            "0.30, NORMAL",
+            "0.5999, NORMAL",
+            "0.60, NORMAL",
+            "0.6001, BOTTLENECK",
+            "0.7999, BOTTLENECK",
+            "0.80, BOTTLENECK",
+            "0.8001, SEVERE_BOTTLENECK",
             "1.00, SEVERE_BOTTLENECK",
             "1.2792, SEVERE_BOTTLENECK"
     })

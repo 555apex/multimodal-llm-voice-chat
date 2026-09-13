@@ -1,5 +1,7 @@
 package cn.fj.roadagent.core.agent;
 
+import cn.fj.roadagent.domain.traffic.CapacityLevel;
+
 import cn.fj.roadagent.application.agent.AgentDecision;
 import cn.fj.roadagent.domain.traffic.FujianCity;
 import cn.fj.roadagent.domain.traffic.HighwayRoute;
@@ -263,14 +265,15 @@ final class KnownTrafficQuestionClassifier {
         if (containsAny(text, "拥堵状况指数", "拥堵指数0到1", "拥堵指数0至1")) {
             return Optional.of("拥堵状况指数取值为0至1，数值越大表示相对拥堵程度越高；具体路况状态仍以数据库status字段为权威，指数只作为排序和研判辅助。 ");
         }
-        if (text.contains("利用率等于15%") || text.contains("利用率等于15％")) {
-            return Optional.of("按当前项目口径，通行能力利用率等于15%时判定为正常；严格高于20%才进入瓶颈等级。 ");
-        }
-        if (text.contains("利用率等于20%") || text.contains("利用率等于20％")) {
-            return Optional.of("按当前项目口径，通行能力利用率等于20%时仍判定为正常，严格高于20%才判定为瓶颈。 ");
-        }
-        if (text.contains("利用率等于30%") || text.contains("利用率等于30％")) {
-            return Optional.of("按本项目口径，通行能力利用率等于30%时判定为瓶颈，严格高于30%才判定为严重瓶颈。 ");
+        var capacityMatch = java.util.regex.Pattern
+                .compile("利用率等于(\\d+(?:\\.\\d+)?)\\s*[%％]").matcher(text);
+        if (capacityMatch.find()) {
+            double ratio = Double.parseDouble(capacityMatch.group(1)) / 100;
+            if (Double.isFinite(ratio)) {
+                return Optional.of("按当前项目口径，通行能力利用率等于" + capacityMatch.group(1)
+                        + "%时判定为" + CapacityLevel.fromUtilization(ratio).displayName()
+                        + "。" + CapacityLevel.policyDescription() + "。");
+            }
         }
         if (containsAny(text, "实际通行能力为0", "实际能力为0")) {
             return Optional.of("实际通行能力为0是有效数据库值，应按0辆/小时展示；瓶颈等级采用数据库利用率并按项目阈值判定，不把0当作缺失值。 ");

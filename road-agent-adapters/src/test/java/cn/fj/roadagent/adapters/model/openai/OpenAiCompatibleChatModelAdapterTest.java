@@ -184,6 +184,35 @@ class OpenAiCompatibleChatModelAdapterTest {
         assertEquals(2, requestCount.get());
     }
 
+    @Test
+    void singleAttemptNeverRepairsMalformedJson() {
+        AtomicInteger calls = new AtomicInteger();
+        server.createContext("/chat/completions", exchange -> {
+            calls.incrementAndGet();
+            sendJson(exchange, "{\"choices\":[{\"message\":{\"content\":\"not-json\"}}]}");
+        });
+        server.start();
+        var failure = assertThrows(ExternalServiceException.class, () -> adapter(false, false)
+                .generateStructuredOnce(new ModelRequest("system", "facts", 0.1), IntentJson.class, Duration.ofSeconds(1)));
+        assertEquals("MODEL_INVALID_JSON", failure.errorCode());
+        assertEquals(1, calls.get());
+    }
+
+    @Test
+    void singleAttemptHonorsShorterRemainingTimeout() {
+        AtomicInteger calls = new AtomicInteger();
+        server.createContext("/chat/completions", exchange -> {
+            calls.incrementAndGet();
+            try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            sendJson(exchange, "{\"choices\":[{\"message\":{\"content\":\"{}\"}}]}");
+        });
+        server.start();
+        var failure = assertThrows(ExternalServiceException.class, () -> adapter()
+                .generateStructuredOnce(new ModelRequest("system", "facts", 0.1), IntentJson.class, Duration.ofMillis(100)));
+        assertEquals("MODEL_TIMEOUT", failure.errorCode());
+        assertTrue(calls.get() <= 1);
+    }
+
     private OpenAiCompatibleChatModelAdapter adapter() {
         return adapter(true, null);
     }

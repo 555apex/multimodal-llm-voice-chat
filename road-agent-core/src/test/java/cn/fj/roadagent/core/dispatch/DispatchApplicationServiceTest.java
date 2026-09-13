@@ -323,6 +323,51 @@ class DispatchApplicationServiceTest {
         assertEquals(1, fixture.allocations.values.size());
     }
 
+    @Test
+    void formatAndSemanticFailuresShareOneCorrectionBudget() {
+        for (boolean formatFirst : List.of(false, true)) {
+            int[] calls = {0};
+            FixedModel model = new FixedModel() {
+                @Override
+                public <T> T generateStructuredOnce(ModelRequest request, Class<T> resultType, Duration timeout) {
+                    assertTrue(timeout.compareTo(Duration.ofSeconds(180)) <= 0);
+                    assertTrue(!timeout.isNegative() && !timeout.isZero());
+                    assertEquals(1536, request.maxOutputTokens());
+                    int attempt = ++calls[0];
+                    if ((attempt == 1) == formatFirst) {
+                        throw new cn.fj.roadagent.application.exception.ExternalServiceException(
+                                "CHAT_MODEL", "MODEL_INVALID_JSON", "malformed object");
+                    }
+                    return new UnknownResourceModel().generateStructured(request, resultType);
+                }
+            };
+            Fixture fixture = fixture(model);
+            assertThrows(RuntimeException.class, () -> fixture.service.generate(event().eventId()));
+            assertEquals(2, calls[0]);
+            assertTrue(fixture.allocations.values.isEmpty());
+            assertEquals(WorkflowStatus.GENERATION_FAILED,
+                    fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow().status());
+        }
+    }
+
+    @Test
+    void transportAndTruncationFailuresNeverStartCorrection() {
+        for (String code : List.of("MODEL_TIMEOUT", "MODEL_TRUNCATED", "MODEL_REQUEST_FAILED")) {
+            int[] calls = {0};
+            FixedModel model = new FixedModel() {
+                @Override
+                public <T> T generateStructuredOnce(ModelRequest request, Class<T> resultType, Duration timeout) {
+                    calls[0]++;
+                    throw new cn.fj.roadagent.application.exception.ExternalServiceException("CHAT_MODEL", code, code);
+                }
+            };
+            Fixture fixture = fixture(model);
+            assertThrows(RuntimeException.class, () -> fixture.service.generate(event().eventId()));
+            assertEquals(1, calls[0]);
+            assertTrue(fixture.allocations.values.isEmpty());
+        }
+    }
+
     private Fixture fixture(ChatModelPort model) {
         TestEventPort events = new TestEventPort(event());
         TestDispatchRepository plans = new TestDispatchRepository();

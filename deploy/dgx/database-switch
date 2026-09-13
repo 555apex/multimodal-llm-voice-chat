@@ -151,8 +151,8 @@ verify_readonly() {
   done
   (( missing == 0 )) || die "candidate database schema is incomplete"
   compact="$(db_client "$CANDIDATE_RUNTIME" query \
-    "SELECT COUNT(DISTINCT event_type) FROM w_emergency_response_plan WHERE plan_status=1 AND source_document='compact-20260910'" | tr -d '\r')"
-  [[ "$compact" == "16" ]] || die "candidate database does not have 16 active compact-20260910 plans"
+    "SELECT IF(COUNT(*)=16 AND COUNT(DISTINCT event_type)=16 AND SUM(JSON_TYPE(resource_baseline)='ARRAY')=16 AND SUM(required_facts IS NOT NULL AND CHAR_LENGTH(rescue_plan_template)>0 AND CHAR_LENGTH(content_hash)=64)=16,16,0) FROM w_emergency_response_plan WHERE plan_status=1" | tr -d '\r')"
+  [[ "$compact" == "16" ]] || die "candidate database must have exactly 16 complete active response plans with array baselines (empty arrays allowed)"
   inventory="$(db_client "$CANDIDATE_RUNTIME" query "SELECT COUNT(*) FROM w_emergency_resource r LEFT JOIN (SELECT resource_id,SUM(IF(allocation_status=0,allocated_quantity,0)) reserved,SUM(IF(allocation_status=1,allocated_quantity,0)) dispatched FROM w_emergency_resource_allocation GROUP BY resource_id) a ON a.resource_id=r.resource_id WHERE r.available_quantity<0 OR r.reserved_quantity<>COALESCE(a.reserved,0) OR r.dispatched_quantity<>COALESCE(a.dispatched,0) OR r.available_quantity+r.reserved_quantity+r.dispatched_quantity>r.total_quantity" | tr -d '\r')"
   [[ "$inventory" == "0" ]] || die "candidate database inventory and allocation ledgers are inconsistent"
   count_sql=""

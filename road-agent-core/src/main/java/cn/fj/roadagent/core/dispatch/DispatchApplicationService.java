@@ -830,7 +830,6 @@ public final class DispatchApplicationService implements
             persistGenerationFailure(generating, workflow, exception);
             throw exception;
         }
-        DispatchPlanProposal proposal;
         List<ResourceRequirement> requirements;
         EmergencyResponsePlanSnapshot responsePlan = generating.responsePlan();
         if (responsePlan == null
@@ -842,29 +841,8 @@ public final class DispatchApplicationService implements
                 ? generating : generating.withResponsePlan(responsePlan);
         String renderedPlan;
         try {
-            proposal = chatModelPort.generateStructured(
-                    proposalRequest(generating.event(), previous, feedback, catalog, responsePlan),
-                    DispatchPlanProposal.class
-            );
-            if (proposal == null) {
-                throw new IllegalArgumentException("模型返回的工单内容为空");
-            }
-            ProposalValidation validation;
-            try {
-                validation = validateProposal(
-                        proposal, generating.event(), catalog, responsePlan);
-            } catch (IllegalArgumentException invalid) {
-                String correction = (feedback == null || feedback.isBlank() ? "" : feedback + "\n")
-                        + "上次输出未通过系统校验：" + invalid.getMessage()
-                        + "。请完整重写JSON；资源编码只能从数据库可选资源目录中选择，"
-                        + "不得继续返回无效编码。";
-                proposal = chatModelPort.generateStructured(proposalRequest(generating.event(), previous,
-                        correction,
-                        catalog, responsePlan), DispatchPlanProposal.class);
-                if (proposal == null) throw new IllegalArgumentException("模型修正内容为空");
-                validation = validateProposal(
-                        proposal, generating.event(), catalog, responsePlan);
-            }
+            ProposalValidation validation = generateValidatedProposal(
+                    generating.event(), previous, feedback, catalog, responsePlan);
             renderedPlan = validation.renderedPlan();
             requirements = validation.requirements();
         } catch (IllegalArgumentException exception) {
@@ -1230,6 +1208,43 @@ public final class DispatchApplicationService implements
             user.append("\n请针对退回意见返工，不能原样重复上一版。");
         }
         return new ModelRequest(system, user.toString(), List.of(), 0.1, 1536);
+    }
+
+    private ProposalValidation generateValidatedProposal(
+            EmergencyEvent event, DispatchPlan previous, String feedback,
+            List<EmergencyResource> catalog, EmergencyResponsePlanSnapshot responsePlan
+    ) {
+        long started = System.nanoTime();
+        long budget = Duration.ofSeconds(360).toNanos();
+        String attemptFeedback = feedback;
+        for (int attempt = 0; attempt < 2; attempt++) {
+            long remaining = budget - (System.nanoTime() - started);
+            if (remaining <= 0) {
+                throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型生成总预算已耗尽");
+            }
+            try {
+                DispatchPlanProposal proposal = chatModelPort.generateStructuredOnce(
+                        proposalRequest(event, previous, attemptFeedback, catalog, responsePlan),
+                        DispatchPlanProposal.class,
+                        Duration.ofNanos(Math.min(remaining, Duration.ofSeconds(180).toNanos())));
+                if (proposal == null) throw new IllegalArgumentException("模型返回的工单内容为空");
+                ProposalValidation validation = validateProposal(proposal, event, catalog, responsePlan);
+                if (System.nanoTime() - started >= budget) {
+                    throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型生成总预算已耗尽");
+                }
+                return validation;
+            } catch (IllegalArgumentException | ExternalServiceException invalid) {
+                if (invalid instanceof ExternalServiceException external
+                        && !"MODEL_INVALID_JSON".equals(external.errorCode())) throw external;
+                if (attempt == 1) throw invalid;
+                attemptFeedback = (feedback == null || feedback.isBlank() ? "" : feedback + "\n")
+                        + "上次输出未通过系统校验：" + invalid.getMessage()
+                        + "。请完整重写JSON；资源编码只能从数据库可选资源目录中选择，"
+                        + "不得重复资源类型；数量必须为正整数。保留原人工意见，填写简写字段，"
+                        + "现场事实简述和补充建议分别最多50字，无必要的补充建议请留空。";
+            }
+        }
+        throw new IllegalStateException("unreachable generation attempt");
     }
 
     private ProposalValidation validateProposal(

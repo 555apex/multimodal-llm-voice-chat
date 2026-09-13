@@ -21,6 +21,12 @@ public enum CapacityLevel {
         return displayName;
     }
 
+    public static String policyDescription() {
+        return "利用率不高于%.0f%%为正常；高于%.0f%%且不高于%.0f%%为瓶颈；高于%.0f%%为严重瓶颈；利用率越高压力越大"
+                .formatted(BOTTLENECK_THRESHOLD * 100, BOTTLENECK_THRESHOLD * 100,
+                        SEVERE_BOTTLENECK_THRESHOLD * 100, SEVERE_BOTTLENECK_THRESHOLD * 100);
+    }
+
     public static CapacityLevel fromUtilization(double utilizationRatio) {
         if (!Double.isFinite(utilizationRatio) || utilizationRatio < 0) {
             throw new IllegalArgumentException("通行能力利用率必须是非负有限数");

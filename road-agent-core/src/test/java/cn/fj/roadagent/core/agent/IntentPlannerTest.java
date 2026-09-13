@@ -227,6 +227,15 @@ class IntentPlannerTest {
         AgentDecision threshold = planner.plan("通行能力利用率等于20%时是什么等级？", List.of());
         assertEquals("DIRECT_ANSWER", threshold.intent());
         assertTrue(threshold.clarification().contains("正常"));
+        for (String ratio : List.of("30", "60", "80", "80.01")) {
+            var answer = planner.plan("通行能力利用率等于" + ratio + "%时是什么等级？", List.of());
+            assertEquals("DIRECT_ANSWER", answer.intent());
+            String expected = cn.fj.roadagent.domain.traffic.CapacityLevel
+                    .fromUtilization(Double.parseDouble(ratio) / 100).displayName();
+            assertTrue(answer.clarification().contains("判定为" + expected + "。"));
+            assertTrue(answer.clarification().contains("60%"));
+            assertTrue(answer.clarification().contains("80%"));
+        }
 
         AgentDecision exactActive = planner.plan("日均流量刚好为100算活跃卡口吗？", List.of());
         assertEquals("DIRECT_ANSWER", exactActive.intent());
