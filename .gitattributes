@@ -7,3 +7,5 @@ mvnw.cmd -text
 /deploy/dgx/mysql-client-entrypoint text eol=lf
 /deploy/dgx/public-db-access text eol=lf
 /deploy/dgx/*.py text eol=lf
+/roadagent text eol=lf
+/docs/diagrams/*.py text eol=lf
