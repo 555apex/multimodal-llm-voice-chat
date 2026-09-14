@@ -82,7 +82,9 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             List<String> missing = intentPlanner.missingFields(decision);
             if (!missing.isEmpty()) {
                 if (intent == AgentIntent.TRAFFIC_QUERY
-                        && decision.parsedTrafficQueryType().map(type -> type.regionalTrafficQuery()).orElse(false)) {
+                        && decision.parsedTrafficQueryType().map(type -> type.regionalTrafficQuery()
+                        || type == cn.fj.roadagent.domain.traffic.TrafficQueryType.CITY_PAIR
+                        || type == cn.fj.roadagent.domain.traffic.TrafficQueryType.CITY_PAIR_CONGESTION).orElse(false)) {
                     rememberTrafficContext(command.conversationId(), decision);
                 }
                 String clarification = decision.clarification();

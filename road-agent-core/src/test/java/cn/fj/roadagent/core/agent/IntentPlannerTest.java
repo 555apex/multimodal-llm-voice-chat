@@ -50,7 +50,8 @@ class IntentPlannerTest {
 
         new IntentPlanner(model).plan("请根据上下文规划这条模糊请求", List.of());
 
-        assertTrue(model.lastRequest.systemPrompt().contains("PROVINCE_OVERVIEW、ROUTE_CATALOG、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL"));
+        assertTrue(model.lastRequest.systemPrompt().contains("CITY_PAIR_CONGESTION"));
+        assertTrue(model.lastRequest.systemPrompt().contains("ROUTE_CONGESTION"));
         assertTrue(model.lastRequest.systemPrompt().contains("CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL"));
         assertTrue(model.lastRequest.systemPrompt().contains("通行能力利用率"));
         assertTrue(model.lastRequest.systemPrompt().contains("不得把五四路、成功大道"));
@@ -181,9 +182,25 @@ class IntentPlannerTest {
         assertEquals("宁德", cityPair.originCity());
         assertEquals("福州", cityPair.destinationCity());
 
+        AgentDecision singleCity = planner.plan("厦门市当前的交通情况如何？", List.of());
+        assertEquals("CITY_PAIR", singleCity.trafficScope());
+        assertEquals("厦门", singleCity.originCity());
+        assertNull(singleCity.destinationCity());
+        assertTrue(singleCity.clarification().contains("再补充一个福建地级市"));
+
+        AgentDecision singleCityCongestion = planner.plan("福州市有哪些拥堵路段？", List.of());
+        assertEquals("CITY_PAIR_CONGESTION", singleCityCongestion.trafficScope());
+        assertEquals("福州", singleCityCongestion.originCity());
+        assertTrue(singleCityCongestion.clarification().contains("具体G/S国省道路线编号"));
+
+        assertEquals("CITY_PAIR_CONGESTION",
+                planner.plan("福州和厦门的拥堵情况如何？", List.of()).trafficScope());
+
         AgentDecision route = planner.plan("G104 北京—平潭当前通行情况如何？", List.of());
         assertEquals("ROUTE_DETAIL", route.trafficScope());
         assertEquals("G104", route.routeCode());
+        assertEquals("ROUTE_CONGESTION",
+                planner.plan("G104当前有哪些拥堵问题？", List.of()).trafficScope());
 
         assertEquals("CAPACITY_OVERVIEW",
                 planner.plan("福建省各国省道通行能力利用率怎么样？", List.of()).trafficScope());
@@ -261,11 +278,12 @@ class IntentPlannerTest {
 
         AgentDecision congestion = KnownTrafficQuestionClassifier
                 .classify("北京-平潭哪些路段拥堵？", routes).orElseThrow();
+        assertEquals("ROUTE_CONGESTION", congestion.trafficScope());
         assertTrue(Boolean.TRUE.equals(congestion.includeTrend()));
 
         AgentDecision cause = KnownTrafficQuestionClassifier
                 .classify("G104为什么会堵车，是否受节假日影响？", routes).orElseThrow();
-        assertEquals("ROUTE_DETAIL", cause.trafficScope());
+        assertEquals("ROUTE_CONGESTION", cause.trafficScope());
         assertEquals("G104", cause.routeCode());
         assertTrue(Boolean.TRUE.equals(cause.includeTrend()));
 

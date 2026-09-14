@@ -1,9 +1,46 @@
 const SENTENCE_END = /[^。！？；\n]+[。！？；]?/g
 const SOFT_END = /[，、,：:]\s*/g
+const SPEECH_ARROW = /\s*(?:->|→|⇒|⟶|➜)\s*/g
+const CHINESE_NAME_DASH = /([\p{Script=Han}])\s*[-—–－]\s*(?=[\p{Script=Han}])/gu
+const ROUTE_LIST_SEPARATOR = /、\s*(?=(?:FJ|[GS])\d+)/giu
+const ROUTE_CODE = /\b(FJ|G|S)(\d+)\b/giu
+const CITY_PERCENTAGE = /([\p{Script=Han}]{2,}市)\s*[（(]\s*(\d+(?:\.\d+)?)\s*%\s*[）)]/gu
+const CITY_LIST_SEPARATOR = /、\s*(?=[\p{Script=Han}]{2,}市(?:[，,（(]))/gu
+const PERCENTAGE = /(\d+(?:\.\d+)?)\s*%/g
+const FIRST_SEGMENT_MAXIMUM = 40
+const FOLLOWING_SEGMENT_MAXIMUM = 45
+const SPOKEN_DIGITS: Record<string, string> = {
+  '0': '零', '1': '一', '2': '二', '3': '三', '4': '四',
+  '5': '五', '6': '六', '7': '七', '8': '八', '9': '九',
+}
 
-/** 按中文语义边界切分；首段较短以降低首音频延迟，后续段较长以减少停顿。 */
+/** 只调整送入TTS的文本；界面仍保留原始符号。 */
+export function normalizeSpeechText(source: string): string {
+  return source
+    .replace(SPEECH_ARROW, '到')
+    .replace(CHINESE_NAME_DASH, '$1到')
+    .replace(ROUTE_LIST_SEPARATOR, '；')
+    .replace(CITY_PERCENTAGE, (_match, city: string, value: string) => `${city}，占比${speakPercentage(value)}`)
+    .replace(CITY_LIST_SEPARATOR, '；')
+    .replace(PERCENTAGE, (_match, value: string) => speakPercentage(value))
+    .replace(ROUTE_CODE, (_match, prefix: string, digits: string) => {
+      const routeType = prefix.toUpperCase() === 'G' ? '国道'
+        : prefix.toUpperCase() === 'S' ? '省道' : '福建编号'
+      return `${routeType}${[...digits].map((digit) => SPOKEN_DIGITS[digit] ?? digit).join('')}，`
+    })
+    .replace(/，\s*([，、；。！？])/g, '$1')
+}
+
+function speakPercentage(value: string): string {
+  const [integer, fraction] = value.split('.')
+  if (!fraction) return `百分之${integer}`
+  const spokenFraction = [...fraction].map((digit) => SPOKEN_DIGITS[digit] ?? digit).join('')
+  return `百分之${integer}点${spokenFraction}`
+}
+
+/** 按中文语义边界切分；普通完整回答尽量合成一个音频块，避免句间重复等待TTS。 */
 export function speechSummary(source: string): string {
-  const text = source.replace(/\s+/g, ' ').trim()
+  const text = normalizeSpeechText(source).replace(/\s+/g, ' ').trim()
   if (text.length <= 160) return text
   const sentences = text.match(SENTENCE_END) ?? []
   let result = ''
@@ -25,15 +62,16 @@ export function streamingSpeechSegments(source: string): string[] {
 }
 
 export function splitSpeechText(source: string): string[] {
-  const text = source.replace(/\s+/g, ' ').trim()
+  const text = normalizeSpeechText(source).replace(/\s+/g, ' ').trim()
   if (!text) return []
   const sentences = text.match(SENTENCE_END)?.map((value) => value.trim()).filter(Boolean) ?? [text]
   const segments: string[] = []
   let current = ''
 
-  for (const sentence of sentences.flatMap((value) => splitLongSentence(value, segments.length ? 140 : 60))) {
-    const maximum = segments.length === 0 ? 60 : 140
-    if (current && current.length + sentence.length > maximum) {
+  // 先切成较小语义单元，再将首块控制得更短、后续块适当放大。
+  for (const sentence of sentences.flatMap((value) => splitLongSentence(value, FIRST_SEGMENT_MAXIMUM))) {
+    const maximum = segments.length === 0 ? FIRST_SEGMENT_MAXIMUM : FOLLOWING_SEGMENT_MAXIMUM
+    if (current && (current.endsWith('；') || current.length + sentence.length > maximum)) {
       segments.push(current)
       current = sentence
     } else {

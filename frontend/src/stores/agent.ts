@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { streamAgentMessage } from '../api/agentApi'
 import { decideDispatch } from '../api/dispatchApi'
 import { useSpeechStore } from './speech'
-import { speechSummary } from '../utils/speechText'
 import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RunFailedData } from '../types/agent'
 import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
@@ -109,11 +108,6 @@ export const useAgentStore = defineStore('agent', {
           break
         case 'answer.speech':
           message.speechText = (event.data as { content: string }).content
-          if (message.speechText && this.autoSpokenMessageId !== messageId
-            && useSpeechStore().autoReadEnabled && useSpeechStore().surfaceActive) {
-            this.autoSpokenMessageId = messageId
-            void useSpeechStore().speak(messageId, speechSummary(message.speechText))
-          }
           break
         case 'result.traffic':
           message.traffic = event.data as TrafficQueryResult
@@ -124,12 +118,12 @@ export const useAgentStore = defineStore('agent', {
           break
         case 'run.completed':
           message.status = 'completed'
-          if (message.speechText
+          if ((message.content || message.speechText)
             && this.autoSpokenMessageId !== message.id
             && useSpeechStore().autoReadEnabled
             && useSpeechStore().surfaceActive) {
             this.autoSpokenMessageId = message.id
-            void useSpeechStore().speak(message.id, speechSummary(message.speechText))
+            void useSpeechStore().speak(message.id, message.content || message.speechText || '')
           }
           break
         case 'run.failed': {

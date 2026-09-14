@@ -59,8 +59,6 @@ import cn.fj.roadagent.domain.dispatch.ResourceAllocation;
 import cn.fj.roadagent.domain.dispatch.ResourceAllocationStatus;
 import cn.fj.roadagent.domain.dispatch.ResourceFeasibility;
 import cn.fj.roadagent.domain.dispatch.ResourceRequirement;
-import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceBaseline;
-import cn.fj.roadagent.domain.dispatch.ResponsePlanResourceMode;
 import cn.fj.roadagent.domain.dispatch.WorkflowAction;
 import cn.fj.roadagent.domain.dispatch.WorkflowActionType;
 import cn.fj.roadagent.domain.dispatch.WorkflowStage;
@@ -114,42 +112,6 @@ public final class DispatchApplicationService implements
             ResourceDataPort resourceDataPort,
             ResourceAllocationPort resourceAllocationPort,
             EmergencyResourceAllocator resourceAllocator,
-            UnitOfWork unitOfWork,
-            Clock clock,
-            Duration staleGeneratingAfter
-    ) {
-        this(eventPort, dispatchRepository, workflowRepository, chatModelPort, resourceDataPort,
-                resourceAllocationPort, resourceAllocator, noOpClassificationLog(),
-                legacyResponsePlans(), unitOfWork,
-                clock, staleGeneratingAfter);
-    }
-
-    public DispatchApplicationService(
-            AbnormalEventPort eventPort,
-            DispatchRepository dispatchRepository,
-            EmergencyWorkflowRepository workflowRepository,
-            ChatModelPort chatModelPort,
-            ResourceDataPort resourceDataPort,
-            ResourceAllocationPort resourceAllocationPort,
-            EmergencyResourceAllocator resourceAllocator,
-            EventClassificationLogPort classificationLogPort,
-            UnitOfWork unitOfWork,
-            Clock clock,
-            Duration staleGeneratingAfter
-    ) {
-        this(eventPort, dispatchRepository, workflowRepository, chatModelPort, resourceDataPort,
-                resourceAllocationPort, resourceAllocator, classificationLogPort,
-                legacyResponsePlans(), unitOfWork, clock, staleGeneratingAfter);
-    }
-
-    public DispatchApplicationService(
-            AbnormalEventPort eventPort,
-            DispatchRepository dispatchRepository,
-            EmergencyWorkflowRepository workflowRepository,
-            ChatModelPort chatModelPort,
-            ResourceDataPort resourceDataPort,
-            ResourceAllocationPort resourceAllocationPort,
-            EmergencyResourceAllocator resourceAllocator,
             EventClassificationLogPort classificationLogPort,
             EmergencyResponsePlanPort responsePlanPort,
             UnitOfWork unitOfWork,
@@ -168,24 +130,6 @@ public final class DispatchApplicationService implements
         this.unitOfWork = unitOfWork;
         this.clock = clock;
         this.staleGeneratingAfter = staleGeneratingAfter;
-    }
-
-    private static EmergencyResponsePlanPort legacyResponsePlans() {
-        return eventType -> Optional.of(new EmergencyResponsePlan(
-                "LEGACY-TEST-" + eventType, eventType, eventType, 1,
-                List.of("模型救援方案"), "【模型救援方案】",
-                List.of(new ResponsePlanResourceBaseline(
-                        "LEGACY", 1, "兼容旧测试", ResponsePlanResourceMode.CONDITIONAL)),
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        ));
-    }
-
-    private static EventClassificationLogPort noOpClassificationLog() {
-        return new EventClassificationLogPort() {
-            @Override public int nextAttemptNumber(String eventId) { return 1; }
-            @Override public boolean insert(EventClassificationAttempt attempt) { return true; }
-            @Override public long countLatestFailuresForPendingEvents() { return 0; }
-        };
     }
 
     @Override
@@ -424,7 +368,13 @@ public final class DispatchApplicationService implements
                     || current.status() != WorkflowStatus.WAITING_LEVEL_1_SUBMISSION) {
                 throw conflict("WORKFLOW_STAGE_CONFLICT", "当前事件不在一级待上报状态");
             }
-            requireCurrentWaitingPlan(current);
+            DispatchPlan waitingPlan = requireCurrentWaitingPlan(current);
+            if (waitingPlan.hasResourceShortage()) {
+                throw conflict(
+                        "LEVEL_1_RESOURCE_INFEASIBLE",
+                        "当前方案存在资源缺口，不能上报二级；请退回AI重新生成可执行方案"
+                );
+            }
             Instant now = clock.instant();
             ProfessionalReview review = ProfessionalReview.pending(
                     "PR-" + UUID.randomUUID(), current.workflowId(),
@@ -819,8 +769,7 @@ public final class DispatchApplicationService implements
             String feedback,
             EmergencyWorkflow workflow
     ) {
-        // 预案只约束处置正文，不再限制资源类型。模型可从全部启用库存中按需选择，
-        // 后续仍由Java根据真实库存和距离完成分配。
+        // 预案约束处置正文；资源种类与数量必须在一级生成阶段通过真实库存可执行性校验。
         List<EmergencyResource> catalog = resourceDataPort.listAllActiveForPlanning();
         if (catalog.isEmpty()) {
             ExternalServiceException exception = new ExternalServiceException(
@@ -840,9 +789,11 @@ public final class DispatchApplicationService implements
         DispatchPlan generatingWithPlan = generating.responsePlan() == responsePlan
                 ? generating : generating.withResponsePlan(responsePlan);
         String renderedPlan;
+        Map<String, GeoPoint> cityCenters;
         try {
+            cityCenters = resourceDataPort.cityCenters();
             ProposalValidation validation = generateValidatedProposal(
-                    generating.event(), previous, feedback, catalog, responsePlan);
+                    generating.event(), previous, feedback, catalog, cityCenters, responsePlan);
             renderedPlan = validation.renderedPlan();
             requirements = validation.requirements();
         } catch (IllegalArgumentException exception) {
@@ -871,12 +822,17 @@ public final class DispatchApplicationService implements
                         .map(ResourceRequirement::resourceTypeCode)
                         .collect(java.util.stream.Collectors.toCollection(java.util.TreeSet::new));
                 List<EmergencyResource> resources = resourceDataPort.lockByTypeCodes(typeCodes);
-                Map<String, GeoPoint> cityCenters = resourceDataPort.cityCenters();
                 Instant now = clock.instant();
                 ResourceAllocationResult result = resourceAllocator.allocate(
                         generating.event(), requirements, resources, cityCenters, locked.workflowId(),
                         generating.planId(), generating.version(), now
                 );
+                if (!result.shortages().isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "资源库在方案生成期间发生变化，当前资源清单已不可执行："
+                                    + shortageSummary(result)
+                    );
+                }
                 persistReservations(result);
                 List<AllocatedResource> allocations = result.allocations().stream()
                         .map(ResourceAllocation::resource).toList();
@@ -892,7 +848,7 @@ public final class DispatchApplicationService implements
                 insertAction(action(
                         locked, WorkflowActionType.GENERATION_COMPLETED,
                         locked.currentStage(), generated.currentStage(), locked.status(), generated.status(),
-                        result.shortages().isEmpty() ? null : "存在资源缺口，需逐级审核确认",
+                        null,
                         systemKey("generate-complete"), now
                 ));
                 return completed;
@@ -1164,8 +1120,10 @@ public final class DispatchApplicationService implements
                 resourceTypeCode必须逐字选自数据库可选资源目录，不得创造其他类型。
                 资源不受预案中的历史资源建议限制。请结合事件事实、处置需要和人工退回意见独立判断资源种类与数量。
                 quantity必须是大于0的整数。不得输出资源ID、资源名称、来源城市、距离、库存或到达时间。
-                即使当前库存可能不足，也只能提出白名单内资源的真实需求，缺口由系统计算。
-                supplementalAdvice只写预案模板未覆盖且由事件事实支持的补充建议，没有则返回空字符串；不得重写或删改预案。
+                资源清单必须能由当前同城及跨市可调度库存完整满足，不得生成资源缺口方案。
+                若人工退回意见要求不存在的资源类型或超过可调度库存，必须在supplementalAdvice中明确说明该要求不可执行、该版不能上报二级，
+                并依据事件事实和自身应急知识改用目录内且库存足够的替代资源，重新给出可执行救援方案和资源清单。
+                supplementalAdvice只写预案模板未覆盖且由事件事实支持的补充建议或上述返工不可行说明，没有则返回空字符串；不得重写或删改预案。
                 若模板包含“现场事实简述”，该项须为自然通顺的完整陈述，最多50字，不重复事件编号或标题。
                 未知事实写“现场影响范围及人员情况尚待核实”，不得拼凑缺失数量、联系人或时点。补充建议最多50字，purpose最多40字。
                 简明版正文含填充内容和补充建议须为300至400字；不要在填充项末尾重复模板已有标点。
@@ -1205,19 +1163,20 @@ public final class DispatchApplicationService implements
             user.append("\n上一版实际分配：").append(previous.allocatedResources());
             user.append("\n上一版资源缺口：").append(previous.resourceShortages());
             user.append("\n人工退回意见：").append(feedback);
-            user.append("\n请针对退回意见返工，不能原样重复上一版。");
+            user.append("\n请针对退回意见返工，不能原样重复上一版；最终资源清单必须完整可执行，不能把资源缺口上报二级。");
         }
         return new ModelRequest(system, user.toString(), List.of(), 0.1, 1536);
     }
 
     private ProposalValidation generateValidatedProposal(
             EmergencyEvent event, DispatchPlan previous, String feedback,
-            List<EmergencyResource> catalog, EmergencyResponsePlanSnapshot responsePlan
+            List<EmergencyResource> catalog, Map<String, GeoPoint> cityCenters,
+            EmergencyResponsePlanSnapshot responsePlan
     ) {
         long started = System.nanoTime();
         long budget = Duration.ofSeconds(360).toNanos();
         String attemptFeedback = feedback;
-        for (int attempt = 0; attempt < 2; attempt++) {
+        for (int attempt = 0; attempt < 3; attempt++) {
             long remaining = budget - (System.nanoTime() - started);
             if (remaining <= 0) {
                 throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型生成总预算已耗尽");
@@ -1229,6 +1188,15 @@ public final class DispatchApplicationService implements
                         Duration.ofNanos(Math.min(remaining, Duration.ofSeconds(180).toNanos())));
                 if (proposal == null) throw new IllegalArgumentException("模型返回的工单内容为空");
                 ProposalValidation validation = validateProposal(proposal, event, catalog, responsePlan);
+                ResourceAllocationResult preview = resourceAllocator.allocate(
+                        event, validation.requirements(), catalog, cityCenters,
+                        "PREVIEW", "PREVIEW", 1L, clock.instant()
+                );
+                if (!preview.shortages().isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "资源需求超过当前可调度库存：" + shortageSummary(preview)
+                    );
+                }
                 if (System.nanoTime() - started >= budget) {
                     throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型生成总预算已耗尽");
                 }
@@ -1236,15 +1204,24 @@ public final class DispatchApplicationService implements
             } catch (IllegalArgumentException | ExternalServiceException invalid) {
                 if (invalid instanceof ExternalServiceException external
                         && !"MODEL_INVALID_JSON".equals(external.errorCode())) throw external;
-                if (attempt == 1) throw invalid;
+                if (attempt == 2) throw invalid;
                 attemptFeedback = (feedback == null || feedback.isBlank() ? "" : feedback + "\n")
-                        + "上次输出未通过系统校验：" + invalid.getMessage()
-                        + "。请完整重写JSON；资源编码只能从数据库可选资源目录中选择，"
-                        + "不得重复资源类型；数量必须为正整数。保留原人工意见，填写简写字段，"
+                        + "上次方案不可上交二级，原因：" + invalid.getMessage()
+                        + "。请明确说明原资源要求不可执行，并完整重写JSON；资源编码只能从数据库可选资源目录中选择，"
+                        + "不得重复资源类型，数量不得超过目录所示可调度库存。请依据事件事实和应急知识选择可执行替代方案，"
+                        + "保留原人工意见，填写简写字段，"
                         + "现场事实简述和补充建议分别最多50字，无必要的补充建议请留空。";
             }
         }
         throw new IllegalStateException("unreachable generation attempt");
+    }
+
+    private String shortageSummary(ResourceAllocationResult result) {
+        return result.shortages().stream()
+                .map(item -> item.resourceTypeCode() + "需要" + item.requiredQuantity()
+                        + item.unit() + "、可调度" + item.allocatedQuantity()
+                        + item.unit() + "、缺口" + item.shortageQuantity() + item.unit())
+                .collect(java.util.stream.Collectors.joining("；"));
     }
 
     private ProposalValidation validateProposal(

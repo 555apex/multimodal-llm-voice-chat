@@ -15,7 +15,9 @@ const capacityClass: Record<CapacityLevel, string> = {
   NORMAL: 'capacity-normal', BOTTLENECK: 'capacity-bottleneck', SEVERE_BOTTLENECK: 'capacity-severe',
 }
 
-const overview = computed(() => props.result.queryType === 'PROVINCE_OVERVIEW')
+const congestionAnalysis = computed(() => [
+  'PROVINCE_ABNORMAL', 'CITY_PAIR_CONGESTION', 'ROUTE_CONGESTION',
+].includes(props.result.queryType))
 const catalog = computed(() => props.result.queryType === 'ROUTE_CATALOG')
 const catalogRows = computed(() => {
   const rows = props.result.segments.map(row => ({
@@ -29,7 +31,6 @@ const catalogRows = computed(() => {
   }
   return rows.sort((a, b) => a.routeCode.localeCompare(b.routeCode) || a.routeSection.localeCompare(b.routeSection))
 })
-const abnormal = computed(() => props.result.queryType === 'PROVINCE_ABNORMAL')
 const capacityQuery = computed(() => props.result.queryType.startsWith('CAPACITY_'))
 const regionalQuery = computed(() => [
   'REGIONAL_TRAFFIC_OVERVIEW', 'REGIONAL_PAIR_PRESSURE', 'REGIONAL_KEY_CHANNELS',
@@ -56,7 +57,7 @@ const hasDisplayData = computed(() => catalog.value ? catalogRows.value.length >
     ? regionalPairRows.value.length + regionalChannelRows.value.length > 0
     : vehicleQuery.value
       ? structureRows.value.length + timeFeatureRows.value.length + dayTypeRows.value.length + hourlySeries.value.length > 0
-      : overview.value ? props.result.routeSummaries.length > 0 : props.result.segments.length > 0)
+      : congestionAnalysis.value ? props.result.routeSummaries.length > 0 : props.result.segments.length > 0)
 
 function formatNumber(value: number | null | undefined, digits = 2) {
   return value == null ? '未提供' : value.toFixed(digits)
@@ -221,7 +222,7 @@ function matrixCellStyle(value: number | null | undefined) {
         </tr></tbody>
       </table>
     </div>
-    <div v-else-if="overview && result.routeSummaries.length" class="traffic-table-wrap">
+    <div v-else-if="congestionAnalysis && result.routeSummaries.length" class="traffic-table-wrap">
       <table class="traffic-table"><thead><tr><th>路线</th><th>名称</th><th>均速</th><th>状态</th></tr></thead>
         <tbody><tr v-for="route in result.routeSummaries" :key="route.routeCode">
           <td data-label="路线"><strong>{{ route.routeCode }}</strong></td><td data-label="名称">{{ route.routeName }}</td>
@@ -231,19 +232,12 @@ function matrixCellStyle(value: number | null | undefined) {
     </div>
     <div v-else-if="result.segments.length" class="traffic-table-wrap">
       <table class="traffic-table"><thead>
-        <tr v-if="abnormal"><th>拥堵程度</th><th>路线</th><th>路段</th><th>距离</th><th>拥堵指数</th></tr>
-        <tr v-else><th>路线</th><th>名称</th><th>路段</th><th>状态</th><th>均速</th><th>距离</th><th>拥堵指数</th></tr>
+        <tr><th>路线</th><th>名称</th><th>路段</th><th>状态</th><th>均速</th><th>距离</th><th>拥堵指数</th></tr>
       </thead><tbody><tr v-for="segment in result.segments" :key="`${segment.routeCode}-${segment.routeSection}`">
-        <template v-if="abnormal">
-          <td data-label="拥堵程度"><span class="level" :class="statusClass[segment.status]"><i class="status-dot" aria-hidden="true"></i>{{ statusText[segment.status] }}</span></td>
-          <td data-label="路线"><strong>{{ segment.routeCode }}</strong></td><td data-label="路段">{{ segment.routeSection }}</td>
-          <td data-label="距离">{{ formatNumber(segment.distanceKm) }} km</td><td data-label="拥堵指数">{{ formatNumber(segment.severity) }}</td>
-        </template><template v-else>
-          <td data-label="路线"><strong>{{ segment.routeCode }}</strong></td><td data-label="名称">{{ segment.routeName }}</td><td data-label="路段">{{ segment.routeSection }}</td>
-          <td data-label="状态"><span class="level" :class="statusClass[segment.status]"><i class="status-dot" aria-hidden="true"></i>{{ statusText[segment.status] }}</span></td>
-          <td data-label="均速" class="speed">{{ formatNumber(segment.averageSpeedKmh) }} km/h</td><td data-label="距离">{{ formatNumber(segment.distanceKm) }} km</td>
-          <td data-label="拥堵指数">{{ formatNumber(segment.severity) }}</td>
-        </template>
+        <td data-label="路线"><strong>{{ segment.routeCode }}</strong></td><td data-label="名称">{{ segment.routeName }}</td><td data-label="路段">{{ segment.routeSection }}</td>
+        <td data-label="状态"><span class="level" :class="statusClass[segment.status]"><i class="status-dot" aria-hidden="true"></i>{{ statusText[segment.status] }}</span></td>
+        <td data-label="均速" class="speed">{{ formatNumber(segment.averageSpeedKmh) }} km/h</td><td data-label="距离">{{ formatNumber(segment.distanceKm) }} km</td>
+        <td data-label="拥堵指数">{{ formatNumber(segment.severity) }}</td>
       </tr></tbody></table>
     </div>
 
@@ -252,11 +246,12 @@ function matrixCellStyle(value: number | null | undefined) {
         ? (result.queryType === 'CAPACITY_BOTTLENECKS' ? '当前没有符合瓶颈判定条件的路线。' : '本次查询没有返回可展示的通行能力数据。')
         : regionalQuery ? '本次查询范围内没有可展示的跨市路线卡口数据。'
           : vehicleQuery ? '该城市暂无可展示的车型出行特征数据。'
-            : (abnormal ? '当前没有status≥20的拥堵异常路段。' : '本次查询没有返回可展示的交通数据。') }}
+            : (congestionAnalysis ? '当前范围没有status≥20的拥堵路线。' : '本次查询没有返回可展示的交通数据。') }}
     </div>
     <p v-if="result.truncated && !regionalQuery && !vehicleQuery && !odQuery" class="traffic-truncated">
       <template v-if="capacityQuery">共 {{ result.totalSegmentCount }} 条瓶颈路线，当前展示利用率最高的前 {{ result.displayedSegmentCount }} 条。</template>
-      <template v-else>共 {{ result.totalSegmentCount }} 条路段，当前展示拥堵程度较高的前 {{ result.displayedSegmentCount }} 条。</template>
+      <template v-else-if="congestionAnalysis">共 {{ result.totalSegmentCount }} 条拥堵路线，当前展示前 {{ result.displayedSegmentCount }} 条。</template>
+      <template v-else>共 {{ result.totalSegmentCount }} 条路段，当前展示前 {{ result.displayedSegmentCount }} 条。</template>
     </p>
   </section>
 </template>

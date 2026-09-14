@@ -104,13 +104,16 @@ final class KnownTrafficQuestionClassifier {
         if (roadRouteName != null && containsAny(normalized,
                 "交通态势", "当前态势", "交通情况", "通行情况", "通行状态",
                 "运行状态", "当前状态", "路况", "拥堵", "缓行", "畅通", "异常路段")) {
-            return Optional.of(trafficDecision(TrafficQueryType.ROUTE_DETAIL, mentionedCities(normalized),
+            TrafficQueryType type = congestionAnalysis(normalized)
+                    ? TrafficQueryType.ROUTE_CONGESTION : TrafficQueryType.ROUTE_DETAIL;
+            return Optional.of(trafficDecision(type, mentionedCities(normalized),
                     routeCode(normalized), roadRouteName, wantsTrend(normalized)));
         }
         Optional<TrafficQueryType> roadType = roadConditionType(normalized);
         if (roadType.isPresent()) {
             String routeName = roadRouteName;
-            TrafficQueryType resolved = routeName == null ? roadType.get() : TrafficQueryType.ROUTE_DETAIL;
+            TrafficQueryType resolved = routeName == null ? roadType.get()
+                    : congestionAnalysis(normalized) ? TrafficQueryType.ROUTE_CONGESTION : TrafficQueryType.ROUTE_DETAIL;
             return Optional.of(trafficDecision(resolved, mentionedCities(normalized),
                     routeCode(normalized), routeName, wantsTrend(normalized)));
         }
@@ -215,21 +218,28 @@ final class KnownTrafficQuestionClassifier {
                 "缓行", "畅通", "异常路段", "交通异常", "定性趋势");
         if (!roadContext) return Optional.empty();
 
+        boolean congestion = congestionAnalysis(text);
         if (routeCode(text) != null) {
-            return Optional.of(TrafficQueryType.ROUTE_DETAIL);
+            return Optional.of(congestion ? TrafficQueryType.ROUTE_CONGESTION : TrafficQueryType.ROUTE_DETAIL);
         }
         List<String> cities = mentionedCities(text);
         if (cities.size() == 2 && containsAny(text, "到", "至", "和", "与", "之间", "两地")) {
-            return Optional.of(TrafficQueryType.CITY_PAIR);
+            return Optional.of(congestion ? TrafficQueryType.CITY_PAIR_CONGESTION : TrafficQueryType.CITY_PAIR);
         }
-        if (containsAny(text,
-                "哪些路段", "哪些道路拥堵", "拥堵异常", "异常状态", "异常路段", "最拥堵", "拥堵排行", "拥堵排名")) {
+        if (cities.size() == 1) {
+            return Optional.of(congestion ? TrafficQueryType.CITY_PAIR_CONGESTION : TrafficQueryType.CITY_PAIR);
+        }
+        if (congestion) {
             return Optional.of(TrafficQueryType.PROVINCE_ABNORMAL);
         }
         if (containsAny(text, "福建省", "福建路况", "全省", "国省道", "整体", "总体", "目前", "当前态势", "定性趋势", "当前状态")) {
             return Optional.of(TrafficQueryType.PROVINCE_OVERVIEW);
         }
         return Optional.empty();
+    }
+
+    private static boolean congestionAnalysis(String text) {
+        return containsAny(text, "拥堵", "堵车", "堵点", "堵塞", "最堵", "拥堵原因", "拥堵发展", "异常路段");
     }
 
     private static Optional<String> directAnswer(String text) {
@@ -349,13 +359,17 @@ final class KnownTrafficQuestionClassifier {
             String routeName,
             boolean includeTrend
     ) {
-        boolean cityBound = type == TrafficQueryType.CITY_PAIR || type.capacityQuery();
-        String origin = cityBound && cities.size() == 2 ? cities.get(0) : null;
-        String destination = cityBound && cities.size() == 2 ? cities.get(1) : null;
+        boolean cityBound = type == TrafficQueryType.CITY_PAIR
+                || type == TrafficQueryType.CITY_PAIR_CONGESTION || type.capacityQuery();
+        String origin = cityBound && !cities.isEmpty() ? cities.get(0) : null;
+        String destination = cityBound && cities.size() >= 2 ? cities.get(1) : null;
+        String clarification = cityBound && cities.size() == 1
+                ? "已识别%s市。请再补充一个福建地级市，或提供具体G/S国省道路线编号。".formatted(cities.get(0))
+                : null;
         return new AgentDecision(
                 "TRAFFIC_QUERY", type.name(), origin, destination, routeCode, routeName,
                 List.of(), null, null, null, null, null,
-                null, null, null, null, List.of(), null, includeTrend
+                null, null, null, null, List.of(), clarification, includeTrend
         );
     }
 

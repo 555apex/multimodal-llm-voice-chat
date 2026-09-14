@@ -51,7 +51,8 @@ public record HighwayTrafficResult(
         return new HighwayTrafficResult(facts.queryType(), facts.title(), summary,
                 facts.routeSummaries().stream().map(RouteTrafficResultItem::from).toList(),
                 facts.segments().stream().map(HighwayTrafficSegmentResultItem::from).toList(),
-                List.of(), facts.totalSegmentCount(), facts.segments().size(), facts.truncated(),
+                List.of(), facts.totalSegmentCount(),
+                facts.segments().isEmpty() ? facts.routeSummaries().size() : facts.segments().size(), facts.truncated(),
                 "MYSQL", facts.acquiredAt(), facts.warnings(), traceId);
     }
 

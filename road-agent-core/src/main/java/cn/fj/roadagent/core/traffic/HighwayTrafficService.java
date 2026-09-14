@@ -69,7 +69,9 @@ public final class HighwayTrafficService {
             case ROUTE_CATALOG -> routeCatalog(snapshot);
             case PROVINCE_ABNORMAL -> abnormal(snapshot);
             case CITY_PAIR -> cityPair(snapshot, query.originCity(), query.destinationCity());
+            case CITY_PAIR_CONGESTION -> cityPairCongestion(snapshot, query.originCity(), query.destinationCity());
             case ROUTE_DETAIL -> routeDetail(snapshot, query.routeCode(), query.routeName());
+            case ROUTE_CONGESTION -> routeCongestion(snapshot, query.routeCode(), query.routeName());
             case OD_DESTINATION_TENDENCY, OD_CONNECTION_MATRIX ->
                     throw new BusinessRuleException("TRAFFIC_QUERY_TYPE_INVALID", "该查询属于城市目的地联系倾向分析");
             case CAPACITY_OVERVIEW, CAPACITY_BOTTLENECKS, CAPACITY_ROUTE_DETAIL ->
@@ -125,22 +127,22 @@ public final class HighwayTrafficService {
     }
 
     private HighwayTrafficFacts overview(HighwayTrafficSnapshot snapshot) {
-        List<RouteTrafficSummary> summaries = snapshot.routeSummaries().stream()
-                .sorted(Comparator.comparing(RouteTrafficSummary::routeCode))
-                .toList();
+        List<HighwayTrafficSegment> all = snapshot.segments().stream().sorted(SEVERITY_ORDER).toList();
+        List<HighwayTrafficSegment> displayed = all.stream().limit(DETAIL_LIMIT).toList();
         return facts(TrafficQueryType.PROVINCE_OVERVIEW, "福建省国省道整体交通态势",
-                summaries, List.of(), forecastSegments(snapshot.segments(), OVERVIEW_FORECAST_LIMIT),
-                0, snapshot, List.of());
+                List.of(), displayed, forecastSegments(all, OVERVIEW_FORECAST_LIMIT),
+                all.size(), snapshot, List.of());
     }
 
     private HighwayTrafficFacts abnormal(HighwayTrafficSnapshot snapshot) {
-        List<HighwayTrafficSegment> all = snapshot.segments().stream()
-                .filter(segment -> segment.status().abnormal())
-                .sorted(SEVERITY_ORDER)
+        List<RouteTrafficSummary> all = snapshot.routeSummaries().stream()
+                .filter(summary -> summary.status().abnormal())
+                .sorted(Comparator.<RouteTrafficSummary>comparingInt(summary -> summary.status().code()).reversed()
+                        .thenComparing(RouteTrafficSummary::averageSpeedKmh)
+                        .thenComparing(RouteTrafficSummary::routeCode))
                 .toList();
-        return facts(TrafficQueryType.PROVINCE_ABNORMAL, "福建省拥堵异常路段",
-                List.of(), all.stream().limit(ABNORMAL_LIMIT).toList(),
-                all.stream().limit(ABNORMAL_LIMIT).toList(), all.size(), snapshot,
+        return facts(TrafficQueryType.PROVINCE_ABNORMAL, "福建省拥堵路线分析",
+                all.stream().limit(ABNORMAL_LIMIT).toList(), List.of(), List.of(), all.size(), snapshot,
                 List.of());
     }
 
@@ -172,9 +174,23 @@ public final class HighwayTrafficService {
         List<HighwayTrafficSegment> all = sortedSegments(snapshot, routeCodes);
         String title = originName + "—" + destinationName + "交通情况";
         List<HighwayTrafficSegment> displayed = all.stream().limit(DETAIL_LIMIT).toList();
-        return facts(TrafficQueryType.CITY_PAIR, title, summaries,
+        return facts(TrafficQueryType.CITY_PAIR, title, List.of(),
                 displayed, displayed, all.size(), snapshot,
                 List.of());
+    }
+
+    private HighwayTrafficFacts cityPairCongestion(HighwayTrafficSnapshot snapshot, String originInput,
+            String destinationInput) {
+        Set<String> routeCodes = cityPairRouteCodes(snapshot, originInput, destinationInput);
+        List<RouteTrafficSummary> all = snapshot.routeSummaries().stream()
+                .filter(summary -> routeCodes.contains(summary.routeCode()) && summary.status().abnormal())
+                .sorted(Comparator.<RouteTrafficSummary>comparingInt(summary -> summary.status().code()).reversed()
+                        .thenComparing(RouteTrafficSummary::averageSpeedKmh)
+                        .thenComparing(RouteTrafficSummary::routeCode)).toList();
+        String title = requireCity(originInput, "出发城市").displayName() + "市—"
+                + requireCity(destinationInput, "到达城市").displayName() + "市拥堵分析";
+        return facts(TrafficQueryType.CITY_PAIR_CONGESTION, title,
+                all.stream().limit(ABNORMAL_LIMIT).toList(), List.of(), List.of(), all.size(), snapshot, List.of());
     }
 
     private HighwayTrafficFacts routeDetail(
@@ -200,9 +216,40 @@ public final class HighwayTrafficService {
                 .toList();
         List<HighwayTrafficSegment> all = sortedSegments(snapshot, Set.of(route.routeCode()));
         List<HighwayTrafficSegment> displayed = all.stream().limit(DETAIL_LIMIT).toList();
-        return facts(TrafficQueryType.ROUTE_DETAIL, route.routeCode() + " " + route.routeName() + "交通情况",
-                summaries, displayed, displayed, all.size(), snapshot,
+        return facts(TrafficQueryType.ROUTE_DETAIL, route.routeCode() + " " + route.routeName() + "交通运行状况",
+                List.of(), displayed, displayed, all.size(), snapshot,
                 List.of());
+    }
+
+    private HighwayTrafficFacts routeCongestion(HighwayTrafficSnapshot snapshot, String routeCodeInput,
+            String routeNameInput) {
+        HighwayRoute route = requireSingleRoute(snapshot, routeCodeInput, routeNameInput);
+        List<RouteTrafficSummary> summaries = snapshot.routeSummaries().stream()
+                .filter(summary -> summary.routeCode().equals(route.routeCode())).toList();
+        return facts(TrafficQueryType.ROUTE_CONGESTION, route.routeCode() + " " + route.routeName() + "拥堵分析",
+                summaries, List.of(), List.of(), summaries.size(), snapshot, List.of());
+    }
+
+    private Set<String> cityPairRouteCodes(HighwayTrafficSnapshot snapshot, String originInput,
+            String destinationInput) {
+        FujianCity origin = requireCity(originInput, "出发城市");
+        FujianCity destination = requireCity(destinationInput, "到达城市");
+        if (origin == destination) throw new BusinessRuleException("TRAFFIC_CITY_PAIR_INVALID", "出发城市和到达城市不能相同");
+        Set<String> routeCodes = snapshot.routes().stream()
+                .filter(route -> isCityPair(route, origin.displayName() + "市", destination.displayName() + "市"))
+                .map(HighwayRoute::routeCode).collect(Collectors.toCollection(LinkedHashSet::new));
+        if (routeCodes.isEmpty()) throw new BusinessRuleException("TRAFFIC_ROUTE_NOT_FOUND",
+                "未找到以%s市和%s市为起终点的国省道".formatted(origin.displayName(), destination.displayName()));
+        return routeCodes;
+    }
+
+    private HighwayRoute requireSingleRoute(HighwayTrafficSnapshot snapshot, String routeCodeInput,
+            String routeNameInput) {
+        List<HighwayRoute> matches = matchRoutes(snapshot.routes(), routeCodeInput, routeNameInput);
+        if (matches.isEmpty()) throw new BusinessRuleException("TRAFFIC_ROUTE_NOT_FOUND", "未找到对应的国省道路线");
+        if (matches.size() > 1) throw new BusinessRuleException("TRAFFIC_ROUTE_AMBIGUOUS", "找到多条候选路线，请明确路线编号："
+                + matches.stream().map(route -> route.routeCode() + " " + route.routeName()).collect(Collectors.joining("、")));
+        return matches.get(0);
     }
 
     private List<HighwayRoute> matchRoutes(
@@ -250,8 +297,9 @@ public final class HighwayTrafficService {
             HighwayTrafficSnapshot snapshot,
             List<String> warnings
     ) {
+        int displayedCount = segments.isEmpty() ? summaries.size() : segments.size();
         return new HighwayTrafficFacts(type, title, summaries, segments, forecastSegments, totalSegmentCount,
-                totalSegmentCount > segments.size(), snapshot.acquiredAt(), warnings);
+                totalSegmentCount > displayedCount, snapshot.acquiredAt(), warnings);
     }
 
     private ModelRequest summaryRequest(HighwayTrafficFacts facts) {
@@ -327,7 +375,7 @@ public final class HighwayTrafficService {
                 && event.affectedRouteCodes().stream().anyMatch(abnormalRoutes::contains);
         if (event.scope() == TrafficContextScope.ROUTE) return routeMatch;
         if (event.scope() != TrafficContextScope.CITY) return false;
-        if (queryType == TrafficQueryType.CITY_PAIR) {
+        if (queryType == TrafficQueryType.CITY_PAIR || queryType == TrafficQueryType.CITY_PAIR_CONGESTION) {
             boolean cityMatch = event.regionCode() != null && queryRegions.contains(event.regionCode());
             return cityMatch && (event.affectedRouteCodes().isEmpty() || routeMatch);
         }
@@ -354,7 +402,8 @@ public final class HighwayTrafficService {
         value.append("title=").append(facts.title()).append('\n');
         value.append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n');
         value.append("totalSegmentCount=").append(facts.totalSegmentCount()).append('\n');
-        value.append("displayedSegmentCount=").append(facts.segments().size()).append('\n');
+        int displayedCount = facts.segments().isEmpty() ? facts.routeSummaries().size() : facts.segments().size();
+        value.append("displayedSegmentCount=").append(displayedCount).append('\n');
         value.append("truncated=").append(facts.truncated()).append('\n');
         value.append("forecastHorizon=未来1至2小时\n");
         value.append("forecastPolicy=status为权威；uniform_speed和severity仅作辅助；字段冲突时按status\n");

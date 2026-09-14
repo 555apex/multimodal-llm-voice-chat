@@ -15,7 +15,9 @@ import cn.fj.roadagent.application.model.ModelStreamListener;
 import cn.fj.roadagent.application.port.AbnormalEventPort;
 import cn.fj.roadagent.application.port.ChatModelPort;
 import cn.fj.roadagent.application.port.DispatchRepository;
+import cn.fj.roadagent.application.port.EmergencyResponsePlanPort;
 import cn.fj.roadagent.application.port.EmergencyWorkflowRepository;
+import cn.fj.roadagent.application.port.EventClassificationLogPort;
 import cn.fj.roadagent.application.port.ResourceAllocationPort;
 import cn.fj.roadagent.application.port.ResourceDataPort;
 import cn.fj.roadagent.application.port.UnitOfWork;
@@ -28,6 +30,7 @@ import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.EmergencyWorkflow;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
 import cn.fj.roadagent.domain.dispatch.EmergencyResourceStatus;
+import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlan;
 import cn.fj.roadagent.domain.dispatch.GeoPoint;
 import cn.fj.roadagent.domain.dispatch.EventSeverity;
 import cn.fj.roadagent.domain.dispatch.ProfessionalReview;
@@ -258,42 +261,31 @@ class DispatchApplicationServiceTest {
     }
 
     @Test
-    void shortageShouldRequireConditionalReviewAndCommandOpinion() {
-        Fixture fixture = fixture(new DemandModel(10));
+    void persistentInventoryShortageShouldFailAtLevelOneWithoutReservation() {
+        DemandModel model = new DemandModel(10);
+        Fixture fixture = fixture(model);
+
+        assertThrows(RuntimeException.class, () -> fixture.service.generate(event().eventId()));
+
+        assertEquals(3, model.calls);
+        assertTrue(fixture.allocations.values.isEmpty());
+        assertEquals(5, fixture.resources.resources.get("ER-FZ-ROAD").availableQuantity());
+        assertEquals(WorkflowStatus.GENERATION_FAILED,
+                fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow().status());
+    }
+
+    @Test
+    void inventoryShortageShouldBeRepairedBeforeLevelOneSubmission() {
+        RepairingDemandModel model = new RepairingDemandModel();
+        Fixture fixture = fixture(model);
+
         DispatchPlan plan = fixture.service.generate(event().eventId());
-        assertEquals(5, plan.resourceShortages().get(0).shortageQuantity());
-        EmergencyWorkflow workflow = fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow();
-        var level2 = fixture.service.decideLevel1(new Level1DecisionCommand(
-                workflow.workflowId(), Level1Decision.SUBMIT, "带缺口上报",
-                workflow.lockVersion(), "gap-l1"
-        ));
 
-        assertThrows(IllegalArgumentException.class, () -> fixture.service.review(
-                new ProfessionalReviewCommand(
-                        workflow.workflowId(), ApprovalDecision.APPROVE,
-                        EventSeverity.LARGER, ResourceFeasibility.FEASIBLE,
-                        "道路暂时中断", "协调省级资源",
-                        "有缺口仍可执行", level2.workflow().lockVersion(), "gap-invalid"
-                )
-        ));
-        var level3 = fixture.service.review(new ProfessionalReviewCommand(
-                workflow.workflowId(), ApprovalDecision.APPROVE,
-                EventSeverity.LARGER, ResourceFeasibility.FEASIBLE_WITH_GAP,
-                "道路暂时中断", "协调后续批次资源补充",
-                "先使用已匹配资源处置", level2.workflow().lockVersion(), "gap-pass"
-        ));
-
-        assertThrows(IllegalArgumentException.class, () -> fixture.service.decideCommand(
-                new CommandDecisionCommand(
-                        workflow.workflowId(), ApprovalDecision.APPROVE, " ",
-                        level3.workflow().lockVersion(), "gap-command-invalid"
-                )
-        ));
-        var published = fixture.service.decideCommand(new CommandDecisionCommand(
-                workflow.workflowId(), ApprovalDecision.APPROVE, "同意先期执行并继续协调缺口资源",
-                level3.workflow().lockVersion(), "gap-command-pass"
-        ));
-        assertEquals(1, published.commandDecision().noticeSnapshot().resourceShortages().size());
+        assertEquals(2, model.calls);
+        assertTrue(plan.resourceShortages().isEmpty());
+        assertEquals(1, plan.resourceRequirements().get(0).quantity());
+        assertEquals(WorkflowStatus.WAITING_LEVEL_1_SUBMISSION,
+                fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow().status());
     }
 
     @Test
@@ -343,7 +335,7 @@ class DispatchApplicationServiceTest {
             };
             Fixture fixture = fixture(model);
             assertThrows(RuntimeException.class, () -> fixture.service.generate(event().eventId()));
-            assertEquals(2, calls[0]);
+            assertEquals(3, calls[0]);
             assertTrue(fixture.allocations.values.isEmpty());
             assertEquals(WorkflowStatus.GENERATION_FAILED,
                     fixture.workflows.findWorkflowByEventId(event().eventId()).orElseThrow().status());
@@ -377,6 +369,7 @@ class DispatchApplicationServiceTest {
         DispatchApplicationService service = new DispatchApplicationService(
                 events, plans, workflows, model, resources, allocations,
                 new EmergencyResourceAllocator((from, to) -> from.equals(to) ? 0D : 100D),
+                noOpClassificationLog(), testResponsePlans(),
                 new DirectUnitOfWork(),
                 Clock.fixed(NOW, ZoneOffset.UTC), Duration.ofMinutes(2)
         );
@@ -470,6 +463,7 @@ class DispatchApplicationServiceTest {
 
     private static final class DemandModel extends FixedModel {
         private final int quantity;
+        private int calls;
 
         private DemandModel(int quantity) {
             this.quantity = quantity;
@@ -477,11 +471,30 @@ class DispatchApplicationServiceTest {
 
         @Override
         public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+            calls++;
             return resultType.cast(new DispatchPlanProposal(
                     List.of(new DispatchPlanProposal.ProposedResource(
                             "ROAD_RESCUE_TEAM", quantity, "现场抢通"
                     )),
                     "先设置警戒并疏导交通，再开展道路抢通和持续信息报送。"
+            ));
+        }
+    }
+
+    private static final class RepairingDemandModel extends FixedModel {
+        private int calls;
+
+        @Override
+        public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+            calls++;
+            int quantity = calls == 1 ? 10 : 1;
+            return resultType.cast(new DispatchPlanProposal(
+                    List.of(new DispatchPlanProposal.ProposedResource(
+                            "ROAD_RESCUE_TEAM", quantity, "现场抢通"
+                    )),
+                    calls == 1
+                            ? "请求超出库存。"
+                            : "原资源数量超过库存，不能上报二级；现调整为可执行的先期抢通方案。"
             ));
         }
     }
@@ -531,6 +544,24 @@ class DispatchApplicationServiceTest {
         public <T> T required(Supplier<T> operation) {
             return operation.get();
         }
+    }
+
+    private static EventClassificationLogPort noOpClassificationLog() {
+        return new EventClassificationLogPort() {
+            @Override public int nextAttemptNumber(String eventId) { return 1; }
+            @Override public boolean insert(cn.fj.roadagent.domain.dispatch.EventClassificationAttempt attempt) {
+                return true;
+            }
+            @Override public long countLatestFailuresForPendingEvents() { return 0; }
+        };
+    }
+
+    private static EmergencyResponsePlanPort testResponsePlans() {
+        return eventType -> Optional.of(new EmergencyResponsePlan(
+                "ERP-TEST-" + eventType, eventType, eventType, 1,
+                List.of("模型救援方案"), "【模型救援方案】", List.of(),
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ));
     }
 
     private static final class TestResourceDataPort implements ResourceDataPort {

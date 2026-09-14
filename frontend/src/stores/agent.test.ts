@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAgentStore } from './agent'
+import { useSpeechStore } from './speech'
 import type { TrafficQueryResult } from '../types/traffic'
 
 describe('agent store', () => {
@@ -35,6 +36,32 @@ describe('agent store', () => {
     })
 
     expect(store.messages.at(-1)?.speechText).toBe('精简朗读摘要。详细数据请查看页面。')
+  })
+
+  it('waits for completion and automatically reads the full multi-paragraph answer', () => {
+    const store = useAgentStore()
+    const speech = useSpeechStore()
+    speech.capabilities = {
+      asrAvailable: true,
+      ttsAvailable: true,
+      maxRecordingSeconds: 60,
+      maxAudioBytes: 10 * 1024 * 1024,
+    }
+    const speak = vi.spyOn(speech, 'speak').mockResolvedValue()
+    const messageId = crypto.randomUUID()
+    store.messages.push({ id: messageId, role: 'assistant', content: '第一段。', status: 'pending' })
+
+    store.applyEvent(messageId, {
+      name: 'answer.speech',
+      data: { content: '第一段摘要。' },
+    })
+    expect(speak).not.toHaveBeenCalled()
+
+    store.applyEvent(messageId, { name: 'answer.delta', data: { content: '\n第二段完整内容。' } })
+    store.applyEvent(messageId, { name: 'run.completed', data: { runId: 'run-full-speech' } })
+
+    expect(speak).toHaveBeenCalledOnce()
+    expect(speak).toHaveBeenCalledWith(messageId, '第一段。\n第二段完整内容。')
   })
 
   it('persists the MySQL highway traffic result', () => {

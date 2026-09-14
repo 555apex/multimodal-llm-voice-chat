@@ -99,9 +99,11 @@ public record DispatchPlan(
         if (requirements == null || requirements.isEmpty()) {
             throw new IllegalArgumentException("资源需求清单不能为空");
         }
-        if ((allocations == null || allocations.isEmpty())
-                && (shortages == null || shortages.isEmpty())) {
-            throw new IllegalArgumentException("资源匹配结果和缺口不能同时为空");
+        if (shortages != null && !shortages.isEmpty()) {
+            throw new IllegalArgumentException("一级方案存在资源缺口，不能进入审核流程");
+        }
+        if (allocations == null || allocations.isEmpty()) {
+            throw new IllegalArgumentException("资源匹配结果不能为空");
         }
         if (generatedRescuePlan == null || generatedRescuePlan.isBlank()) {
             throw new IllegalArgumentException("模型生成的救援方案不能为空");

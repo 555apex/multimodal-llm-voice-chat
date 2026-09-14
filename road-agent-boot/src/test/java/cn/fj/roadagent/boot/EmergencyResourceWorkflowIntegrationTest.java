@@ -137,7 +137,7 @@ class EmergencyResourceWorkflowIntegrationTest {
                     >= ((Number) quantities.get("minimum_reserve_quantity")).intValue());
         });
 
-        var published = publish(plan.planId(), eventId, false);
+        var published = publish(plan.planId(), eventId);
         assertEquals(WorkflowStatus.PUBLISHED, published.workflow().status());
         assertTrue(jdbc.queryForObject("""
                 SELECT COUNT(*) FROM w_emergency_resource_allocation
@@ -157,7 +157,7 @@ class EmergencyResourceWorkflowIntegrationTest {
 
     @Test
     @Transactional
-    void shouldPersistProvincialShortageThroughConditionalApprovalAndRelease() {
+    void shouldRepairProvincialShortageBeforeLevelOneAndRelease() {
         String eventId = jdbc.queryForObject("""
                 SELECT e.c_no
                 FROM w_lw_incident e
@@ -169,16 +169,28 @@ class EmergencyResourceWorkflowIntegrationTest {
                   ))
                 ORDER BY e.c_no LIMIT 1
                 """, String.class);
-        proposal("WARNING_EQUIPMENT", 999, "建立交通警戒和分流区");
+        when(chatModel.generateStructured(
+                any(ModelRequest.class), eq(DispatchPlanProposal.class)
+        )).thenReturn(
+                new DispatchPlanProposal(
+                        List.of(new DispatchPlanProposal.ProposedResource(
+                                "WARNING_EQUIPMENT", 999, "建立交通警戒和分流区")),
+                        "初始资源数量超过库存。"
+                ),
+                new DispatchPlanProposal(
+                        List.of(new DispatchPlanProposal.ProposedResource(
+                                "WARNING_EQUIPMENT", 1, "建立交通警戒和分流区")),
+                        "原资源数量超过库存，不能上报二级；现改为可执行的先期警戒方案。"
+                )
+        );
 
         var plan = service.generate(eventId);
-        assertTrue(plan.hasResourceShortage());
-        assertEquals(999, plan.resourceShortages().get(0).requiredQuantity());
-        assertTrue(plan.resourceShortages().get(0).shortageQuantity() > 0);
+        assertFalse(plan.hasResourceShortage());
+        assertEquals(1, plan.resourceRequirements().get(0).quantity());
 
-        var published = publish(plan.planId(), eventId, true);
-        assertEquals(1, published.commandDecision().noticeSnapshot()
-                .resourceShortages().size());
+        var published = publish(plan.planId(), eventId);
+        assertTrue(published.commandDecision().noticeSnapshot()
+                .resourceShortages().isEmpty());
         var released = service.releaseResources(new ReleaseResourcesCommand(
                 published.workflow().workflowId(), "集成测试：资源全部归还",
                 published.workflow().lockVersion(), key("gap-release")
@@ -187,7 +199,7 @@ class EmergencyResourceWorkflowIntegrationTest {
     }
 
     private cn.fj.roadagent.application.dispatch.EmergencyWorkflowView publish(
-            String planId, String eventId, boolean hasShortage
+            String planId, String eventId
     ) {
         String workflowId = jdbc.queryForObject("""
                 SELECT workflow_id FROM w_emergency_dispatch_workflow
@@ -201,15 +213,15 @@ class EmergencyResourceWorkflowIntegrationTest {
         var level3 = service.review(new ProfessionalReviewCommand(
                 workflow.workflow().workflowId(), ApprovalDecision.APPROVE,
                 EventSeverity.LARGER,
-                hasShortage ? ResourceFeasibility.FEASIBLE_WITH_GAP : ResourceFeasibility.FEASIBLE,
+                ResourceFeasibility.FEASIBLE,
                 "影响道路正常通行",
-                hasShortage ? "协调后续批次资源和替代措施" : "协调属地交通管制",
-                hasShortage ? "存在缺口但可先期执行" : "资源方案可行",
+                "协调属地交通管制",
+                "资源方案可行",
                 level2.workflow().lockVersion(), key("l2")
         ));
         return service.decideCommand(new CommandDecisionCommand(
                 workflow.workflow().workflowId(), ApprovalDecision.APPROVE,
-                hasShortage ? "同意先期执行并继续协调资源缺口" : "同意发布",
+                "同意发布",
                 level3.workflow().lockVersion(), key("l3")
         ));
     }

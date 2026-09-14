@@ -34,15 +34,14 @@ describe('TrafficResultPanel MySQL highway modes', () => {
       summary: '当前全省国省干线总体通行平稳。未来1至2小时，预计整体趋势基本稳定。',
       queryType: 'PROVINCE_OVERVIEW',
       title: '福建省国省道整体交通态势',
-      routeSummaries: [{
-        routeCode: 'G104', routeName: '北京-平潭', averageSpeedKmh: 89.34, status: 10, statusName: '畅通',
-      }],
-      segments: [],
+      routeSummaries: [],
+      segments: [{ routeCode: 'G104', routeName: '北京-平潭', routeSection: 'FJ001→FJ002',
+        distanceKm: 10, averageSpeedKmh: 89.34, status: 10, statusName: '畅通', severity: 0.1 }],
     }
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: false } })
 
     expect(wrapper.find('.traffic-summary').text()).toContain('未来1至2小时')
-    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual(['路线', '名称', '均速', '状态'])
+    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual(['路线', '名称', '路段', '状态', '均速', '距离', '拥堵指数'])
   })
 
   it('renders province overview with authoritative route values and five-level label', () => {
@@ -50,10 +49,9 @@ describe('TrafficResultPanel MySQL highway modes', () => {
       ...base,
       queryType: 'PROVINCE_OVERVIEW',
       title: '福建省国省道整体交通态势',
-      routeSummaries: [{
-        routeCode: 'G104', routeName: '北京-平潭', averageSpeedKmh: 89.34, status: 10, statusName: '畅通',
-      }],
-      segments: [],
+      routeSummaries: [],
+      segments: [{ routeCode: 'G104', routeName: '北京-平潭', routeSection: 'FJ001→FJ002',
+        distanceKm: 10, averageSpeedKmh: 89.34, status: 10, statusName: '畅通', severity: 0.1 }],
     }
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
@@ -63,16 +61,14 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     expect(wrapper.text()).toContain('畅通')
   })
 
-  it('renders abnormal top list with severity fixed to two decimals and truncation notice', () => {
+  it('renders congestion analysis with route-level status rows', () => {
     const result: TrafficQueryResult = {
       ...base,
       queryType: 'PROVINCE_ABNORMAL',
-      title: '福建省拥堵异常路段',
-      routeSummaries: [],
-      segments: [{
-        routeCode: 'G316', routeName: '长乐-同仁', routeSection: 'FJ076→FJ085',
-        distanceKm: 45, averageSpeedKmh: 19, status: 40, statusName: '重度拥堵', severity: 0.8,
-      }],
+      title: '福建省拥堵路线分析',
+      routeSummaries: [{ routeCode: 'G316', routeName: '长乐-同仁',
+        averageSpeedKmh: 19, status: 40, statusName: '重度拥堵' }],
+      segments: [],
       totalSegmentCount: 25,
       displayedSegmentCount: 10,
       truncated: true,
@@ -81,8 +77,8 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
     expect(wrapper.text()).toContain('重度拥堵')
-    expect(wrapper.text()).toContain('0.80')
-    expect(wrapper.text()).toContain('共 25 条路段')
+    expect(wrapper.text()).toContain('19.00 km/h')
+    expect(wrapper.text()).toContain('共 25 条拥堵路线')
   })
 
   it('renders city-pair detail columns', () => {

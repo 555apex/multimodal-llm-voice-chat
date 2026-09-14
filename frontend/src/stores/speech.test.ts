@@ -33,6 +33,7 @@ class FakeAudio {
 
 describe('speech store', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     setActivePinia(createPinia())
     FakeAudio.instances = []
     FakeAudio.captureFactory = undefined
@@ -64,7 +65,7 @@ describe('speech store', () => {
 
   it('does not resume a paused queue when the next synthesized segment arrives', async () => {
     const store = useSpeechStore(); await store.loadCapabilities()
-    const text = '道路通行正常，请保持安全车距。'.repeat(12)
+    const text = '道路通行正常，请保持安全车距。'.repeat(40)
     const playing = store.speak('pause-boundary', text)
     await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(1))
     await store.toggleMessage('pause-boundary', text)
@@ -72,6 +73,23 @@ describe('speech store', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(FakeAudio.instances).toHaveLength(1); expect(store.playbackStatus).toBe('paused')
     await store.toggleMessage('pause-boundary', text)
+    await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(2))
+    store.stop(); await playing
+  })
+
+  it('starts the first block before synthesis of the next block completes', async () => {
+    const store = useSpeechStore(); await store.loadCapabilities()
+    let resolveSecond!: (blob: Blob) => void
+    vi.mocked(synthesizeSpeech)
+      .mockResolvedValueOnce(new Blob(['first'], { type: 'audio/mpeg' }))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve }))
+
+    const playing = store.speak('prefetch', '第一段说明，'.repeat(80))
+    await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(1))
+    expect(synthesizeSpeech).toHaveBeenCalledTimes(2)
+
+    resolveSecond(new Blob(['second'], { type: 'audio/mpeg' }))
+    FakeAudio.instances[0]!.onended?.()
     await vi.waitFor(() => expect(FakeAudio.instances).toHaveLength(2))
     store.stop(); await playing
   })

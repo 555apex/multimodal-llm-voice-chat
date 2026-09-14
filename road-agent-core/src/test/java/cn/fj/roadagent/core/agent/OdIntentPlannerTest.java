@@ -24,7 +24,7 @@ class OdIntentPlannerTest {
         cases.put("福建省城市联系矩阵", "OD_CONNECTION_MATRIX");
         cases.put("福建省哪些卡口承担较大的交通压力？", "REGIONAL_KEY_CHANNELS");
         cases.put("福州、厦门、泉州的区域交通压力分布如何？", "REGIONAL_TRAFFIC_OVERVIEW");
-        cases.put("福州到厦门目前拥堵吗？", "CITY_PAIR");
+        cases.put("福州到厦门目前拥堵吗？", "CITY_PAIR_CONGESTION");
         cases.put("福州市车型占比如何？", "VEHICLE_STRUCTURE");
         cases.put("福建省各国省道通行能力利用率如何？", "CAPACITY_OVERVIEW");
         cases.forEach((question, type) -> {

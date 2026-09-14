@@ -48,7 +48,8 @@ public final class IntentPlanner {
             List<ConversationMessage> history,
             AgentDecision latestSuccessfulTrafficDecision
     ) {
-        boolean followUp = !history.isEmpty() && currentMessage.matches("(?s).*(它|其中|这些|上述|前面|反方向|再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|只展示|只保留|改为|改成|换成|那|可以|好的|同意|今天|今日|昨天|昨日|前天|日期|\\d{1,2}月\\d{1,2}日|20\\d{2}[-年/]\\d{1,2}).*");
+        boolean followUp = !history.isEmpty() && (currentMessage.matches("(?s).*(它|其中|这些|上述|前面|反方向|再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|只展示|只保留|改为|改成|换成|那|可以|好的|同意|今天|今日|昨天|昨日|前天|日期|\\d{1,2}月\\d{1,2}日|20\\d{2}[-年/]\\d{1,2}).*")
+                || FujianCity.fromName(currentMessage).isPresent());
         var inherited = followUp
                 ? inheritTrafficContext(currentMessage, latestSuccessfulTrafficDecision)
                 : java.util.Optional.<AgentDecision>empty();
@@ -69,7 +70,7 @@ public final class IntentPlanner {
                 city, areaName, roadName, direction, eventType, location, severity,
                 eventDescription, resourceTypes, clarification, includeTrend, analysisDate。
                 selectedCities和resourceTypes使用字符串数组，includeTrend使用布尔值；analysisDate仅用于车型查询，格式为YYYY-MM-DD，未指定日期时为null并由Java默认当天；其他不适用字段使用null。
-                trafficScope只能为PROVINCE_OVERVIEW、ROUTE_CATALOG、PROVINCE_ABNORMAL、CITY_PAIR、ROUTE_DETAIL、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、REGIONAL_PAIR_PRESSURE、REGIONAL_KEY_CHANNELS、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON、OD_DESTINATION_TENDENCY、OD_CONNECTION_MATRIX：
+                trafficScope只能为PROVINCE_OVERVIEW、ROUTE_CATALOG、PROVINCE_ABNORMAL、CITY_PAIR、CITY_PAIR_CONGESTION、ROUTE_DETAIL、ROUTE_CONGESTION、CAPACITY_OVERVIEW、CAPACITY_BOTTLENECKS、CAPACITY_ROUTE_DETAIL、REGIONAL_TRAFFIC_OVERVIEW、REGIONAL_PAIR_PRESSURE、REGIONAL_KEY_CHANNELS、VEHICLE_PATTERN_OVERVIEW、VEHICLE_STRUCTURE、VEHICLE_HOURLY_PATTERN、VEHICLE_DAY_TYPE_COMPARISON、OD_DESTINATION_TENDENCY、OD_CONNECTION_MATRIX：
                 - 询问当前覆盖路线、当前有数据的国省道或路线与路段名称对应关系时使用ROUTE_CATALOG。
                 - 单独分析一个城市主要联系哪些目的地、目的地联系倾向或出行需求结构时使用OD_DESTINATION_TENDENCY，selectedCities必须恰好一个城市。
                 - 分析两个及以上城市或福建九市的OD结构、城市联系矩阵时使用OD_CONNECTION_MATRIX；未限定城市时selectedCities为空并默认九市。
@@ -79,8 +80,9 @@ public final class IntentPlanner {
                 - “这两个城市”且上下文没有城市时必须clarification追问，不得当成全省。用户提到省外城市、区县或平潭时保留原始名称在selectedCities，不能静默丢弃，也不能映射到别的城市。
                 - 询问福建省整体、全省国省道交通态势时使用PROVINCE_OVERVIEW；
                 - 询问福建省哪些路段拥堵、异常或最拥堵时使用PROVINCE_ABNORMAL；
-                - 询问两个福建地级市之间交通情况时使用CITY_PAIR，并分别提取originCity、destinationCity；
-                - 指定G/S路线编号或国省道路线名称时使用ROUTE_DETAIL，优先提取routeCode，否则提取routeName。
+                - 询问两个福建地级市之间运行状况时使用CITY_PAIR；明确询问拥堵、堵点、拥堵原因或发展趋势时使用CITY_PAIR_CONGESTION。
+                - 只给出一个城市的运行状况或拥堵问题仍选择对应CITY_PAIR类型，保留originCity，并追问另一个城市或具体G/S路线。
+                - 指定G/S路线编号或国省道路线名称的一般运行状况使用ROUTE_DETAIL；明确询问拥堵时使用ROUTE_CONGESTION。
                 - 询问全省各国省道实际通行能力、设计通行能力或利用率总览时使用CAPACITY_OVERVIEW；
                 - 询问全省哪些路线是瓶颈、严重瓶颈或通行能力利用率最高时使用CAPACITY_BOTTLENECKS；
                 - 询问指定G/S路线的实际通行能力、设计通行能力、利用率或瓶颈等级时使用CAPACITY_ROUTE_DETAIL，优先提取routeCode，否则提取routeName。
@@ -150,6 +152,17 @@ public final class IntentPlanner {
             }
             return java.util.Optional.empty();
         }
+        if (previousType == TrafficQueryType.CITY_PAIR || previousType == TrafficQueryType.CITY_PAIR_CONGESTION) {
+            List<String> mentioned = mentionedCities(normalized);
+            if (previous.destinationCity() == null && previous.originCity() != null && mentioned.size() == 1
+                    && !mentioned.get(0).equals(previous.originCity())) {
+                return java.util.Optional.of(new AgentDecision(previous.intent(), previous.trafficScope(),
+                        previous.originCity(), mentioned.get(0), null, null, List.of(), null,
+                        previous.city(), previous.areaName(), previous.roadName(), previous.direction(),
+                        previous.eventType(), previous.location(), previous.severity(), previous.eventDescription(),
+                        previous.resourceTypes(), null, previous.includeTrend(), previous.analysisDate()));
+            }
+        }
         if (previousType != null && previousType.regionalTrafficQuery()) {
             List<String> mentioned = mentionedCities(normalized);
             boolean changesCities = List.of("再加", "加上", "补充", "加入", "去掉", "移除", "删掉")
@@ -203,7 +216,8 @@ public final class IntentPlanner {
             var scope = decision.parsedTrafficQueryType();
             if (scope.isEmpty()) {
                 missing.add("trafficScope");    // 缺失范围
-            } else if (scope.get() == TrafficQueryType.CITY_PAIR) {
+            } else if (scope.get() == TrafficQueryType.CITY_PAIR
+                    || scope.get() == TrafficQueryType.CITY_PAIR_CONGESTION) {
                 if (FujianCity.fromName(decision.originCity()).isEmpty()) {
                     missing.add("originCity");
                 }
@@ -211,6 +225,7 @@ public final class IntentPlanner {
                     missing.add("destinationCity");
                 }
             } else if ((scope.get() == TrafficQueryType.ROUTE_DETAIL
+                    || scope.get() == TrafficQueryType.ROUTE_CONGESTION
                     || scope.get() == TrafficQueryType.CAPACITY_ROUTE_DETAIL)
                     && isBlank(decision.routeCode())
                     && isBlank(decision.routeName())

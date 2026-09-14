@@ -84,17 +84,16 @@ class HighwayTrafficServiceTest {
     }
 
     @Test
-    void overviewUsesAuthoritativeRouteStatusAndSortsByCode() {
+    void overviewUsesSegmentLevelCongestionIndexData() {
         RecordingModel model = new RecordingModel();
         var result = service(model).query(query(TrafficQueryType.PROVINCE_OVERVIEW));
 
-        assertEquals(List.of("G104", "S201"), result.routeSummaries().stream()
-                .map(route -> route.routeCode()).toList());
-        assertEquals(88.8, result.routeSummaries().get(0).averageSpeedKmh());
-        assertTrue(result.segments().isEmpty());
+        assertTrue(result.routeSummaries().isEmpty());
+        assertEquals(13, result.segments().size());
+        assertEquals(50, result.segments().get(0).status());
         assertFalse(result.summary().contains("未来1至2小时"));
         assertTrue(model.lastRequest.userPrompt().contains("status=10/畅通"));
-        assertTrue(model.lastRequest.userPrompt().contains("routeStatusCounts="));
+        assertTrue(model.lastRequest.userPrompt().contains("displayedSegmentStatusCounts="));
         assertTrue(model.lastRequest.systemPrompt().contains("3至4句"));
         assertTrue(model.lastRequest.systemPrompt().contains("status是权威状态"));
         assertTrue(model.lastRequest.userPrompt().contains("forecastSegments:"));
@@ -124,7 +123,7 @@ class HighwayTrafficServiceTest {
                 TrafficQueryType.ROUTE_DETAIL, null, null, "G104", null, List.of(), null, "trace", true, true);
         assertTrue(service.query(trendOnly).summary().startsWith("未来1至2小时"));
         assertFalse(service.query(trendOnly).summary().contains("当前福建"));
-        assertTrue(service.query(query(TrafficQueryType.PROVINCE_OVERVIEW)).segments().isEmpty());
+        assertFalse(service.query(query(TrafficQueryType.PROVINCE_OVERVIEW)).segments().isEmpty());
     }
 
     @Test
@@ -223,15 +222,16 @@ class HighwayTrafficServiceTest {
     }
 
     @Test
-    void abnormalKeepsOnlyStatusAtLeastTwentyAndUsesDeterministicOrderAndLimit() {
+    void congestionAnalysisUsesRouteLevelStatusRows() {
         RecordingModel model = new RecordingModel();
         var result = service(model).query(query(TrafficQueryType.PROVINCE_ABNORMAL));
 
-        assertEquals(12, result.totalSegmentCount());
-        assertEquals(10, result.displayedSegmentCount());
-        assertTrue(result.truncated());
-        assertEquals(50, result.segments().get(0).status());
-        assertFalse(result.segments().stream().anyMatch(segment -> segment.status() == 10));
+        assertEquals(1, result.totalSegmentCount());
+        assertEquals(1, result.displayedSegmentCount());
+        assertFalse(result.truncated());
+        assertTrue(result.segments().isEmpty());
+        assertEquals("S201", result.routeSummaries().get(0).routeCode());
+        assertFalse(result.routeSummaries().stream().anyMatch(route -> route.status() == TrafficStatus.SMOOTH.code()));
         assertTrue(result.warnings().isEmpty());
     }
 
@@ -245,9 +245,23 @@ class HighwayTrafficServiceTest {
                 TrafficQueryType.ROUTE_DETAIL, null, null, null, "北京 — 平潭", "trace"
         ));
 
-        assertEquals(List.of("G104"), cityResult.routeSummaries().stream()
-                .map(route -> route.routeCode()).toList());
-        assertEquals("G104", routeResult.routeSummaries().get(0).routeCode());
+        assertEquals(List.of("G104"), cityResult.segments().stream()
+                .map(segment -> segment.routeCode()).distinct().toList());
+        assertEquals("G104", routeResult.segments().get(0).routeCode());
+    }
+
+    @Test
+    void cityPairAndRouteCongestionUseOnlyRouteLevelStatusRows() {
+        HighwayTrafficService service = service(new RecordingModel());
+        var pair = service.query(new HighwayTrafficQuery(
+                TrafficQueryType.CITY_PAIR_CONGESTION, "宁德", "福州", null, null, "trace"));
+        var routeResult = service.query(new HighwayTrafficQuery(
+                TrafficQueryType.ROUTE_CONGESTION, null, null, "S201", null, "trace"));
+
+        assertTrue(pair.segments().isEmpty());
+        assertTrue(pair.routeSummaries().isEmpty());
+        assertTrue(routeResult.segments().isEmpty());
+        assertEquals("S201", routeResult.routeSummaries().get(0).routeCode());
     }
 
     @Test
@@ -256,7 +270,7 @@ class HighwayTrafficServiceTest {
         var result = service.query(new HighwayTrafficQuery(
                 TrafficQueryType.ROUTE_DETAIL, null, null, "g104", "不存在", "trace"
         ));
-        assertEquals("G104", result.routeSummaries().get(0).routeCode());
+        assertEquals("G104", result.segments().get(0).routeCode());
         assertThrows(BusinessRuleException.class, () -> service.query(new HighwayTrafficQuery(
                 TrafficQueryType.ROUTE_DETAIL, null, null, null, "不存在", "trace"
         )));
