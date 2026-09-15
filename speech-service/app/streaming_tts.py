@@ -5,17 +5,11 @@ import multiprocessing as mp
 import queue
 import subprocess
 import time
-import re
+from .text_processing import semantic_segments
 
 
 def text_segments(text, maximum=160):
-    current=''
-    for token in re.findall(r'[A-Za-z0-9.+%_-]+|.', text, flags=re.S):
-        if current and len(current)+len(token)>maximum:
-            yield current
-            current=''
-        current+=token
-    if current: yield current
+    yield from semantic_segments(text, maximum=maximum, minimum=30)
 
 
 def _worker(settings, requests, replies, cancelled):
