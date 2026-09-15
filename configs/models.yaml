@@ -7,13 +7,34 @@ models:
     endpoint: http://qwen:8000/v1/chat/completions
     enable_thinking: false
   tts:
-    directory: /home/whtc/models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice
-    container_directory: /models/Qwen--Qwen3-TTS-12Hz-0.6B-CustomVoice
+    directory: /home/whtc/models/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice
+    container_directory: /models/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice
     device: cuda:0
     speaker: Serena
-    engine: standard
-    implementation: qwen-tts==0.1.1
+    engine: vllm-omni
+    implementation: vllm-omni==0.28.0
     workers: 1
+    max_concurrency: 2
+    stream_format: pcm_s16le_24000_mono
+    rollback:
+      model: Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+      engine: standard
+      image: road-agent-dgx-speech:before-tts-20260915
+    omni_candidate:
+      release_approved: true
+      selection_order: 1
+      implementation: vllm-omni==0.28.0
+      model: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+      container_directory: /models/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice
+      voice: Serena
+      language: Chinese
+      stream_format: pcm_s16le_24000_mono
+      gpu_memory_utilization: 0.12
+      acceptance: user_approved_near_threshold_result
+      measured_first_audio_p95_seconds: 0.223
+      measured_rtf_mean: 0.743
+      measured_rtf_maximum: 0.836
+      measured_maximum_starvation_ms: 0
     accelerated_candidate:
       release_approved: false
       reason: dual-user synthesis ratio exceeds 0.8 on this DGX

@@ -1,0 +1,40 @@
+services:
+  tts-omni-candidate:
+    image: ${TTS_OMNI_IMAGE:-docker.m.daocloud.io/vllm/vllm-omni@sha256:6f8be103eaf0055448cf7578cfd621405fd669079d4361bd58896326b2bf722a}
+    container_name: road-agent-tts-omni-candidate
+    profiles: ["tts-candidate"]
+    gpus: all
+    ipc: host
+    command:
+      - vllm
+      - serve
+      - ${TTS_OMNI_MODEL_PATH:-/models/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice}
+      - --omni
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8091"
+      - --gpu-memory-utilization
+      - "0.12"
+    environment:
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+    volumes:
+      - ${TTS_OMNI_MODEL_HOST_PATH:-/home/whtc/models/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice}:${TTS_OMNI_MODEL_PATH:-/models/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice}:ro
+    ports:
+      - "127.0.0.1:18092:8091"
+    networks:
+      - speech-private
+    restart: unless-stopped
+    mem_limit: 36g
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8091/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 10m
+
+networks:
+  speech-private:
+    external: true
+    name: road-agent-dgx_speech-private
