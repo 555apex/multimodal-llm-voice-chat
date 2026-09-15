@@ -8,9 +8,12 @@ public record SpeechCapabilities(
         String ttsVoice,
         int maxRecordingSeconds,
         long maxAudioBytes,
-        boolean ttsStreamingAvailable
+        boolean ttsStreamingAvailable,
+        String ttsEngine,
+        String ttsModel,
+        int ttsSampleRate
 ) {
     public SpeechCapabilities(boolean asr, boolean tts, String model, String voice, int seconds, long bytes) {
-        this(asr, tts, model, voice, seconds, bytes, false);
+        this(asr, tts, model, voice, seconds, bytes, false, null, null, 0);
     }
 }
