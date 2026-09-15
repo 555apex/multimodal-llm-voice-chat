@@ -1,7 +1,7 @@
-const SENTENCE_END = /[^。！？；\n]+[。！？；]?/g
-const SOFT_END = /[，、,：:]\s*/g
+const SENTENCE_END = /[^。！？；：\n]+[。！？；：]?/g
+const SOFT_END = /[，、,]\s*/g
+const PROTECTED_TOKEN = /[A-Za-z]{1,4}\d{1,5}(?:[+-]\d+(?:\.\d+)?)?|\d{1,2}:\d{2}(?::\d{2})?|[+-]?\d+(?:\.\d+)?\s*(?:%|mm|cm|km|m|公里|米|毫米|厘米|小时|分钟|秒)/gi
 
-/** 按中文语义边界切分；首段较短以降低首音频延迟，后续段较长以减少停顿。 */
 export function speechSummary(source: string): string {
   const text = source.replace(/\s+/g, ' ').trim()
   if (text.length <= 160) return text
@@ -15,68 +15,48 @@ export function speechSummary(source: string): string {
   return result || '查询结果已显示，请查看详细数据，或点击全文朗读。'
 }
 
-export function streamingSpeechSegments(source: string): string[] {
-  const result: string[] = []
-  for (const part of splitSpeechText(source)) {
-    if (result.length && result[result.length - 1].length + part.length <= 160) result[result.length - 1] += part
-    else result.push(part)
-  }
-  return result
-}
-
+/** MP3 fallback segmentation. Streaming TTS receives the complete text once. */
 export function splitSpeechText(source: string): string[] {
   const text = source.replace(/\s+/g, ' ').trim()
   if (!text) return []
-  const sentences = text.match(SENTENCE_END)?.map((value) => value.trim()).filter(Boolean) ?? [text]
+  const sentences = text.match(SENTENCE_END)?.map(value => value.trim()).filter(Boolean) ?? [text]
   const segments: string[] = []
   let current = ''
-
-  for (const sentence of sentences.flatMap((value) => splitLongSentence(value, segments.length ? 140 : 60))) {
-    const maximum = segments.length === 0 ? 60 : 140
-    if (current && current.length + sentence.length > maximum) {
-      segments.push(current)
-      current = sentence
-    } else {
-      current += sentence
+  for (const sentence of sentences) {
+    const initialMaximum = segments.length === 0 && !current ? 48 : 90
+    for (const piece of splitLongSentence(sentence, initialMaximum)) {
+      const maximum = segments.length === 0 ? 48 : 90
+      if (current && current.length + piece.length > maximum) {
+        segments.push(current)
+        current = piece
+      } else {
+        current += piece
+      }
     }
   }
   if (current) segments.push(current)
-  return segments.filter(Boolean)
+  return segments
 }
 
 function splitLongSentence(sentence: string, maximum: number): string[] {
-  if (sentence.length <= maximum) return [sentence]
-  const pieces: string[] = []
-  let start = 0
-  let match: RegExpExecArray | null
-  SOFT_END.lastIndex = 0
-  while ((match = SOFT_END.exec(sentence)) !== null) {
-    const end = match.index + match[0].length
-    if (end - start >= Math.max(30, maximum - 30)) {
-      pieces.push(sentence.slice(start, end))
-      start = end
-    }
+  const result: string[] = []
+  let remaining = sentence
+  while (remaining.length > maximum) {
+    const protectedSpans = [...remaining.matchAll(PROTECTED_TOKEN)].map(match => [match.index!, match.index! + match[0].length])
+    const boundaries = [...remaining.slice(0, maximum + 1).matchAll(SOFT_END)]
+      .map(match => match.index! + match[0].length)
+      .filter(position => position >= 30 && !protectedSpans.some(([start, end]) => start < position && position < end))
+    let cut = boundaries.at(-1) ?? safeCut(maximum, protectedSpans)
+    if (cut <= 0) cut = maximum
+    result.push(remaining.slice(0, cut).trim())
+    remaining = remaining.slice(cut).trim()
   }
-  if (start < sentence.length) pieces.push(sentence.slice(start))
-
-  return pieces.flatMap((piece) => {
-    if (piece.length <= maximum) return [piece]
-    return splitByWordBoundaries(piece, maximum)
-  })
+  if (remaining) result.push(remaining)
+  return result
 }
 
-function splitByWordBoundaries(text: string, maximum: number): string[] {
-  const segmenter = new Intl.Segmenter('zh-CN', { granularity: 'word' })
-  const result: string[] = []
-  let current = ''
-  for (const { segment } of segmenter.segment(text)) {
-    if (current && current.length + segment.length > maximum) {
-      result.push(current)
-      current = ''
-    }
-    // 单个道路名或连续数字宁可略超目标长度，也不从中间硬切。
-    current += segment
-  }
-  if (current) result.push(current)
-  return result
+function safeCut(preferred: number, spans: number[][]) {
+  const protectedSpan = spans.find(([start, end]) => start < preferred && preferred < end)
+  if (!protectedSpan) return preferred
+  return protectedSpan[0] >= 16 ? protectedSpan[0] : protectedSpan[1]
 }

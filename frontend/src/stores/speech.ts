@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { fetchSpeechCapabilities, synthesizeSpeech } from '../api/speechApi'
 import { splitSpeechText } from '../utils/speechText'
-import { streamingSpeechSegments } from '../utils/speechText'
 import { PcmSpeechPlayer, receiveSpeech } from '../utils/pcmSpeech'
 import type { SpeechCapabilities, SpeechPlaybackStatus } from '../types/speech'
 
@@ -233,10 +232,8 @@ export const useSpeechStore = defineStore('speech', {
           activePcm = player
           await player.open()
           if (generation !== playbackGeneration) { player.close(); return }
-          for (const text of streamingSpeechSegments(speechText)) {
-            await receiveSpeech(text, player, controller.signal)
-            if (generation !== playbackGeneration) return
-          }
+          await receiveSpeech(speechText, player, controller.signal)
+          if (generation !== playbackGeneration) return
           player.end()
           await player.done
           if (generation === playbackGeneration) this.finishPlayback()
