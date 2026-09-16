@@ -86,10 +86,12 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
 
     @Override
     public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
-        String first = complete(request, true);
+        String first = complete(request, true, resultType);
         try {
             return objectMapper.readValue(cleanJson(first), resultType);
         } catch (JsonProcessingException firstException) {
+            LOGGER.warn("Structured model response rejected target={} attempt=1 reason={}",
+                    resultType.getSimpleName(), singleLine(firstException.getOriginalMessage()));
             // 仅修复一次格式；把具体字段错误和原响应反馈给模型，避免重复相同错误。
             ModelRequest repairRequest = new ModelRequest(
                     request.systemPrompt(),
@@ -97,10 +99,12 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
                     request.history(),
                     0.0, request.maxOutputTokens()
             );
-            String repaired = complete(repairRequest, true);
+            String repaired = complete(repairRequest, true, resultType);
             try {
                 return objectMapper.readValue(cleanJson(repaired), resultType);
             } catch (JsonProcessingException secondException) {
+                LOGGER.warn("Structured model response rejected target={} attempt=2 reason={}",
+                        resultType.getSimpleName(), singleLine(secondException.getOriginalMessage()));
                 throw new ExternalServiceException(
                         // 保留既有错误码，避免破坏已按错误码处理的客户端。
                         "CHAT_MODEL", "MODEL_INVALID_JSON",
@@ -178,7 +182,8 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         if (timeout.isZero() || timeout.isNegative()) {
             throw new ExternalServiceException("CHAT_MODEL", "MODEL_TIMEOUT", "模型生成总预算已耗尽");
         }
-        String content = complete(request, true, timeout.compareTo(requestTimeout) < 0 ? timeout : requestTimeout);
+        String content = complete(request, true, timeout.compareTo(requestTimeout) < 0 ? timeout : requestTimeout,
+                resultType);
         try {
             return objectMapper.readValue(cleanJson(content), resultType);
         } catch (JsonProcessingException exception) {
@@ -191,8 +196,16 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         return complete(request, structured, requestTimeout);
     }
 
+    private String complete(ModelRequest request, boolean structured, Class<?> resultType) {
+        return complete(request, structured, requestTimeout, resultType);
+    }
+
     private String complete(ModelRequest request, boolean structured, Duration timeout) {
-        HttpRequest httpRequest = buildHttpRequest(request, false, structured, timeout);
+        return complete(request, structured, timeout, null);
+    }
+
+    private String complete(ModelRequest request, boolean structured, Duration timeout, Class<?> resultType) {
+        HttpRequest httpRequest = buildHttpRequest(request, false, structured, timeout, resultType);
         long started = System.nanoTime();
         try {
             HttpResponse<String> response = httpClient.send(
@@ -236,6 +249,11 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
     }
 
     private HttpRequest buildHttpRequest(ModelRequest request, boolean stream, boolean structured, Duration timeout) {
+        return buildHttpRequest(request, stream, structured, timeout, null);
+    }
+
+    private HttpRequest buildHttpRequest(ModelRequest request, boolean stream, boolean structured, Duration timeout,
+            Class<?> resultType) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", modelName);
         body.put("messages", buildMessages(request));
@@ -246,7 +264,8 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
             body.put("chat_template_kwargs", Map.of("enable_thinking", enableThinking));
         }
         if (structured) {
-            body.put("response_format", Map.of("type", "json_object"));
+            body.put("response_format", supportsStrictSchema(resultType)
+                    ? strictResponseFormat(resultType) : Map.of("type", "json_object"));
         }
 
         try {
@@ -263,6 +282,43 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
         } catch (JsonProcessingException exception) {
             throw new IllegalArgumentException("无法序列化模型请求", exception);
         }
+    }
+
+    private boolean supportsStrictSchema(Class<?> resultType) {
+        // Traffic summary records contain only required strings. Do not change nullable
+        // intent or nested dispatch contracts until their schemas are explicitly defined.
+        return resultType != null && resultType.isRecord()
+                && java.util.Arrays.stream(resultType.getRecordComponents())
+                .allMatch(component -> component.getType() == String.class);
+    }
+
+    private Map<String, Object> strictResponseFormat(Class<?> resultType) {
+        Map<String, Object> properties = new LinkedHashMap<>();
+        List<String> required = new ArrayList<>();
+        for (var component : resultType.getRecordComponents()) {
+            Map<String, Object> field = new LinkedHashMap<>();
+            field.put("type", "string");
+            if ("TrafficForecastSummaryResponse".equals(resultType.getSimpleName())
+                    && "trend".equals(component.getName())) {
+                field.put("enum", List.of("基本稳定", "持续拥堵", "可能加剧", "逐渐缓解", "局部分化"));
+            }
+            if ("summary".equals(component.getName())) {
+                field.put("minLength", 50);
+                field.put("maxLength", 800);
+            }
+            properties.put(component.getName(), field);
+            required.add(component.getName());
+        }
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", properties);
+        schema.put("required", required);
+        schema.put("additionalProperties", false);
+        Map<String, Object> definition = new LinkedHashMap<>();
+        definition.put("name", resultType.getSimpleName().replaceAll("[^A-Za-z0-9_-]", "_"));
+        definition.put("strict", true);
+        definition.put("schema", schema);
+        return Map.of("type", "json_schema", "json_schema", definition);
     }
 
     private List<Map<String, String>> buildMessages(ModelRequest request) {
@@ -319,12 +375,15 @@ public final class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
 
                 上次响应不符合目标JSON数据结构，请根据下面的解析反馈完整重写。
                 目标类型：%s
+                目标JSON字段结构：%s
                 解析反馈：%s
                 上次响应：
                 %s
                 只输出修复后的严格JSON对象，不要解释，不要使用Markdown代码块。
                 """.formatted(
                 resultType.getSimpleName(),
+                supportsStrictSchema(resultType) ? objectMapper.valueToTree(strictResponseFormat(resultType)).toString()
+                        : "遵循原系统提示中的字段定义，保留规定字段和类型",
                 truncate(singleLine(exception.getOriginalMessage()), 1000),
                 truncate(invalidContent, 6000)
         );

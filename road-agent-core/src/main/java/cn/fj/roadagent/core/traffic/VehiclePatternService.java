@@ -86,14 +86,18 @@ public final class VehiclePatternService {
 
     public HighwayTrafficResult query(HighwayTrafficQuery query) {
         VehiclePatternFacts facts = collectFacts(query);
-        TrafficSummaryResponse response = chatModelPort.generateStructuredStrict(
-                summaryRequest(facts), TrafficSummaryResponse.class
-        );
         String summary;
         try {
+            TrafficSummaryResponse response = chatModelPort.generateStructuredStrict(
+                    summaryRequest(facts), TrafficSummaryResponse.class
+            );
             ModelFactNumberValidator.validate(response.summary(), serializeFacts(facts));
             summary = response.summary();
-        } catch (IllegalArgumentException ignored) {
+        } catch (RuntimeException exception) {
+            System.getLogger(VehiclePatternService.class.getName()).log(
+                    System.Logger.Level.WARNING,
+                    "Vehicle structured summary rejected; using deterministic facts: {0}",
+                    exception.getMessage());
             summary = deterministicSummary(facts);
         }
         summary = appendCompletenessNotice(summary, facts);

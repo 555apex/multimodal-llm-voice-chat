@@ -23,10 +23,31 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class VehiclePatternServiceTest {
+
+    @Test
+    void invalidStructuredJsonFallsBackToDeterministicVehicleSummary() {
+        ChatModelPort failingModel = new ChatModelPort() {
+            @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
+            @Override public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+                throw new cn.fj.roadagent.application.exception.ExternalServiceException(
+                        "CHAT_MODEL", "MODEL_INVALID_JSON", "invalid json");
+            }
+            @Override public void stream(ModelRequest request, ModelStreamListener listener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+
+        var result = new VehiclePatternService(city -> Optional.of(snapshot()), failingModel)
+                .query(query(TrafficQueryType.VEHICLE_PATTERN_OVERVIEW, "福州"));
+
+        assertTrue(result.summary().contains("最新记录"));
+        assertFalse(result.summary().contains("MODEL_INVALID_JSON"));
+    }
 
     @Test
     void overviewFillsMissingHoursCalculatesSharesAndDayTypes() {

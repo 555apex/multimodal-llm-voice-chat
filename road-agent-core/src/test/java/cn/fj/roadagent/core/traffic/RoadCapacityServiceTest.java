@@ -27,6 +27,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class RoadCapacityServiceTest {
 
     @Test
+    void invalidStructuredJsonFallsBackToDeterministicCapacitySummary() {
+        ChatModelPort failingModel = new ChatModelPort() {
+            @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
+            @Override public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+                throw new cn.fj.roadagent.application.exception.ExternalServiceException(
+                        "CHAT_MODEL", "MODEL_INVALID_JSON", "invalid json");
+            }
+            @Override public void stream(ModelRequest request, ModelStreamListener listener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        RoadCapacitySnapshot snapshot = new RoadCapacitySnapshot(
+                List.of(row("G104", "北京-平潭", 400, 0.61)),
+                Instant.parse("2026-08-13T01:00:00Z"), "capacity-fp");
+
+        var result = new RoadCapacityService(() -> snapshot, failingModel).query(
+                query(TrafficQueryType.CAPACITY_OVERVIEW, null, null));
+
+        assertTrue(result.summary().contains("本次共评估1条"));
+        assertFalse(result.summary().contains("MODEL_INVALID_JSON"));
+    }
+
+    @Test
     void overviewReturnsEveryRouteSortedAndReportsThreeLevelCounts() {
         RecordingModel model = new RecordingModel();
         RoadCapacityService service = service(model, List.of(

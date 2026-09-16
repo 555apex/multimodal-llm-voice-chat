@@ -150,6 +150,9 @@ class OpenAiCompatibleChatModelAdapterTest {
         assertTrue(repairRequest.get().contains("上次响应不符合目标JSON数据结构"));
         assertTrue(repairRequest.get().contains("not-json"));
         assertTrue(repairRequest.get().contains("\"temperature\":0.0"));
+        assertTrue(repairRequest.get().contains("\"type\":\"json_schema\""));
+        assertTrue(repairRequest.get().contains("\"required\":[\"intent\"]"));
+        assertTrue(repairRequest.get().contains("\"additionalProperties\":false"));
     }
 
     @Test

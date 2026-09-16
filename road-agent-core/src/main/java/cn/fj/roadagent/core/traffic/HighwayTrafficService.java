@@ -91,9 +91,18 @@ public final class HighwayTrafficService {
                     ? UUID.randomUUID().toString() : query.traceId();
             return HighwayTrafficResult.fromFacts(facts, catalogSummary(facts), traceId);
         }
-        TrafficForecastSummaryResponse response = chatModelPort.generateStructuredStrict(
-                summaryRequest(facts), TrafficForecastSummaryResponse.class
-        );
+        TrafficForecastSummaryResponse response;
+        try {
+            response = chatModelPort.generateStructuredStrict(
+                    summaryRequest(facts), TrafficForecastSummaryResponse.class
+            );
+        } catch (RuntimeException exception) {
+            System.getLogger(HighwayTrafficService.class.getName()).log(
+                    System.Logger.Level.WARNING,
+                    "Traffic structured summary rejected for {0}; using deterministic facts: {1}",
+                    facts.queryType(), exception.getMessage());
+            response = deterministicResponse(facts);
+        }
         String traceId = query.traceId() == null || query.traceId().isBlank()
                 ? UUID.randomUUID().toString() : query.traceId();
         String summary;
@@ -320,6 +329,36 @@ public final class HighwayTrafficService {
                 不要复述全部表格，不要使用Markdown，不要将国省干线事实改写为城市道路数据。
                 """.strip();
         return new ModelRequest(systemPrompt, serializeFacts(facts), List.of(), 0.1);
+    }
+
+    TrafficForecastSummaryResponse deterministicResponse(HighwayTrafficFacts facts) {
+        List<RouteTrafficSummary> routeRows = facts.routeSummaries();
+        List<HighwayTrafficSegment> segmentRows = facts.segments();
+        int displayed = segmentRows.isEmpty() ? routeRows.size() : segmentRows.size();
+        long abnormal = segmentRows.isEmpty()
+                ? routeRows.stream().filter(row -> row.status().abnormal()).count()
+                : segmentRows.stream().filter(row -> row.status().abnormal()).count();
+        String first = facts.title() + "：共查询到" + facts.totalSegmentCount() + "条相关记录，当前展示"
+                + displayed + "条，其中异常记录" + abnormal + "条。";
+        String focus = segmentRows.isEmpty()
+                ? routeRows.stream().filter(row -> row.status().abnormal()).limit(5)
+                    .map(row -> row.routeCode() + " " + row.routeName()).collect(Collectors.joining("、"))
+                : segmentRows.stream().filter(row -> row.status().abnormal()).limit(5)
+                    .map(row -> row.routeCode() + " " + row.routeSection()).collect(Collectors.joining("、"));
+        String second = focus.isBlank()
+                ? "当前展示记录未发现拥堵异常，具体状态、速度和采集时间见下方明细。"
+                : "当前应优先关注" + focus + "，具体状态、速度和采集时间见下方明细。";
+        String third = abnormal == 0
+                ? "建议继续关注后续批次变化，并结合出行时段合理安排路线。"
+                : "建议对异常路线适当预留通行时间，并结合后续批次变化安排巡查。";
+        String trend = abnormal == 0 ? "基本稳定"
+                : abnormal == displayed && displayed > 0 ? "持续拥堵" : "局部分化";
+        String forecast = switch (trend) {
+            case "持续拥堵" -> "未来1至2小时，预计相关道路仍将持续拥堵。";
+            case "局部分化" -> "未来1至2小时，预计不同道路通行态势呈局部分化。";
+            default -> "未来1至2小时，预计相关道路通行态势基本稳定。";
+        };
+        return new TrafficForecastSummaryResponse(first + second + third, trend, forecast);
     }
 
     String verifiedCause(HighwayTrafficQuery query, HighwayTrafficFacts facts) {

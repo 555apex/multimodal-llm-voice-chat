@@ -33,6 +33,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HighwayTrafficServiceTest {
 
     @Test
+    void invalidStructuredJsonFallsBackToDeterministicRouteCongestionSummary() {
+        ChatModelPort failingModel = new ChatModelPort() {
+            @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
+            @Override public <T> T generateStructured(ModelRequest request, Class<T> resultType) {
+                throw new cn.fj.roadagent.application.exception.ExternalServiceException(
+                        "CHAT_MODEL", "MODEL_INVALID_JSON", "invalid json");
+            }
+            @Override public void stream(ModelRequest request, ModelStreamListener listener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+
+        var result = service(failingModel).query(new HighwayTrafficQuery(
+                TrafficQueryType.ROUTE_CONGESTION, null, null, "G104", null, "trace"));
+
+        assertTrue(result.summary().contains("G104"));
+        assertTrue(result.summary().contains("具体状态、速度和采集时间见下方明细"));
+        assertFalse(result.summary().contains("MODEL_INVALID_JSON"));
+        assertFalse(result.routeSummaries().isEmpty());
+    }
+
+    @Test
     void summaryRequiresAFullThreeToFiveSentenceChineseAssessment() {
         assertThrows(IllegalArgumentException.class, () -> new TrafficSummaryResponse(
                 "当前路网态势已完成汇总。请合理安排出行。"

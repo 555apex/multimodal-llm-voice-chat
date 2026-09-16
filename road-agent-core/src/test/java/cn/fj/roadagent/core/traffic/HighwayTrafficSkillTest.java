@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class HighwayTrafficSkillTest {
 
     @Test
-    void modelFailureDoesNotEmitAnswerTrafficResultOrSpeech() {
+    void modelFailureUsesDeterministicSummaryAndPublishesTrafficResult() {
         ChatModelPort failingModel = new ChatModelPort() {
             @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
             @Override public <T> T generateStructured(ModelRequest request, Class<T> type) {
@@ -44,16 +44,15 @@ class HighwayTrafficSkillTest {
         HighwayTrafficSkill skill = new HighwayTrafficSkill(service);
         List<AgentEvent> events = new ArrayList<>();
 
-        assertThrows(IllegalStateException.class, () -> skill.execute(context(), events::add));
+        skill.execute(context(), events::add);
 
         List<String> names = events.stream().map(AgentEvent::name).toList();
-        assertFalse(names.contains("answer.delta"));
-        assertFalse(names.contains("answer.speech"));
-        assertFalse(names.contains("result.traffic"));
+        assertTrue(names.contains("answer.delta"));
+        assertTrue(names.contains("result.traffic"));
     }
 
     @Test
-    void capacityModelFailureAlsoDoesNotEmitAnswerTrafficResultOrSpeech() {
+    void capacityModelFailureAlsoUsesDeterministicSummaryAndPublishesResult() {
         ChatModelPort failingModel = new ChatModelPort() {
             @Override public ModelResponse generate(ModelRequest request) { throw new UnsupportedOperationException(); }
             @Override public <T> T generateStructured(ModelRequest request, Class<T> type) {
@@ -79,12 +78,11 @@ class HighwayTrafficSkillTest {
         );
         List<AgentEvent> events = new ArrayList<>();
 
-        assertThrows(IllegalStateException.class, () -> skill.execute(context, events::add));
+        skill.execute(context, events::add);
 
         List<String> names = events.stream().map(AgentEvent::name).toList();
-        assertFalse(names.contains("answer.delta"));
-        assertFalse(names.contains("answer.speech"));
-        assertFalse(names.contains("result.traffic"));
+        assertTrue(names.contains("answer.delta"));
+        assertTrue(names.contains("result.traffic"));
     }
 
     @Test

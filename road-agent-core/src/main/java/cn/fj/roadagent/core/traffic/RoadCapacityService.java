@@ -60,10 +60,19 @@ public final class RoadCapacityService {
 
     public HighwayTrafficResult query(HighwayTrafficQuery query) {
         RoadCapacityFacts facts = collectFacts(query);
-        TrafficSummaryResponse response = chatModelPort.generateStructuredStrict(
-                summaryRequest(facts), TrafficSummaryResponse.class
-        );
-        String summary = factSafeSummary(facts, response.summary());
+        String summary;
+        try {
+            TrafficSummaryResponse response = chatModelPort.generateStructuredStrict(
+                    summaryRequest(facts), TrafficSummaryResponse.class
+            );
+            summary = factSafeSummary(facts, response.summary());
+        } catch (RuntimeException exception) {
+            System.getLogger(RoadCapacityService.class.getName()).log(
+                    System.Logger.Level.WARNING,
+                    "Capacity structured summary rejected; using deterministic facts: {0}",
+                    exception.getMessage());
+            summary = deterministicSummary(facts);
+        }
         String traceId = query.traceId() == null || query.traceId().isBlank()
                 ? UUID.randomUUID().toString() : query.traceId();
         return HighwayTrafficResult.fromCapacityFacts(facts, summary, traceId);
