@@ -161,6 +161,9 @@ public final class HighwayTrafficService {
             String destinationInput
     ) {
         FujianCity origin = requireCity(originInput, "出发城市");
+        if (destinationInput == null || destinationInput.isBlank()) {
+            return singleCityTraffic(snapshot, origin);
+        }
         FujianCity destination = requireCity(destinationInput, "到达城市");
         if (origin == destination) {
             throw new BusinessRuleException("TRAFFIC_CITY_PAIR_INVALID", "出发城市和到达城市不能相同");
@@ -190,6 +193,18 @@ public final class HighwayTrafficService {
 
     private HighwayTrafficFacts cityPairCongestion(HighwayTrafficSnapshot snapshot, String originInput,
             String destinationInput) {
+        FujianCity origin = requireCity(originInput, "查询城市");
+        if (destinationInput == null || destinationInput.isBlank()) {
+            Set<String> routeCodes = singleCityRouteCodes(snapshot, origin);
+            List<RouteTrafficSummary> all = snapshot.routeSummaries().stream()
+                    .filter(summary -> routeCodes.contains(summary.routeCode()) && summary.status().abnormal())
+                    .sorted(Comparator.<RouteTrafficSummary>comparingInt(summary -> summary.status().code()).reversed()
+                            .thenComparing(RouteTrafficSummary::averageSpeedKmh)
+                            .thenComparing(RouteTrafficSummary::routeCode)).toList();
+            return facts(TrafficQueryType.CITY_PAIR_CONGESTION, origin.displayName() + "市国省道拥堵分析",
+                    all.stream().limit(ABNORMAL_LIMIT).toList(), List.of(), List.of(), all.size(), snapshot,
+                    List.of());
+        }
         Set<String> routeCodes = cityPairRouteCodes(snapshot, originInput, destinationInput);
         List<RouteTrafficSummary> all = snapshot.routeSummaries().stream()
                 .filter(summary -> routeCodes.contains(summary.routeCode()) && summary.status().abnormal())
@@ -200,6 +215,28 @@ public final class HighwayTrafficService {
                 + requireCity(destinationInput, "到达城市").displayName() + "市拥堵分析";
         return facts(TrafficQueryType.CITY_PAIR_CONGESTION, title,
                 all.stream().limit(ABNORMAL_LIMIT).toList(), List.of(), List.of(), all.size(), snapshot, List.of());
+    }
+
+    private HighwayTrafficFacts singleCityTraffic(HighwayTrafficSnapshot snapshot, FujianCity city) {
+        Set<String> routeCodes = singleCityRouteCodes(snapshot, city);
+        List<HighwayTrafficSegment> all = sortedSegments(snapshot, routeCodes);
+        List<HighwayTrafficSegment> displayed = all.stream().limit(DETAIL_LIMIT).toList();
+        return facts(TrafficQueryType.CITY_PAIR, city.displayName() + "市国省干线交通运行状况",
+                List.of(), displayed, displayed, all.size(), snapshot, List.of());
+    }
+
+    private Set<String> singleCityRouteCodes(HighwayTrafficSnapshot snapshot, FujianCity city) {
+        String cityName = city.displayName();
+        Set<String> routeCodes = snapshot.routes().stream()
+                .filter(route -> route.startPlace().contains(cityName) || route.endPlace().contains(cityName))
+                .map(HighwayRoute::routeCode)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (routeCodes.isEmpty()) {
+            throw new BusinessRuleException(
+                    "TRAFFIC_ROUTE_NOT_FOUND", "未找到起点或终点包含%s市的国省道".formatted(city.displayName())
+            );
+        }
+        return routeCodes;
     }
 
     private HighwayTrafficFacts routeDetail(

@@ -103,7 +103,7 @@ final class KnownTrafficQuestionClassifier {
         String roadRouteName = matchedRouteName(normalized, routes);
         if (roadRouteName != null && containsAny(normalized,
                 "交通态势", "当前态势", "交通情况", "通行情况", "通行状态",
-                "运行状态", "当前状态", "路况", "拥堵", "缓行", "畅通", "异常路段")) {
+                "运行状态", "运行状况", "当前状态", "路况", "拥堵", "缓行", "畅通", "异常路段")) {
             TrafficQueryType type = congestionAnalysis(normalized)
                     ? TrafficQueryType.ROUTE_CONGESTION : TrafficQueryType.ROUTE_DETAIL;
             return Optional.of(trafficDecision(type, mentionedCities(normalized),
@@ -213,7 +213,7 @@ final class KnownTrafficQuestionClassifier {
 
     private static Optional<TrafficQueryType> roadConditionType(String text) {
         boolean roadContext = containsAny(text,
-                "交通态势", "当前态势", "交通情况", "通行情况", "通行状态", "运行状态", "当前状态", "路况",
+                "交通态势", "当前态势", "交通情况", "通行情况", "通行状态", "运行状态", "运行状况", "当前状态", "路况",
                 "拥堵", "堵车", "为什么会堵", "拥堵原因", "节假日影响", "活动影响",
                 "缓行", "畅通", "异常路段", "交通异常", "定性趋势");
         if (!roadContext) return Optional.empty();
@@ -359,11 +359,12 @@ final class KnownTrafficQuestionClassifier {
             String routeName,
             boolean includeTrend
     ) {
-        boolean cityBound = type == TrafficQueryType.CITY_PAIR
-                || type == TrafficQueryType.CITY_PAIR_CONGESTION || type.capacityQuery();
+        boolean cityTraffic = type == TrafficQueryType.CITY_PAIR
+                || type == TrafficQueryType.CITY_PAIR_CONGESTION;
+        boolean cityBound = cityTraffic || type.capacityQuery();
         String origin = cityBound && !cities.isEmpty() ? cities.get(0) : null;
         String destination = cityBound && cities.size() >= 2 ? cities.get(1) : null;
-        String clarification = cityBound && cities.size() == 1
+        String clarification = type.capacityQuery() && cities.size() == 1
                 ? "已识别%s市。请再补充一个福建地级市，或提供具体G/S国省道路线编号。".formatted(cities.get(0))
                 : null;
         return new AgentDecision(

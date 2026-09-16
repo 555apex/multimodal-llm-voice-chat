@@ -148,13 +148,32 @@ public final class HighwayTrafficSkill implements AgentSkill {
             result=HighwayTrafficResult.fromVehicleFacts(f, vehiclePatternService.deterministicSummary(f), trace);
         } else {
             var f = trafficService.collectFacts(query); facts=trafficService.serializeFacts(f);
-            String summary=f.title()+"：已查询到"+f.routeSummaries().size()+"条路线概况、"+f.segments().size()+"条路段明细。具体状态与采集时间见下方数据。";
+            String summary = factSummary(f);
             summary += trafficService.verifiedCause(query, f);
             result=HighwayTrafficResult.fromFacts(f, summary, trace);
         }
         sink.emit(new AgentEvent("tool.completed", Map.of("source", "MYSQL")));
         return TrafficLiveResponder.respond(result, facts, streamingModel, sink,
                 query.includeTrend(), query.trendOnly(), presentationOnly(context.command().message()));
+    }
+
+    private String factSummary(cn.fj.roadagent.application.traffic.HighwayTrafficFacts facts) {
+        if (facts.segments().isEmpty() && facts.routeSummaries().isEmpty()
+                && (facts.queryType() == TrafficQueryType.PROVINCE_ABNORMAL
+                    || facts.queryType() == TrafficQueryType.CITY_PAIR_CONGESTION
+                    || facts.queryType() == TrafficQueryType.ROUTE_CONGESTION)) {
+            return facts.title() + "：当前未发现符合条件的拥堵路线。具体采集时间见下方数据。";
+        }
+        if (!facts.segments().isEmpty() && facts.routeSummaries().isEmpty()) {
+            return facts.title() + "：已查询到" + facts.totalSegmentCount() + "条相关路段，当前展示"
+                    + facts.segments().size() + "条。具体状态与采集时间见下方数据。";
+        }
+        if (!facts.routeSummaries().isEmpty() && facts.segments().isEmpty()) {
+            return facts.title() + "：已查询到" + facts.totalSegmentCount() + "条相关路线，当前展示"
+                    + facts.routeSummaries().size() + "条。具体状态与采集时间见下方数据。";
+        }
+        return facts.title() + "：已查询到" + facts.routeSummaries().size() + "条路线和"
+                + facts.segments().size() + "条路段。具体状态与采集时间见下方数据。";
     }
 
     private RoadCapacityService requireCapacityService() {

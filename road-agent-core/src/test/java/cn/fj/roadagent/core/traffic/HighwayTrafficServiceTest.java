@@ -273,6 +273,36 @@ class HighwayTrafficServiceTest {
     }
 
     @Test
+    void singleCityTrafficUsesRoutesWhoseStartOrEndContainsTheCity() {
+        HighwayTrafficService service = service(new RecordingModel());
+
+        var result = service.query(new HighwayTrafficQuery(
+                TrafficQueryType.CITY_PAIR, "宁德", null, null, null, "trace"
+        ));
+
+        assertEquals(13, result.totalSegmentCount());
+        assertEquals(List.of("G104", "S201"), result.segments().stream()
+                .map(segment -> segment.routeCode()).distinct().sorted().toList());
+        assertTrue(result.routeSummaries().isEmpty());
+        assertTrue(result.title().contains("宁德市"));
+    }
+
+    @Test
+    void singleCityCongestionUsesOnlyAbnormalRouteLevelRows() {
+        HighwayTrafficService service = service(new RecordingModel());
+
+        var result = service.query(new HighwayTrafficQuery(
+                TrafficQueryType.CITY_PAIR_CONGESTION, "宁德", null, null, null, "trace"
+        ));
+
+        assertTrue(result.segments().isEmpty());
+        assertEquals(List.of("S201"), result.routeSummaries().stream()
+                .map(route -> route.routeCode()).toList());
+        assertEquals(1, result.totalSegmentCount());
+        assertTrue(result.title().contains("宁德市"));
+    }
+
+    @Test
     void cityPairAndRouteCongestionUseOnlyRouteLevelStatusRows() {
         HighwayTrafficService service = service(new RecordingModel());
         var pair = service.query(new HighwayTrafficQuery(

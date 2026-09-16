@@ -81,7 +81,7 @@ public final class IntentPlanner {
                 - 询问福建省整体、全省国省道交通态势时使用PROVINCE_OVERVIEW；
                 - 询问福建省哪些路段拥堵、异常或最拥堵时使用PROVINCE_ABNORMAL；
                 - 询问两个福建地级市之间运行状况时使用CITY_PAIR；明确询问拥堵、堵点、拥堵原因或发展趋势时使用CITY_PAIR_CONGESTION。
-                - 只给出一个城市的运行状况或拥堵问题仍选择对应CITY_PAIR类型，保留originCity，并追问另一个城市或具体G/S路线。
+                - 只给出一个城市的运行状况或拥堵问题仍选择对应CITY_PAIR类型，保留originCity、destinationCity为null，不追问；系统会查询起点或终点包含该城市的国省道。
                 - 指定G/S路线编号或国省道路线名称的一般运行状况使用ROUTE_DETAIL；明确询问拥堵时使用ROUTE_CONGESTION。
                 - 询问全省各国省道实际通行能力、设计通行能力或利用率总览时使用CAPACITY_OVERVIEW；
                 - 询问全省哪些路线是瓶颈、严重瓶颈或通行能力利用率最高时使用CAPACITY_BOTTLENECKS；
@@ -97,7 +97,7 @@ public final class IntentPlanner {
                 车型查询中若用户没有指定城市，analysisCity必须为null并追问城市；同时指定福州和厦门时analysisCity为null、selectedCities保留两市，由Java分别生成两份结果。
                 用户提到“通行能力”“能力利用率”“瓶颈路线”时，必须选择CAPACITY_开头的范围，不要选择普通路况范围。
                 用户提到跨区域或多城市“交通联系”时优先选择REGIONAL_*；CITY_PAIR只用于两个城市之间当前路况。
-                CITY_PAIR只用于询问两个城市之间当前国省道路况、拥堵状态和路段通行情况。
+                CITY_PAIR用于询问单个城市相关国省道，或两个城市之间的当前路况、拥堵状态和路段通行情况。
                 用户询问拥堵原因、节假日影响或重大活动影响时仍选择最接近的PROVINCE_OVERVIEW、PROVINCE_ABNORMAL、CITY_PAIR或ROUTE_DETAIL，由Java结合结构化事件事实生成原因提示。
                 需求指向拥堵、异常或未来趋势时includeTrend=true；普通当前路况、容量、压力和车型查询为false。依赖“它、其中、这些路段、反方向”的追问必须继承最近一轮成功交通查询的对象和范围，不得擅自切换为全省。
                 不得把五四路、成功大道等城市道路识别为可查询路线。
@@ -221,7 +221,8 @@ public final class IntentPlanner {
                 if (FujianCity.fromName(decision.originCity()).isEmpty()) {
                     missing.add("originCity");
                 }
-                if (FujianCity.fromName(decision.destinationCity()).isEmpty()) {
+                if (!isBlank(decision.destinationCity())
+                        && FujianCity.fromName(decision.destinationCity()).isEmpty()) {
                     missing.add("destinationCity");
                 }
             } else if ((scope.get() == TrafficQueryType.ROUTE_DETAIL

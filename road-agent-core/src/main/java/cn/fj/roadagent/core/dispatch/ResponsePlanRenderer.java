@@ -52,7 +52,7 @@ final class ResponsePlanRenderer {
         matcher.appendTail(output);
         String advice = normalize(supplementalAdvice);
         if (advice != null) {
-            if (advice.length() > (concise ? 50 : 1500)) throw new IllegalArgumentException("模型补充建议超过长度限制");
+            advice = abbreviate(advice, concise ? 50 : 1500);
             output.append("\n\n补充建议：").append(advice);
         }
         String rendered = output.toString().trim()
@@ -121,5 +121,10 @@ final class ResponsePlanRenderer {
 
     private String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String abbreviate(String value, int limit) {
+        if (value.length() <= limit) return value;
+        return value.substring(0, limit - 1).replaceAll("[，。；：！？]+$", "") + "…";
     }
 }

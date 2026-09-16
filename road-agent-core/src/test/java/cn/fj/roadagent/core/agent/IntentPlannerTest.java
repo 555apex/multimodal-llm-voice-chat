@@ -186,12 +186,20 @@ class IntentPlannerTest {
         assertEquals("CITY_PAIR", singleCity.trafficScope());
         assertEquals("厦门", singleCity.originCity());
         assertNull(singleCity.destinationCity());
-        assertTrue(singleCity.clarification().contains("再补充一个福建地级市"));
+        assertNull(singleCity.clarification());
+
+        AgentDecision reportedWording = planner.plan("福州市当前国省干线交通运行状况如何？", List.of());
+        assertEquals("CITY_PAIR", reportedWording.trafficScope());
+        assertEquals("福州", reportedWording.originCity());
+        assertNull(reportedWording.destinationCity());
+        assertNull(reportedWording.clarification());
+        assertTrue(planner.missingFields(reportedWording).isEmpty());
 
         AgentDecision singleCityCongestion = planner.plan("福州市有哪些拥堵路段？", List.of());
         assertEquals("CITY_PAIR_CONGESTION", singleCityCongestion.trafficScope());
         assertEquals("福州", singleCityCongestion.originCity());
-        assertTrue(singleCityCongestion.clarification().contains("具体G/S国省道路线编号"));
+        assertNull(singleCityCongestion.clarification());
+        assertTrue(planner.missingFields(singleCityCongestion).isEmpty());
 
         assertEquals("CITY_PAIR_CONGESTION",
                 planner.plan("福州和厦门的拥堵情况如何？", List.of()).trafficScope());

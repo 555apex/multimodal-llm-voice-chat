@@ -39,8 +39,8 @@ class ResponsePlanRendererTest {
                 }
                 assertThrows(IllegalArgumentException.class, () -> renderer.render(compact, event(),
                         Map.of("现场事实简述", "长".repeat(51)), ""));
-                assertThrows(IllegalArgumentException.class, () -> renderer.render(compact, event(),
-                        Map.of(), "长".repeat(51)));
+                String withLongAdvice = renderer.render(compact, event(), Map.of(), "长".repeat(51));
+                assertTrue(withLongAdvice.contains("补充建议：" + "长".repeat(49) + "…"));
             }
         }
     }
