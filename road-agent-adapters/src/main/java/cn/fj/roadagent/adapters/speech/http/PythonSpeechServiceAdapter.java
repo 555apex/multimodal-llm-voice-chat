@@ -49,7 +49,8 @@ public final class PythonSpeechServiceAdapter implements
                 throw unavailable("SPEECH_EMPTY_CAPABILITIES", "语音服务没有返回能力信息", null);
             }
             return new SpeechProviderCapabilities(
-                    body.asrAvailable(), body.ttsAvailable(), body.asrModel(), body.ttsVoice(), body.ttsStreamingAvailable()
+                    body.asrAvailable(), body.ttsAvailable(), body.asrModel(), body.ttsVoice(),
+                    body.ttsStreamingAvailable(), body.ttsEngine(), body.ttsModel(), body.ttsSampleRate()
             );
         } catch (RestClientException exception) {
             throw unavailable("SPEECH_UNAVAILABLE", "语音服务尚未就绪", exception);
@@ -175,7 +176,10 @@ public final class PythonSpeechServiceAdapter implements
             boolean ttsAvailable,
             String asrModel,
             String ttsVoice,
-            boolean ttsStreamingAvailable
+            boolean ttsStreamingAvailable,
+            String ttsEngine,
+            String ttsModel,
+            int ttsSampleRate
     ) {
     }
 

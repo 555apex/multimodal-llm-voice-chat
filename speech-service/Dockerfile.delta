@@ -1,0 +1,15 @@
+# Delta rebuild: replace only the application code, reusing the verified
+# dependency layer from the released speech image.
+#
+# Rationale: this DGX reaches its PyPI mirror at roughly 12-16 kB/s, so a full
+# rebuild that re-installs ~100 MB of wheels takes hours. The application code
+# is copied in the final layer of the main Dockerfile, so replacing it here
+# produces the same runtime as a full rebuild while keeping the dependency set
+# identical to the already-validated image (no version drift).
+#
+# Use the main Dockerfile whenever dependencies must change.
+
+ARG SPEECH_DELTA_BASE=road-agent-dgx-speech:tts-20260915
+FROM ${SPEECH_DELTA_BASE}
+
+COPY --chown=speech:speech app ./app

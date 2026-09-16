@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$ROOT/../.." && pwd)"
 COMPOSE="$ROOT/compose.yaml"
 PUBLIC_COMPOSE="$ROOT/compose.public.yaml"
+TTS_OMNI_COMPOSE="$ROOT/compose.tts-omni-candidate.yaml"
 ENV_FILE="$ROOT/.env"
 MODEL_STACK_DIR="${MODEL_STACK_DIR:-/home/whtc/workspace/projects/model-serving}"
 MODEL_ROOT="${MODEL_ROOT:-/home/whtc/models}"
@@ -27,6 +28,12 @@ public_compose() {
   ROADAGENT_PUBLIC_DB_ACCESS_FILE="$PUBLIC_DB_ACCESS_FILE" \
     docker compose --env-file "$ENV_FILE" --project-directory "$PROJECT_ROOT" \
       -f "$COMPOSE" -f "$PUBLIC_COMPOSE" "$@"
+}
+
+tts_omni_compose() {
+  docker compose --project-name road-agent-tts-omni --env-file "$ENV_FILE" \
+    --project-directory "$PROJECT_ROOT" -f "$TTS_OMNI_COMPOSE" \
+    --profile tts-candidate "$@"
 }
 
 wait_http() {
@@ -110,11 +117,24 @@ ensure_qwen() {
   wait_http "$QWEN_HEALTH_URL/health" 1200
 }
 
+ensure_tts_omni() {
+  local engine
+  engine="$(sed -n 's/^SPEECH_TTS_ENGINE=//p' "$ENV_FILE" | tail -n 1)"
+  [[ "$engine" == "vllm-omni" ]] || return 0
+  [[ -f "$MODEL_ROOT/Qwen--Qwen3-TTS-12Hz-1.7B-CustomVoice/.deployment-manifest.json" ]] || {
+    echo "validated Qwen3-TTS 1.7B snapshot is missing" >&2
+    exit 1
+  }
+  tts_omni_compose up -d tts-omni-candidate
+  wait_container_healthy road-agent-tts-omni-candidate 1200
+}
+
 start_base_stack() {
   require_runtime_files
   python3 "$ROOT/release_ops.py" guard-live
   ensure_network
   ensure_qwen
+  ensure_tts_omni
   compose up -d
   wait_http "http://127.0.0.1:18080/" 1200
   wait_container_healthy road-agent-dgx-speech 1800
@@ -125,6 +145,7 @@ start_public_prerequisites() {
   python3 "$ROOT/release_ops.py" guard-live
   ensure_network
   ensure_qwen
+  ensure_tts_omni
   compose up -d speech-service
   wait_container_healthy road-agent-dgx-speech 1800
 }
@@ -268,6 +289,7 @@ case "${1:-status}" in
   status)
     docker ps -a --filter name=road-agent-dgx --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
     docker ps -a --filter name=model-serving-qwen --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+    docker ps -a --filter name=road-agent-tts-omni-candidate --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
     if [[ -f "$PUBLIC_ENABLED_FILE" ]]; then
       tailscale funnel status 2>&1 || true
     fi
@@ -305,6 +327,9 @@ case "${1:-status}" in
       case "$2" in
         public-backend|public-frontend)
           public_compose --profile public logs --tail 200 "$2"
+          ;;
+        tts-omni-candidate)
+          tts_omni_compose logs --tail 200 "$2"
           ;;
         *)
           compose logs --tail 200 "$2"
@@ -355,6 +380,7 @@ case "${1:-status}" in
       stop_public_runtime
     fi
     compose down --remove-orphans
+    tts_omni_compose down
     ;;
   *)
     echo "usage: $0 [preflight|download-models|build|up|status|smoke|db-preflight|db-backup|db-migrate|db-verify|db-restore|db-switch-stage|db-switch-verify|db-switch-prepare|db-switch-provision-public|db-switch-activate|db-switch-rollback|logs|serve|serve-off|public-auth-set|public-on|public-off|public-status|public-db-access-verify|public-db-access-grants|down]" >&2

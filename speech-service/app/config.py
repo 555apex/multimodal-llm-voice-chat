@@ -31,6 +31,13 @@ class Settings:
     tts_volume: str
     tts_pitch: str
     max_tts_characters: int
+    tts_engine: str = "standard"
+    tts_service_url: str = ""
+    tts_service_model: str = ""
+    tts_api_key: str = "EMPTY"
+    tts_sample_rate: int = 24000
+    tts_reference_audio: str = ""
+    tts_reference_text: str = ""
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -68,4 +75,11 @@ class Settings:
             tts_volume=os.getenv("SPEECH_TTS_VOLUME", "+0%"),
             tts_pitch=os.getenv("SPEECH_TTS_PITCH", "+0Hz"),
             max_tts_characters=_positive_int("SPEECH_MAX_TTS_CHARACTERS", 500),
+            tts_engine=os.getenv("SPEECH_TTS_ENGINE", "standard").strip().lower(),
+            tts_service_url=os.getenv("SPEECH_TTS_SERVICE_URL", "").strip().rstrip("/"),
+            tts_service_model=os.getenv("SPEECH_TTS_SERVICE_MODEL", "").strip(),
+            tts_api_key=os.getenv("SPEECH_TTS_API_KEY", "EMPTY").strip(),
+            tts_sample_rate=_positive_int("SPEECH_TTS_SAMPLE_RATE", 24000),
+            tts_reference_audio=os.getenv("SPEECH_TTS_REFERENCE_AUDIO", "").strip(),
+            tts_reference_text=os.getenv("SPEECH_TTS_REFERENCE_TEXT", "").strip(),
         )

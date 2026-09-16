@@ -4,6 +4,9 @@ export interface SpeechCapabilities {
   ttsStreamingAvailable?: boolean
   asrModel?: string
   ttsVoice?: string
+  ttsEngine?: string
+  ttsModel?: string
+  ttsSampleRate?: number
   maxRecordingSeconds: number
   maxAudioBytes: number
 }

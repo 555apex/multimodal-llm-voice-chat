@@ -92,6 +92,32 @@ def test_returns_mp3_from_local_tts_engine() -> None:
         assert response.headers["content-type"] == "audio/mpeg"
         assert response.content == b"ID3-fake-mp3"
 
+
+def test_tts_normalizes_markup_and_invalid_characters_before_inference() -> None:
+    class CapturingTts:
+        received = ""
+        def load(self): return None
+        async def synthesize(self, text):
+            self.received = text
+            return b"ID3-clean"
+
+    engine = CapturingTts()
+    with TestClient(create_app(settings(), FakeAsr(), engine, load_model=False)) as test_client:
+        response = test_client.post(
+            "/v1/tts/speech",
+            json={"text": "查看[路况](https://example.test)。\ufffd **正常**。"},
+        )
+        assert response.status_code == 200
+        assert engine.received == "查看路况。正常。"
+
+
+def test_health_reports_actual_tts_runtime() -> None:
+    with client() as test_client:
+        health = test_client.get("/health/ready").json()
+        assert health["ttsEngine"] == "standard"
+        assert health["ttsSampleRate"] == 24000
+        assert health["ttsQueue"] == {"active": 0, "waiting": 0, "capacity": 1}
+
 def test_tts_load_failure_keeps_asr_available():
     class FailedTts(FakeTts):
         def load(self):raise RuntimeError('TTS unavailable')

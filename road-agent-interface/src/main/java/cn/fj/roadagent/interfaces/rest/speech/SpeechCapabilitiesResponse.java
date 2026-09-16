@@ -9,7 +9,10 @@ public record SpeechCapabilitiesResponse(
         String ttsVoice,
         int maxRecordingSeconds,
         long maxAudioBytes,
-        boolean ttsStreamingAvailable
+        boolean ttsStreamingAvailable,
+        String ttsEngine,
+        String ttsModel,
+        int ttsSampleRate
 ) {
     static SpeechCapabilitiesResponse from(SpeechCapabilities capabilities) {
         return new SpeechCapabilitiesResponse(
@@ -19,7 +22,10 @@ public record SpeechCapabilitiesResponse(
                 capabilities.ttsVoice(),
                 capabilities.maxRecordingSeconds(),
                 capabilities.maxAudioBytes(),
-                capabilities.ttsStreamingAvailable()
+                capabilities.ttsStreamingAvailable(),
+                capabilities.ttsEngine(),
+                capabilities.ttsModel(),
+                capabilities.ttsSampleRate()
         );
     }
 }

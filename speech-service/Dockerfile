@@ -1,11 +1,16 @@
 ARG SPEECH_BASE_IMAGE=nvcr.io/nvidia/pytorch@sha256:d724ba5b68075cd3b96eefbc510a45d36e60dd16fd70b217708625f1f4b37bc1
 ARG TEST_BASE_IMAGE=dockerproxy.net/library/python:3.12-slim
+# The default PyPI endpoint is intermittently unreachable from this DGX and has
+# served incomplete version lists (starlette>=0.46.0 reported as "none"), which
+# breaks dependency resolution. Default to a reachable mirror; override to switch.
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 
 FROM ${SPEECH_BASE_IMAGE} AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=${PIP_INDEX_URL} \
     SPEECH_ASR_DOWNLOAD_ROOT=/models
 
 WORKDIR /app
@@ -45,7 +50,8 @@ FROM ${TEST_BASE_IMAGE} AS test
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_INDEX_URL=${PIP_INDEX_URL}
 
 WORKDIR /app
 

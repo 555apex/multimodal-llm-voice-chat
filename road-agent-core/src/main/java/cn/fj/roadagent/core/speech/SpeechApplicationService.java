@@ -62,7 +62,8 @@ public final class SpeechApplicationService implements
             return new SpeechCapabilities(
                     provider.asrAvailable(), provider.ttsAvailable(),
                     provider.asrModel(), provider.ttsVoice(),
-                    maxRecordingSeconds, maxAudioBytes, provider.ttsStreamingAvailable()
+                    maxRecordingSeconds, maxAudioBytes, provider.ttsStreamingAvailable(),
+                    provider.ttsEngine(), provider.ttsModel(), provider.ttsSampleRate()
             );
         } catch (RuntimeException exception) {
             return unavailable();

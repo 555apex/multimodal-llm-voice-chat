@@ -6,9 +6,16 @@ public record SpeechProviderCapabilities(
         boolean ttsAvailable,
         String asrModel,
         String ttsVoice,
-        boolean ttsStreamingAvailable
+        boolean ttsStreamingAvailable,
+        String ttsEngine,
+        String ttsModel,
+        int ttsSampleRate
 ) {
     public SpeechProviderCapabilities(boolean asr, boolean tts, String model, String voice) {
-        this(asr, tts, model, voice, false);
+        this(asr, tts, model, voice, false, null, null, 0);
+    }
+
+    public SpeechProviderCapabilities(boolean asr, boolean tts, String model, String voice, boolean streaming) {
+        this(asr, tts, model, voice, streaming, null, null, 0);
     }
 }

@@ -3,9 +3,10 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 import asyncio
 import logging
-import os
 import base64
 import json
+import time
+import threading
 from uuid import UUID
 from typing import AsyncIterator
 
@@ -16,6 +17,7 @@ from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings
+from .text_processing import normalize_speech_text
 from .engines import (
     AsrEngine,
     FasterWhisperAsrEngine,
@@ -48,9 +50,12 @@ def create_app(
 ) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
     resolved_asr = asr_engine or FasterWhisperAsrEngine(resolved_settings)
-    if tts_engine is None and os.getenv('SPEECH_TTS_ENGINE') == 'cuda-graph':
+    if tts_engine is None and resolved_settings.tts_engine == 'cuda-graph':
         from .streaming_tts import StreamingTtsEngine
         tts_engine = StreamingTtsEngine(resolved_settings)
+    if tts_engine is None and resolved_settings.tts_engine == 'vllm-omni':
+        from .omni_tts import VllmOmniTtsEngine
+        tts_engine = VllmOmniTtsEngine(resolved_settings)
     resolved_tts = tts_engine or Qwen3TtsEngine(resolved_settings)
 
     @asynccontextmanager
@@ -69,8 +74,9 @@ def create_app(
             except Exception:
                 LOGGER.exception('ASR loading failed')
             LOGGER.info(
-                "Loading Qwen3-TTS model=%s device=%s dtype=%s voice=%s",
-                resolved_settings.tts_model_path,
+                "Loading TTS engine=%s model=%s device=%s dtype=%s voice=%s",
+                getattr(resolved_tts, "engine_name", resolved_settings.tts_engine),
+                getattr(resolved_tts, "model_name", resolved_settings.tts_model_path),
                 resolved_settings.tts_device,
                 resolved_settings.tts_dtype,
                 resolved_settings.tts_voice,
@@ -107,6 +113,8 @@ def create_app(
     application.state.tts_ready = False
     application.state.asr_queue = InferenceQueue(resolved_settings.asr_max_concurrency)
     application.state.tts_queue = InferenceQueue(resolved_settings.tts_max_concurrency)
+    application.state.tts_stream_active = 0
+    application.state.tts_stream_waiting = 0
 
     @application.get("/health/live")
     async def live() -> dict[str, str]:
@@ -124,6 +132,14 @@ def create_app(
             "ttsStreamingAvailable": tts_ready and hasattr(resolved_tts, 'stream'),
             "asrModel": resolved_settings.asr_model,
             "ttsVoice": resolved_settings.tts_voice,
+            "ttsEngine": getattr(resolved_tts, "engine_name", resolved_settings.tts_engine),
+            "ttsModel": getattr(resolved_tts, "model_name", resolved_settings.tts_model_path),
+            "ttsSampleRate": getattr(resolved_tts, "sample_rate", resolved_settings.tts_sample_rate),
+            "ttsQueue": {
+                "active": application.state.tts_stream_active,
+                "waiting": application.state.tts_stream_waiting + len(application.state.tts_queue.jobs),
+                "capacity": resolved_settings.tts_max_concurrency,
+            },
         }
 
     @application.post("/v1/asr/transcriptions")
@@ -163,12 +179,14 @@ def create_app(
     @application.post("/v1/tts/speech")
     async def synthesize(body: TtsRequest, request: Request) -> Response:
         if not application.state.tts_ready: raise HTTPException(503, "TTS is unavailable")
-        text = body.text.strip()
+        normalized = normalize_speech_text(body.text)
+        text = normalized.text
         if not text:
             raise HTTPException(status_code=400, detail="Text is empty")
         if len(text) > resolved_settings.max_tts_characters:
             raise HTTPException(status_code=413, detail="Text is too long")
         try:
+            started_at = time.monotonic()
             async def generate(cancelled):
                 if getattr(resolved_tts, 'supports_cancellation', False):
                     return await resolved_tts.synthesize(text, cancelled=cancelled)
@@ -178,6 +196,12 @@ def create_app(
                 try:request_id=str(UUID(request_id))
                 except ValueError:raise HTTPException(400,'Invalid speech request id')
             audio = await application.state.tts_queue.run(generate, request, request_id)
+            LOGGER.info(
+                "TTS completed engine=%s raw_chars=%d clean_chars=%d replacements=%d elapsed_ms=%d",
+                getattr(resolved_tts, "engine_name", resolved_settings.tts_engine),
+                len(body.text), len(text), normalized.replacements,
+                round((time.monotonic() - started_at) * 1000),
+            )
         except HTTPException:
             raise
         except Exception as exception:
@@ -194,24 +218,66 @@ def create_app(
         application.state.tts_queue.cancel(str(request_id))
 
     @application.post('/v1/tts/speech/stream')
-    async def stream_speech(request: TtsRequest):
-        text=request.text.strip()
+    async def stream_speech(body: TtsRequest, request: Request):
+        if not application.state.tts_ready:
+            raise HTTPException(503, 'TTS is unavailable')
+        normalized = normalize_speech_text(body.text)
+        text=normalized.text
         if not text: raise HTTPException(400, 'Text is empty')
         if len(text)>resolved_settings.max_tts_characters: raise HTTPException(413, 'Text is too long')
         if not hasattr(resolved_tts, 'stream'): raise HTTPException(501, 'Streaming TTS is unavailable')
         def event(name, data):
             return 'event: '+name+'\ndata: '+json.dumps(data,separators=(',',':'))+'\n\n'
         async def audio():
-            yield event('audio.start', {'sampleRate':24000,'channels':1,'format':'s16le'})
+            application.state.tts_stream_waiting += 1
+            acquired = False
+            cancelled = threading.Event()
+            started_at = time.monotonic()
+            first_chunk_at = None
             sequence=0
             try:
-                async for pcm in resolved_tts.stream(text):
+                await asyncio.wait_for(application.state.tts_semaphore.acquire(), timeout=30)
+                acquired = True
+                application.state.tts_stream_waiting -= 1
+                application.state.tts_stream_active += 1
+                sample_rate = getattr(resolved_tts, 'sample_rate', resolved_settings.tts_sample_rate)
+                yield event('audio.start', {'sampleRate':sample_rate,'channels':1,'format':'s16le'})
+                stream = resolved_tts.stream(text, cancelled=cancelled) \
+                    if getattr(resolved_tts, 'supports_cancellation', False) else resolved_tts.stream(text)
+                async for pcm in stream:
+                    if await request.is_disconnected():
+                        cancelled.set()
+                        return
+                    if first_chunk_at is None:
+                        first_chunk_at = time.monotonic()
                     yield event('audio.chunk', {'sequence':sequence,'pcm':base64.b64encode(pcm).decode()})
                     sequence+=1
+                if sequence < 1:
+                    raise RuntimeError('TTS model returned no PCM audio')
                 yield event('audio.completed', {'chunks':sequence})
+                LOGGER.info(
+                    "TTS stream completed engine=%s raw_chars=%d clean_chars=%d replacements=%d "
+                    "first_chunk_ms=%s elapsed_ms=%d chunks=%d",
+                    getattr(resolved_tts, "engine_name", resolved_settings.tts_engine),
+                    len(body.text), len(text), normalized.replacements,
+                    round((first_chunk_at - started_at) * 1000) if first_chunk_at else "none",
+                    round((time.monotonic() - started_at) * 1000), sequence,
+                )
+            except asyncio.TimeoutError:
+                yield event('audio.failed', {'message':'语音服务繁忙，请稍后重试'})
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
             except Exception:
                 LOGGER.exception('Streaming TTS failed')
                 yield event('audio.failed', {'message':'语音合成中断，请重试'})
+            finally:
+                cancelled.set()
+                if not acquired:
+                    application.state.tts_stream_waiting = max(0, application.state.tts_stream_waiting - 1)
+                else:
+                    application.state.tts_stream_active = max(0, application.state.tts_stream_active - 1)
+                    application.state.tts_semaphore.release()
         return StreamingResponse(audio(),media_type='text/event-stream',headers={'Cache-Control':'no-store','X-Accel-Buffering':'no'})
 
     return application

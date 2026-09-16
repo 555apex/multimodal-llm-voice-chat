@@ -1,4 +1,34 @@
-# CosyVoice3 DGX candidate (not enabled in production)
+# DGX streaming TTS candidates (not enabled in production)
+
+The selection order is Qwen3-TTS 1.7B CustomVoice first, then CosyVoice3 only
+if Qwen fails the release gate. Production remains on Qwen3-TTS 0.6B until a
+candidate passes.
+
+## Qwen3-TTS 1.7B / vLLM-Omni
+
+The candidate uses the official multi-architecture
+`vllm/vllm-omni:v0.28.0` image, Qwen3-TTS 1.7B CustomVoice, Serena, explicit
+Chinese input and raw 24 kHz mono PCM streaming. On DGX the image may be pulled
+through `docker.m.daocloud.io`; record the resulting image digest before use.
+
+Start only the isolated candidate on loopback port 18092:
+
+```bash
+docker compose --project-name road-agent-tts-omni \
+  --project-directory /home/whtc/workspace/projects/road-agent-dgx \
+  -f deploy/dgx/compose.tts-omni-candidate.yaml --profile tts-candidate \
+  up -d tts-omni-candidate
+python3 deploy/dgx/tts-candidate/bench-omni.py \
+  --output /home/whtc/backups/roadagent/tts-20260915/validation/qwen17-benchmark.json
+```
+
+The short gate is 10 single requests plus 10 dual-user request pairs. Reject if
+first-audio P95 exceeds 3 seconds, any RTF exceeds 0.8, output is invalid, or the
+simulated playback starvation exceeds 300 milliseconds, or the existing LLM/ASR
+becomes unstable. Stop the candidate after the benchmark; do
+not change production environment values before the report is reviewed.
+
+## CosyVoice3 fallback
 
 Pinned upstream source: `QwenAudio/CosyVoice@074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc`.
 Pinned weights: `FunAudioLLM/Fun-CosyVoice3-0.5B-2512@29e01c4e8d000f4bcd70751be16fa94bf3d85a18`.

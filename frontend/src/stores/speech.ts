@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { fetchSpeechCapabilities, synthesizeSpeech } from '../api/speechApi'
 import { splitSpeechText } from '../utils/speechText'
-import { streamingSpeechSegments } from '../utils/speechText'
 import { PcmSpeechPlayer, receiveSpeech } from '../utils/pcmSpeech'
 import type { SpeechCapabilities, SpeechPlaybackStatus } from '../types/speech'
 
@@ -233,26 +232,24 @@ export const useSpeechStore = defineStore('speech', {
           activePcm = player
           await player.open()
           if (generation !== playbackGeneration) { player.close(); return }
-          for (const text of streamingSpeechSegments(speechText)) {
-            await receiveSpeech(text, player, controller.signal)
-            if (generation !== playbackGeneration) return
-          }
+          await receiveSpeech(speechText, player, controller.signal)
+          if (generation !== playbackGeneration) return
           player.end()
           await player.done
           if (generation === playbackGeneration) this.finishPlayback()
           return
         }
-        // 首块就绪后立即播放；播放当前块时并行预取下一块，兼顾首句延迟和句间连续性。
-        let blob = await this.loadSegment(messageId, 0, segments[0], controller.signal)
+        let nextAudio = this.loadSegment(messageId, 0, segments[0], controller.signal)
         for (let index = 0; index < segments.length; index += 1) {
-          const nextBlob = index + 1 < segments.length
+          const blob = await nextAudio
+          if (generation !== playbackGeneration) return
+          nextAudio = index + 1 < segments.length
             ? this.loadSegment(messageId, index + 1, segments[index + 1], controller.signal)
-            : null
+            : Promise.resolve(new Blob())
+          void nextAudio.catch(() => undefined)
           await this.waitForResume()
           if (generation !== playbackGeneration) return
           await this.playBlob(blob, generation)
-          if (nextBlob) blob = await nextBlob
-          if (generation !== playbackGeneration) return
         }
         if (generation === playbackGeneration) {
           this.finishPlayback()
