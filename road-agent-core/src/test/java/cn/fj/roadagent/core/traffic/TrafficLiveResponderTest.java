@@ -72,6 +72,21 @@ class TrafficLiveResponderTest {
         assertEquals(result.assistantMessage(), result.speechText());
     }
 
+    @Test void repairsInternalProcessingNoticeAndKeepsSpeechConsistent() {
+        TestModel model = new TestModel("图表按项目规则补0，不代表实际无车。", "建议持续关注路况变化。");
+        var result = TrafficLiveResponder.respond(facts(), Map.of(), model, e -> {}, false, false, false);
+        assertEquals(1, model.repairs);
+        assertFalse(HighwayTrafficResult.internalProcessingNotice(result.assistantMessage()));
+        assertEquals(result.assistantMessage(), result.speechText());
+    }
+
+    @Test void filtersInternalWarningsButRetainsBusinessScopeWarnings() {
+        var result = new HighwayTrafficResult(TrafficQueryType.PROVINCE_OVERVIEW, "路网", "查询完成。",
+                List.of(), List.of(), List.of(), 0, 0, false, "MYSQL", Instant.EPOCH,
+                List.of("有18个小时源数据缺失，图表按项目规则补0。", "仅展示前20条路线。"), "test");
+        assertEquals(List.of("仅展示前20条路线。"), result.warnings());
+    }
+
     private static class TestModel implements ChatModelPort {
         private final String streamed;
         private final String repaired;

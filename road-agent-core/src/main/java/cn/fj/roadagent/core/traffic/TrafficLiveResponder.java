@@ -70,6 +70,9 @@ final class TrafficLiveResponder {
         if (text == null || text.isBlank() || !text.strip().matches("(?s).*[。！？!?]$")) {
             throw new IllegalArgumentException("解读为空或句子未完整结束");
         }
+        if (HighwayTrafficResult.internalProcessingNotice(text)) {
+            throw new IllegalArgumentException("解读包含内部数据处理说明，请仅解读交通事实");
+        }
         ModelFactNumberValidator.validate(text, facts);
         if (result.queryType().odQuery() && OdTrafficService.invalidClaim(text)) {
             throw new IllegalArgumentException("联系倾向不能解释为实际方向流量或概率");

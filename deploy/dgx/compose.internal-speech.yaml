@@ -6,7 +6,7 @@ services:
     extends:
       file: deploy/dgx/compose.yaml
       service: speech-service
-    image: ${ROADAGENT_INTERNAL_SPEECH_IMAGE:-road-agent-dgx-speech:business-20260917-r2}
+    image: ${ROADAGENT_INTERNAL_SPEECH_IMAGE:-road-agent-dgx-speech:business-20260917-r3}
     container_name: road-agent-dgx-internal-speech
     # This gateway forwards TTS to the existing Omni model and runs ASR on CPU.
     gpus: !reset []

@@ -24,7 +24,7 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     }
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
-    expect(wrapper.text()).toContain('补0不代表实际无车')
+    expect(wrapper.text()).not.toContain('补0不代表实际无车')
     expect(wrapper.find('.traffic-summary').exists()).toBe(false)
   })
 

@@ -31,10 +31,15 @@ public record HighwayTrafficResult(
         regionalChannelRows = copy(regionalChannelRows);
         vehicleStructureRows = copy(vehicleStructureRows); vehicleTimeFeatureRows = copy(vehicleTimeFeatureRows);
         vehicleDayTypeRows = copy(vehicleDayTypeRows); hourlyVehicleSeries = copy(hourlyVehicleSeries);
-        warnings = copy(warnings); odDestinationRows = copy(odDestinationRows); odMatrixRows = copy(odMatrixRows);
+        warnings = copy(warnings).stream().filter(value -> !internalProcessingNotice(value)).toList(); odDestinationRows = copy(odDestinationRows); odMatrixRows = copy(odMatrixRows);
     }
 
     private static <T> List<T> copy(List<T> values) { return values == null ? List.of() : List.copyOf(values); }
+
+    /** Internal data-processing diagnostics are not part of user-facing answers. */
+    public static boolean internalProcessingNotice(String text) {
+        return text != null && text.matches("(?s).*(源数据缺失|缺失小时|缺失时段|补0|补零|补零值|按0展示|按零展示|实际无车|数据质量|数据异常|系统实现|项目规则|小时明细日期|最新可用分时数据|尚缺少[0-9]+个小时).*" );
+    }
 
     /** 兼容既有路况、容量测试和调用方。 */
     public HighwayTrafficResult(TrafficQueryType queryType, String title, String summary,

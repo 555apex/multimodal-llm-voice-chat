@@ -92,6 +92,9 @@ public final class VehiclePatternService {
                     summaryRequest(facts), TrafficSummaryResponse.class
             );
             ModelFactNumberValidator.validate(response.summary(), serializeFacts(facts));
+            if (HighwayTrafficResult.internalProcessingNotice(response.summary())) {
+                throw new IllegalArgumentException("摘要包含内部数据处理说明");
+            }
             summary = response.summary();
         } catch (RuntimeException exception) {
             System.getLogger(VehiclePatternService.class.getName()).log(
@@ -100,7 +103,6 @@ public final class VehiclePatternService {
                     exception.getMessage());
             summary = deterministicSummary(facts);
         }
-        summary = appendCompletenessNotice(summary, facts);
         String traceId = query.traceId() == null || query.traceId().isBlank()
                 ? UUID.randomUUID().toString() : query.traceId();
         return HighwayTrafficResult.fromVehicleFacts(facts, summary, traceId);
@@ -245,7 +247,7 @@ public final class VehiclePatternService {
                 必须输出严格JSON对象，且只能包含summary字段。summary必须是3至5句、80至600字的连贯中文。
                 先概括所选城市的车型结构或时间规律，再点出占比最高车型、峰值时段或工作日周末差异中与本次查询有关的重点，最后给出简洁监测建议。
                 工作日字段表示5天合计，周末字段表示2天合计，不得将二者改写成日均值。
-                缺失小时和小时明细日期由Java在最终摘要中追加说明，模型不得把补0解释成该小时实际没有车辆。
+                只解读交通业务事实，不输出缺失小时、补零、数据质量或内部处理说明，不将零值推断为实际没有车辆。
                 必须直接采用结构化事实，不得重新计算、修正或补充数值，不推测事故、天气、道路原因，不输出数据异常分析，不讨论数据限制和系统实现，不使用Markdown。
                 """.strip();
         return new ModelRequest(prompt, serializeFacts(facts), List.of(), 0.1);
@@ -259,8 +261,7 @@ public final class VehiclePatternService {
         out.append("analysisDate=").append(facts.analysisDate()).append('\n');
         out.append("hourlyDataDate=").append(facts.hourlyDataDate()).append('\n');
         out.append("dataTimeAsiaShanghai=").append(TrafficTimeFormatter.asiaShanghai(facts.acquiredAt())).append('\n');
-        out.append("calculationPolicy=车型3类；24小时；工作日5天合计；周末2天合计；早高峰07至09；晚高峰17至19；缺失小时补0不代表实际无车\n");
-        out.append("missingHourCount=").append(facts.missingHourCount()).append('\n');
+        out.append("calculationPolicy=车型3类；24小时；工作日5天合计；周末2天合计；早高峰07至09；晚高峰17至19\n");
         out.append("vehicleStructureRows:\n");
         facts.structureRows().forEach(row -> out.append("- ").append(row.vehicleTypeName())
                 .append("|周通行量=").append(row.weeklyVolume())
@@ -299,21 +300,6 @@ public final class VehiclePatternService {
             second = "当前车型统计结果已完成整理，可结合下方明细查看各项运输特征。";
         }
         return first + second + "建议持续跟踪后续批次变化，为重点时段交通组织提供参考。";
-    }
-
-    private String appendCompletenessNotice(String summary, VehiclePatternFacts facts) {
-        if (facts.hourlySeries().isEmpty()) return summary;
-        StringBuilder result = new StringBuilder(summary == null ? "" : summary.trim());
-        if (facts.hourlyDataDate() != null && !facts.hourlyDataDate().equals(facts.analysisDate())) {
-            result.append(" 本次24小时折线采用所选记录内")
-                    .append(facts.hourlyDataDate().format(DATE_LABEL))
-                    .append("的最新可用分时数据。");
-        }
-        if (facts.missingHourCount() > 0) {
-            result.append(" 该分时数据尚缺少").append(facts.missingHourCount())
-                    .append("个小时，图表缺失时段统一按0展示，不代表实际无车。");
-        }
-        return result.toString();
     }
 
     private String title(TrafficQueryType type, FujianCity city, LocalDate analysisDate, boolean explicitDate) {

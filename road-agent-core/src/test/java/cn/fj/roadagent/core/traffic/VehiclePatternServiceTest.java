@@ -1,5 +1,7 @@
 package cn.fj.roadagent.core.traffic;
 
+import cn.fj.roadagent.application.traffic.HighwayTrafficResult;
+
 import cn.fj.roadagent.application.exception.BusinessRuleException;
 import cn.fj.roadagent.application.model.ModelRequest;
 import cn.fj.roadagent.application.model.ModelResponse;
@@ -65,7 +67,7 @@ class VehiclePatternServiceTest {
         assertEquals(22, facts.missingHourCount());
         var result = cn.fj.roadagent.application.traffic.HighwayTrafficResult
                 .fromVehicleFacts(facts, "测试摘要", "trace");
-        assertTrue(result.warnings().stream().anyMatch(warning -> warning.contains("补0不代表实际无车")));
+        assertTrue(result.warnings().isEmpty());
     }
 
     @Test
@@ -170,7 +172,7 @@ class VehiclePatternServiceTest {
 
         assertTrue(!result.summary().contains("999999"));
         assertTrue(result.summary().contains("最新记录"));
-        assertTrue(result.summary().contains("缺失时段统一按0展示"));
+        assertFalse(HighwayTrafficResult.internalProcessingNotice(result.summary()));
     }
 
     private VehiclePatternService service(VehicleTravelPatternSnapshot snapshot) {

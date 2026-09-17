@@ -87,7 +87,7 @@ function matrixCellStyle(value: number | null | undefined) {
       </div>
     </header>
     <p v-if="!compact && result.summary" class="traffic-summary">{{ result.summary }}</p>
-    <p v-for="warning in (odQuery ? [] : result.warnings)" :key="warning" class="scope-caption od-warning">{{ warning }}</p>
+    <p v-for="warning in (odQuery ? [] : result.warnings.filter(value => !/源数据缺失|缺失小时|缺失时段|补0|补零|按0展示|实际无车|数据质量|数据异常|系统实现|项目规则|小时明细日期|最新可用分时数据/.test(value)))" :key="warning" class="scope-caption od-warning">{{ warning }}</p>
 
     <template v-if="odQuery">
       <p class="scope-caption od-scope">分析范围：{{ odScope }} · 当前7日城市联系结构</p>

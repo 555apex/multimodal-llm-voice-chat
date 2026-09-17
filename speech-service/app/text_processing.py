@@ -102,6 +102,7 @@ def normalize_speech_text(source: str) -> NormalizedSpeechText:
             number = _chinese_number(int(number))
         return number + "组城市间联系"
     converted = re.sub(r"(?<![0-9])([0-9]{1,2}|[零一二三四五六七八九十]+)个城市对", spoken_city_pair, converted)
+    converted = converted.replace("城市对联系", "城市间联系").replace("城市对", "城市间联系")
     time_replacements = int(converted != text)
     text = converted
     replacements = text.count("\ufffd") + time_replacements
@@ -124,6 +125,13 @@ def normalize_speech_text(source: str) -> NormalizedSpeechText:
     for pattern, replacement in substitutions:
         text, count = pattern.subn(replacement, text)
         replacements += count
+
+    # Speak geographic/route connections, not pauses. Dates and clocks have
+    # already been normalized; negative numbers and ordinary lists stay intact.
+    text, count = re.subn(r"(?<=[\u4e00-\u9fff])\s*(?:->|=>|[—–－→⇒⟶➜-])\s*(?=[\u4e00-\u9fff])", "到", text)
+    replacements += count
+    text, count = re.subn(r"(?<=[A-Za-z0-9])\s*(?:->|=>|[→⇒⟶➜])\s*(?=[A-Za-z0-9])", "到", text)
+    replacements += count
 
     cleaned: list[str] = []
     for character in text:
