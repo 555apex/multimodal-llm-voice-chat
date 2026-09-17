@@ -167,7 +167,7 @@ public final class IntentPlanner {
             List<String> mentioned = mentionedCities(normalized);
             boolean changesCities = List.of("再加", "加上", "补充", "加入", "去掉", "移除", "删掉")
                     .stream().anyMatch(normalized::contains);
-            boolean changesDimension = List.of("城市对", "通道", "路线", "关键卡口", "交通枢纽")
+            boolean changesDimension = List.of("城市对", "城市间联系", "通道", "路线", "关键卡口", "交通枢纽")
                     .stream().anyMatch(normalized::contains);
             if (changesCities || changesDimension || normalized.matches("(?s).*(这些|上述|前面|这几个).*")) {
                 LinkedHashSet<String> cities = new LinkedHashSet<>(previous.selectedCities());
@@ -175,7 +175,7 @@ public final class IntentPlanner {
                 else cities.addAll(mentioned);
                 TrafficQueryType type = previousType;
                 if (normalized.contains("关键卡口") || normalized.contains("交通枢纽")) type = TrafficQueryType.REGIONAL_KEY_CHANNELS;
-                else if (normalized.contains("城市对")) type = TrafficQueryType.REGIONAL_PAIR_PRESSURE;
+                else if (normalized.contains("城市对") || normalized.contains("城市间联系")) type = TrafficQueryType.REGIONAL_PAIR_PRESSURE;
                 else if (normalized.contains("通道") || normalized.contains("路线")) type = TrafficQueryType.REGIONAL_KEY_CHANNELS;
                 String clarification = !cities.isEmpty() && cities.size() < 3
                         ? "区域交通联系分析至少需要三个城市，请再补充一个或多个福建地级市。" : null;

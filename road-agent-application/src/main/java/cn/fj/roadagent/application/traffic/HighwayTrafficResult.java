@@ -26,15 +26,23 @@ public record HighwayTrafficResult(
         List<OdMatrixRowResultItem> odMatrixRows
 ) {
     public HighwayTrafficResult {
+        title = userFacingText(title);
+        summary = userFacingText(summary);
         routeSummaries = copy(routeSummaries); segments = copy(segments); capacityRows = copy(capacityRows);
         selectedRegions = copy(selectedRegions); regionalPairRows = copy(regionalPairRows);
         regionalChannelRows = copy(regionalChannelRows);
         vehicleStructureRows = copy(vehicleStructureRows); vehicleTimeFeatureRows = copy(vehicleTimeFeatureRows);
         vehicleDayTypeRows = copy(vehicleDayTypeRows); hourlyVehicleSeries = copy(hourlyVehicleSeries);
-        warnings = copy(warnings).stream().filter(value -> !internalProcessingNotice(value)).toList(); odDestinationRows = copy(odDestinationRows); odMatrixRows = copy(odMatrixRows);
+        warnings = copy(warnings).stream().filter(value -> !internalProcessingNotice(value)).map(HighwayTrafficResult::userFacingText).toList(); odDestinationRows = copy(odDestinationRows); odMatrixRows = copy(odMatrixRows);
     }
 
     private static <T> List<T> copy(List<T> values) { return values == null ? List.of() : List.copyOf(values); }
+
+    public static String userFacingText(String text) {
+        if (text == null) return null;
+        return text.replaceAll("([0-9]+)个城市对", "$1组城市间联系")
+                .replace("城市对联系", "城市间联系").replace("城市对", "城市间联系");
+    }
 
     /** Internal data-processing diagnostics are not part of user-facing answers. */
     public static boolean internalProcessingNotice(String text) {

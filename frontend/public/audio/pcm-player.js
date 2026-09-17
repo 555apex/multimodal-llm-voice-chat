@@ -3,6 +3,7 @@ class RoadPcmPlayer extends AudioWorkletProcessor {
   constructor() {
     super(); this.queue=[]; this.offset=0; this.queued=0; this.started=false;
     this.ended=false; this.paused=false; this.frames=0; this.starved=0; this.consumed=0;
+    this.tailFrames=Math.ceil(sampleRate*.35); this.drained=false;
     this.port.onmessage=({data})=>{
       if(data.type==='chunk') { this.queue.push(data.samples); this.queued+=data.samples.length; }
       if(data.type==='end') this.ended=true;
@@ -12,6 +13,7 @@ class RoadPcmPlayer extends AudioWorkletProcessor {
   }
   process(_inputs, outputs) {
     const out=outputs[0][0]; if(!out) return true;
+    if(this.drained) return true;
     if(this.paused) return true;
     if(!this.started && (this.queued>=sampleRate*.7 || this.ended)) {
       this.started=true; this.port.postMessage({type:'playing'});
@@ -32,7 +34,14 @@ class RoadPcmPlayer extends AudioWorkletProcessor {
       this.frames=0;
     }
     // Queue exhaustion is not audible completion: the final render quantum is still buffered.
-    if(this.ended && !this.queued) {this.port.postMessage({type:'drained',renderEndTime:currentTime+out.length/sampleRate,starvedMs:this.starved/sampleRate*1000});return false;}
+    if(this.ended && !this.queued) {
+      this.tailFrames-=out.length;
+      if(this.tailFrames<=0) {
+        this.drained=true;
+        this.port.postMessage({type:'drained',renderEndTime:currentTime+out.length/sampleRate,starvedMs:this.starved/sampleRate*1000});
+      }
+    }
+    // Stay active until the main thread closes the context after audible drain.
     return true;
   }
 }

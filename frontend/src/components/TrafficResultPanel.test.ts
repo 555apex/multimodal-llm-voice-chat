@@ -183,7 +183,7 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     }
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
-    expect(wrapper.text()).toContain('城市对交通联系压力（1个城市对）')
+    expect(wrapper.text()).toContain('城市间联系压力（1组城市间联系）')
     expect(wrapper.text()).toContain('重要跨市路线通道（1条路线）')
     expect(wrapper.text()).toContain('福州市—宁德市')
     expect(wrapper.text()).toContain('22,400 辆')
@@ -202,14 +202,14 @@ describe('TrafficResultPanel MySQL highway modes', () => {
     }))
     const result: TrafficQueryResult = {
       ...base,
-      queryType: 'REGIONAL_PAIR_PRESSURE', title: '福建省九市城市对交通联系压力',
+      queryType: 'REGIONAL_PAIR_PRESSURE', title: '福建省九市城市间联系压力',
       routeSummaries: [], segments: [], regionalPairRows: rows,
       totalSegmentCount: 12, displayedSegmentCount: 5, truncated: true,
     }
 
     const wrapper = mount(TrafficResultPanel, { props: { result, compact: true } })
 
-    expect(wrapper.text()).toContain('城市对交通联系压力 Top5')
+    expect(wrapper.text()).toContain('城市间联系压力 Top5')
   })
 
   it('renders vehicle overview tables and all three chart templates', async () => {

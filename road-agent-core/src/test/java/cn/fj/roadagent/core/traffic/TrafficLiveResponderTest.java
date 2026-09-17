@@ -87,6 +87,18 @@ class TrafficLiveResponderTest {
         assertEquals(List.of("仅展示前20条路线。"), result.warnings());
     }
 
+    @Test void normalizesCityPairsInTextCardsAndSpeech() {
+        var facts = new HighwayTrafficResult(TrafficQueryType.PROVINCE_OVERVIEW, "城市对交通联系压力", "共识别22个城市对。",
+                List.of(), List.of(), List.of(), 0, 0, false, "MYSQL", Instant.EPOCH, List.of(), "test");
+        assertEquals("共识别22组城市间联系。", facts.summary());
+        assertFalse(facts.title().contains("城市对"));
+        var result = TrafficLiveResponder.respond(facts, Map.of("pairs", 22),
+                new TestModel("建议关注城市对联系压力变化。", null), e -> {}, false, false, false);
+        assertFalse(result.assistantMessage().contains("城市对"));
+        assertTrue(result.assistantMessage().contains("城市间联系"));
+        assertEquals(result.assistantMessage(), result.speechText());
+    }
+
     private static class TestModel implements ChatModelPort {
         private final String streamed;
         private final String repaired;

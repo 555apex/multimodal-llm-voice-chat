@@ -74,7 +74,7 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
             // 无关问题，限制Agent不回答
             if (intent == AgentIntent.UNSUPPORTED) {
                 completeWithoutSkill(command, sink, runId,
-                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析三市及以上的城市对联系压力与重要跨市路线、单城市目的地联系倾向和多城市联系矩阵，以及福州、厦门车型出行特征，并提供应急调度辅助。 ");
+                        "目前我支持福建普通国省干线交通态势与短时趋势研判、拥堵异常路段、指定路线状态、道路通行能力和瓶颈路线评估，也可以分析三市及以上的城市间联系压力与重要跨市路线、单城市目的地联系倾向和多城市联系矩阵，以及福州、厦门车型出行特征，并提供应急调度辅助。 ");
                 return;
             }
 

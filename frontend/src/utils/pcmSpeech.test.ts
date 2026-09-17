@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { receiveSpeech, PcmSpeechPlayer } from './pcmSpeech'
+import workletSource from '../../public/audio/pcm-player.js?raw'
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers() })
 const frame = (name: string, data: unknown) => `event: ${name}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`
 const start = frame('audio.start', { sampleRate: 24000, channels: 1, format: 's16le' })
@@ -58,6 +59,8 @@ it('waits for the last rendered sample to reach the output clock before completi
   expect(close).not.toHaveBeenCalled()
   audible = 1.21
   await vi.advanceTimersByTimeAsync(15)
+  expect(completed).toBe(false)
+  await vi.advanceTimersByTimeAsync(200)
   expect(completed).toBe(true)
   expect(close).not.toHaveBeenCalled()
   player.close()
@@ -79,4 +82,21 @@ it('cancelling during output drain cancels the timer and releases playback', asy
   player.close()
   await player.done
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it('keeps the worklet active and renders a silent tail before reporting drain once', () => {
+  const postMessage = vi.fn()
+  let Processor: any
+  class Base { port = { onmessage: null as any, postMessage } }
+  new Function('AudioWorkletProcessor', 'registerProcessor', 'sampleRate', 'currentTime', workletSource)(
+    Base, (_name: string, value: any) => { Processor = value }, 24000, 1)
+  const processor = new Processor()
+  processor.port.onmessage({ data: { type: 'chunk', samples: new Float32Array([0.5, 0.25]) } })
+  processor.port.onmessage({ data: { type: 'end' } })
+  const output = new Float32Array(128)
+  expect(processor.process([], [[output]])).toBe(true)
+  expect(Array.from(output.slice(0, 2))).toEqual([0.5, 0.25])
+  expect(postMessage.mock.calls.some(([data]) => data.type === 'drained')).toBe(false)
+  for (let i = 0; i < 80; i++) expect(processor.process([], [[new Float32Array(128)]])).toBe(true)
+  expect(postMessage.mock.calls.filter(([data]) => data.type === 'drained')).toHaveLength(1)
 })

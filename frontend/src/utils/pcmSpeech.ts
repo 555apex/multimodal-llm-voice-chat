@@ -11,7 +11,7 @@ export class PcmSpeechPlayer {
   readonly done = new Promise<void>((resolve) => { this.resolveDone = resolve })
   constructor(private update: (event: { type: string; level?: number; starvedMs?: number }) => void) {}
   async open() {
-    await this.context.audioWorklet.addModule('/audio/pcm-player.js')
+    await this.context.audioWorklet.addModule('/audio/pcm-player.js?v=tail-20260917-r4')
     if (this.closed) return
     this.node = new AudioWorkletNode(this.context, 'road-pcm-player', { outputChannelCount: [1] })
     this.node.port.onmessage = ({ data }) => {
@@ -56,8 +56,12 @@ export class PcmSpeechPlayer {
         ? outputTime
         : this.context.currentTime - (this.context.baseLatency || 0) - (this.context.outputLatency || 0.1)
       if (audibleTime >= renderEndTime) {
-        this.update({ type: 'ended' })
-        this.resolveDone()
+        // Output timestamps can precede the physical device/Bluetooth drain.
+        this.drainTimer = setTimeout(() => {
+          if (this.closed) return
+          this.update({ type: 'ended' })
+          this.resolveDone()
+        }, 200)
       } else {
         this.drainTimer = setTimeout(check, 15)
       }

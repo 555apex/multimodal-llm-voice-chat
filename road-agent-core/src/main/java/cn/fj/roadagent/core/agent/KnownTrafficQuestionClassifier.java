@@ -191,7 +191,7 @@ final class KnownTrafficQuestionClassifier {
             return Optional.empty();
         }
         boolean regional = containsAny(text, "区域交通联系", "跨区域交通联系", "跨市交通联系", "区域联系",
-                "跨市通道", "城市对", "城市之间的联系", "多城市交通联系");
+                "跨市通道", "城市对", "城市间联系", "城市之间的联系", "多城市交通联系");
         boolean pressure = containsAny(text, "交通压力", "承担流量", "日均流量", "日总流量", "流量较大", "流量最大", "压力最大", "交通负荷", "排行", "排名", "top");
         if (!regional && !pressure) return Optional.empty();
         if (containsAny(text, "城市和国省道", "城市与国省道", "城市、路线", "城市和路线",
@@ -201,7 +201,7 @@ final class KnownTrafficQuestionClassifier {
         if (containsAny(text, "关键卡口", "通道卡口", "卡口枢纽", "交通枢纽", "哪些卡口", "卡口排行", "交调站")) {
             return Optional.of(TrafficQueryType.REGIONAL_KEY_CHANNELS);
         }
-        if (containsAny(text, "哪些城市对", "哪个城市对", "城市对流量", "城市对压力", "城市之间压力",
+        if (containsAny(text, "哪些城市对", "哪个城市对", "城市对流量", "城市对压力", "城市间联系压力", "城市间联系流量", "城市之间压力",
                 "哪些城市", "哪个城市", "各市", "各地市", "城市排行", "城市交通压力")) {
             return Optional.of(TrafficQueryType.REGIONAL_PAIR_PRESSURE);
         }
@@ -258,7 +258,7 @@ final class KnownTrafficQuestionClassifier {
             return Optional.of("可以。城市压力表标题会按实际返回的城市数量显示，不使用与结果不符的固定标题。");
         }
         if (containsAny(text, "合并两市卡口统计") && containsAny(text, "不要把结果描述成真实od", "不描述成真实od")) {
-            return Optional.of("可以明确区分：跨区域交通联系分析按路线起终点建立无方向城市对，需选择至少三个福建地级市；结果展示城市对和重要跨市路线，不描述为真实OD、净流入或净流出。");
+            return Optional.of("可以明确区分：跨区域交通联系分析按路线起终点建立无方向城市间联系，需选择至少三个福建地级市；结果展示城市间联系和重要跨市路线，不描述为真实OD、净流入或净流出。");
         }
         if (containsAny(text, "正在更新但还没有完整数据", "请不要用不完整记录作答")) {
             return Optional.of("可以。请继续说明要查询的交通范围；系统只会使用已完整发布的交通快照回答。 ");

@@ -47,7 +47,7 @@ const structureRows = computed(() => props.result.vehicleStructureRows ?? [])
 const timeFeatureRows = computed(() => props.result.vehicleTimeFeatureRows ?? [])
 const dayTypeRows = computed(() => props.result.vehicleDayTypeRows ?? [])
 const hourlySeries = computed(() => props.result.hourlyVehicleSeries ?? [])
-const pairSectionTitle = computed(() => rankedSectionTitle('城市对交通联系压力', regionalPairRows.value.length, 5, '个城市对'))
+const pairSectionTitle = computed(() => rankedSectionTitle('城市间联系压力', regionalPairRows.value.length, 5, '组城市间联系'))
 const channelSectionTitle = computed(() => rankedSectionTitle('重要跨市路线通道', regionalChannelRows.value.length, 10, '条路线'))
 const eyebrow = computed(() => odQuery.value ? '城市目的地联系倾向' : regionalQuery.value ? '福建跨区域交通联系'
   : vehicleQuery.value ? `${props.result.analysisCity ?? ''}车型出行特征` : '福建普通国省干线')
@@ -130,7 +130,7 @@ function matrixCellStyle(value: number | null | undefined) {
       <section v-if="regionalPairRows.length" class="traffic-data-section">
         <h3 class="traffic-section-heading">{{ pairSectionTitle }}</h3>
         <p v-if="(result.totalRegionalPairCount ?? 0) > regionalPairRows.length" class="scope-caption">
-          共{{ result.totalRegionalPairCount }}个城市对，当前展示7日总流量较高的前{{ regionalPairRows.length }}个。
+          共{{ result.totalRegionalPairCount }}组城市间联系，当前展示7日总流量较高的前{{ regionalPairRows.length }}组。
         </p>
         <div class="traffic-table-wrap">
           <table class="traffic-table regional-pair-table">
