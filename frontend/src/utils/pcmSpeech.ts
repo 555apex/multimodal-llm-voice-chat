@@ -6,6 +6,7 @@ export class PcmSpeechPlayer {
   private closed = false
   private queuedSamples = 0
   private capacityWaiters: Array<() => void> = []
+  private drainTimer?: ReturnType<typeof setTimeout>
   private resolveDone!: () => void
   readonly done = new Promise<void>((resolve) => { this.resolveDone = resolve })
   constructor(private update: (event: { type: string; level?: number; starvedMs?: number }) => void) {}
@@ -20,8 +21,11 @@ export class PcmSpeechPlayer {
         if (this.queuedSamples < 24000 * 12) this.capacityWaiters.splice(0).forEach(resolve => resolve())
         return
       }
+      if (data.type === 'drained') {
+        this.waitForAudibleEnd(data.renderEndTime)
+        return
+      }
       this.update(data)
-      if (data.type === 'ended') this.resolveDone()
     }
     this.node.connect(this.context.destination)
     await this.context.resume()
@@ -43,10 +47,28 @@ export class PcmSpeechPlayer {
     this.queuedSamples += raw.length / 2
   }
   end() { this.node?.port.postMessage({ type: 'end' }) }
+  private waitForAudibleEnd(renderEndTime: number) {
+    const check = () => {
+      if (this.closed) return
+      const timestamp = this.context.getOutputTimestamp?.()
+      const outputTime = timestamp?.contextTime
+      const audibleTime = typeof outputTime === 'number' && outputTime > 0
+        ? outputTime
+        : this.context.currentTime - (this.context.baseLatency || 0) - (this.context.outputLatency || 0.1)
+      if (audibleTime >= renderEndTime) {
+        this.update({ type: 'ended' })
+        this.resolveDone()
+      } else {
+        this.drainTimer = setTimeout(check, 15)
+      }
+    }
+    check()
+  }
   pause() { this.node?.port.postMessage({ type: 'pause' }) }
   resume() { this.node?.port.postMessage({ type: 'resume' }) }
   close() {
     this.closed = true
+    if (this.drainTimer !== undefined) clearTimeout(this.drainTimer)
     this.capacityWaiters.splice(0).forEach(resolve => resolve())
     this.node?.disconnect()
     void this.context.close().catch(() => undefined)

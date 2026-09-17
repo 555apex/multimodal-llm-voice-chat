@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { speechSummary, splitSpeechText } from './speechText'
 
 describe('speech text segmentation', () => {
+  it('never cuts inside a city-pair business term at the length limit', () => {
+    const source = '甲'.repeat(46) + '城市对和跨市路线。'
+    const segments = splitSpeechText(source)
+    expect(segments.join('')).toBe(source)
+    expect(segments.some(segment => segment.includes('城市对'))).toBe(true)
+  })
   it('keeps Chinese semantic boundaries', () => {
     const segments = splitSpeechText(
       '思明区当前存在拥堵路段，并伴有局部缓行。重点路段包括成功大道和嘉禾路。建议提前规划路线并预留通行时间。详细数据请查看页面。',

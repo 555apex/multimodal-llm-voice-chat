@@ -1,6 +1,7 @@
 const SENTENCE_END = /[^。！？；：\n]+[。！？；：]?/g
 const SOFT_END = /[，、,]\s*/g
 const PROTECTED_TOKEN = /[A-Za-z]{1,4}\d{1,5}(?:[+-]\d+(?:\.\d+)?)?|\d{1,2}:\d{2}(?::\d{2})?|[+-]?\d+(?:\.\d+)?\s*(?:%|mm|cm|km|m|公里|米|毫米|厘米|小时|分钟|秒)/gi
+const BUSINESS_WORDS = /城市对|跨市路线|联系倾向|国省干线|通行能力|交通运行|城市间联系/g
 
 export function speechSummary(source: string): string {
   const text = source.replace(/\s+/g, ' ').trim()
@@ -43,6 +44,7 @@ function splitLongSentence(sentence: string, maximum: number): string[] {
   let remaining = sentence
   while (remaining.length > maximum) {
     const protectedSpans = [...remaining.matchAll(PROTECTED_TOKEN)].map(match => [match.index!, match.index! + match[0].length])
+    protectedSpans.push(...[...remaining.matchAll(BUSINESS_WORDS)].map(match => [match.index!, match.index! + match[0].length]))
     const boundaries = [...remaining.slice(0, maximum + 1).matchAll(SOFT_END)]
       .map(match => match.index! + match[0].length)
       .filter(position => position >= 30 && !protectedSpans.some(([start, end]) => start < position && position < end))

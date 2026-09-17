@@ -31,7 +31,8 @@ class RoadPcmPlayer extends AudioWorkletProcessor {
       this.port.postMessage({type:'consumed',samples:this.consumed});this.consumed=0;
       this.frames=0;
     }
-    if(this.ended && !this.queued) {this.port.postMessage({type:'ended',starvedMs:this.starved/sampleRate*1000});return false;}
+    // Queue exhaustion is not audible completion: the final render quantum is still buffered.
+    if(this.ended && !this.queued) {this.port.postMessage({type:'drained',renderEndTime:currentTime+out.length/sampleRate,starvedMs:this.starved/sampleRate*1000});return false;}
     return true;
   }
 }
