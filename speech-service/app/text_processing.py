@@ -96,13 +96,6 @@ def normalize_speech_text(source: str) -> NormalizedSpeechText:
     original = source or ""
     text = unicodedata.normalize("NFKC", unescape(original))
     converted = _normalize_times(text)
-    def spoken_city_pair(match):
-        number = match[1]
-        if number.isdigit() and int(number) < 100:
-            number = _chinese_number(int(number))
-        return number + "组城市间联系"
-    converted = re.sub(r"(?<![0-9])([0-9]{1,2}|[零一二三四五六七八九十]+)个城市对", spoken_city_pair, converted)
-    converted = converted.replace("城市对联系", "城市间联系").replace("城市对", "城市间联系")
     time_replacements = int(converted != text)
     text = converted
     replacements = text.count("\ufffd") + time_replacements

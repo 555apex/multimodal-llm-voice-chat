@@ -81,17 +81,17 @@ def test_business_words_are_not_cut_at_length_boundary():
     text = '甲' * 31 + '城市对和跨市路线。'
     chunks = semantic_segments(text, maximum=33, minimum=16)
     assert ''.join(chunks) == normalize_speech_text(text).text
-    assert any('城市间联系' in chunk for chunk in chunks)
+    assert any('城市对' in chunk for chunk in chunks)
 
 
-def test_city_pair_count_uses_an_equivalent_spoken_business_phrase():
-    assert normalize_speech_text('共识别22个城市对和32条跨市路线。').text == '共识别二十二组城市间联系和32条跨市路线。'
-    assert normalize_speech_text('二十二个城市对。').text == '二十二组城市间联系。'
-    assert normalize_speech_text('城市对联系压力。').text == '城市间联系压力。'
+def test_city_pair_terms_are_spoken_without_rewording():
+    assert normalize_speech_text('共识别22个城市对和32条跨市路线。').text == '共识别22个城市对和32条跨市路线。'
+    assert normalize_speech_text('二十二个城市对。').text == '二十二个城市对。'
+    assert normalize_speech_text('城市对联系压力。').text == '城市对联系压力。'
 
 
 def test_repeated_city_pairs_and_geographic_connections():
-    assert normalize_speech_text('22个城市对，这些城市对联系紧密。').text == '二十二组城市间联系，这些城市间联系紧密。'
+    assert normalize_speech_text('22个城市对，这些城市对联系紧密。').text == '22个城市对，这些城市对联系紧密。'
     for symbol in ('—', '–', '-', '→', '->', '⇒', '⟶', '➜'):
         assert normalize_speech_text(f'南平市{symbol}宁德市。').text == '南平市到宁德市。'
     assert normalize_speech_text('G357 东山-泸水，FJ014->FJ023。').text == 'G357 东山到泸水，FJ014到FJ023。'
