@@ -168,6 +168,8 @@ public final class DispatchApplicationService implements
     }
 
     private Map<String, EventSeverity> assessSeverities(List<EmergencyWorkflowView> items) {
+        List<String> eventIds = items.stream().map(item -> item.event().eventId()).toList();
+        eventPort.findSeverityAssessments(eventIds).forEach(severityAssessmentCache::putIfAbsent);
         List<EmergencyEvent> missing = items.stream().map(EmergencyWorkflowView::event)
                 .filter(event -> !severityAssessmentCache.containsKey(event.eventId())).toList();
         if (!missing.isEmpty()) {
@@ -194,6 +196,10 @@ public final class DispatchApplicationService implements
                 // 研判服务不得阻断应急待办清单，下方使用保守兜底。
             }
             missing.forEach(event -> severityAssessmentCache.putIfAbsent(event.eventId(), fallbackSeverity(event)));
+            missing.forEach(event -> {
+                try { eventPort.saveSeverityAssessment(event.eventId(), severityAssessmentCache.get(event.eventId())); }
+                catch (RuntimeException ignored) { /* 写回失败不阻断应急待办。 */ }
+            });
         }
         Map<String, EventSeverity> result = new LinkedHashMap<>();
         items.forEach(item -> result.put(item.event().eventId(), severityAssessmentCache.get(item.event().eventId())));
@@ -476,6 +482,8 @@ public final class DispatchApplicationService implements
             if (!eventPort.correctEventType(current.eventId(), previousType, nextType)) {
                 throw conflict("EVENT_TYPE_CONFLICT", "事件类型已被其他操作修改");
             }
+            eventPort.clearSeverityAssessment(current.eventId());
+            severityAssessmentCache.remove(current.eventId());
             EmergencyEvent correctedEvent = withType(plan.event(), nextType);
             DispatchPlan revision = rejected.nextRevision(
                     correctedEvent, now, requireActiveResponsePlan(nextType).snapshot());

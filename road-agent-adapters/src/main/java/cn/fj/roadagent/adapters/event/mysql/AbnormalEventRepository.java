@@ -4,6 +4,7 @@ import cn.fj.roadagent.application.port.AbnormalEventPort;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.WorkflowStage;
 import cn.fj.roadagent.domain.dispatch.UnclassifiedEmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.EventSeverity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -14,6 +15,8 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.regex.Pattern;
 
 /**
@@ -90,6 +93,32 @@ public class AbnormalEventRepository implements AbnormalEventPort {
                          w.stage_entered_at DESC, e.c_no DESC
                 LIMIT ?
                 """.formatted(ELIGIBLE, stagePredicate(stage)), this::mapEvent, boundedLimit);
+    }
+
+    @Override
+    public Map<String, EventSeverity> findSeverityAssessments(List<String> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) return Map.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(eventIds.size(), "?"));
+        Map<String, EventSeverity> result = new LinkedHashMap<>();
+        jdbcTemplate.query("SELECT c_no,agent_severity FROM w_lw_incident WHERE c_no IN ("
+                        + placeholders + ") AND agent_severity IN ('GENERAL','LARGER','MAJOR','ESPECIALLY_MAJOR')",
+                (org.springframework.jdbc.core.RowCallbackHandler) rs -> result.put(
+                        rs.getString("c_no"), EventSeverity.valueOf(rs.getString("agent_severity"))),
+                eventIds.toArray());
+        return Map.copyOf(result);
+    }
+
+    @Override
+    public boolean saveSeverityAssessment(String eventId, EventSeverity severity) {
+        return jdbcTemplate.update("""
+                UPDATE w_lw_incident SET agent_severity = ?
+                WHERE c_no = ? AND c_type = '4' AND deleted = 0 AND agent_severity IS NULL
+                """, severity.name(), eventId) == 1;
+    }
+
+    @Override
+    public void clearSeverityAssessment(String eventId) {
+        jdbcTemplate.update("UPDATE w_lw_incident SET agent_severity = NULL WHERE c_no = ?", eventId);
     }
 
     @Override

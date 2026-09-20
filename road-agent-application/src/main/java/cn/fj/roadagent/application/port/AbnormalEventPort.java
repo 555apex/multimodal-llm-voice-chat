@@ -3,10 +3,12 @@ package cn.fj.roadagent.application.port;
 import cn.fj.roadagent.domain.dispatch.EmergencyEvent;
 import cn.fj.roadagent.domain.dispatch.WorkflowStage;
 import cn.fj.roadagent.domain.dispatch.UnclassifiedEmergencyEvent;
+import cn.fj.roadagent.domain.dispatch.EventSeverity;
 
 import java.time.Instant;
 import java.util.Optional;
 import java.util.List;
+import java.util.Map;
 
 public interface AbnormalEventPort {
     default Optional<EmergencyEvent> findById(String eventId) {
@@ -27,6 +29,16 @@ public interface AbnormalEventPort {
     default List<EmergencyEvent> findPendingForStage(WorkflowStage stage, int limit) {
         return findNextPendingForStage(stage).stream().toList();
     }
+
+    default Map<String, EventSeverity> findSeverityAssessments(List<String> eventIds) {
+        return Map.of();
+    }
+
+    default boolean saveSeverityAssessment(String eventId, EventSeverity severity) {
+        return false;
+    }
+
+    default void clearSeverityAssessment(String eventId) { }
 
     long countPending();
 
