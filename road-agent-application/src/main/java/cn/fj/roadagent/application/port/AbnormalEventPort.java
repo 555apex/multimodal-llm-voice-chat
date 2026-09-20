@@ -6,6 +6,7 @@ import cn.fj.roadagent.domain.dispatch.UnclassifiedEmergencyEvent;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 
 public interface AbnormalEventPort {
     default Optional<EmergencyEvent> findById(String eventId) {
@@ -21,6 +22,10 @@ public interface AbnormalEventPort {
 
     default Optional<EmergencyEvent> findNextPendingForStage(WorkflowStage stage) {
         return stage == WorkflowStage.LEVEL_1 ? findNextPending() : Optional.empty();
+    }
+
+    default List<EmergencyEvent> findPendingForStage(WorkflowStage stage, int limit) {
+        return findNextPendingForStage(stage).stream().toList();
     }
 
     long countPending();

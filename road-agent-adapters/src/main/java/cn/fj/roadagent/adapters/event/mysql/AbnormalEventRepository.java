@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.List;
 import java.util.regex.Pattern;
 
 /**
@@ -77,6 +78,18 @@ public class AbnormalEventRepository implements AbnormalEventPort {
                          w.stage_entered_at ASC, e.c_no ASC
                 LIMIT 1
                 """.formatted(ELIGIBLE, stagePredicate(stage)), this::mapEvent));
+    }
+
+    @Override
+    public List<EmergencyEvent> findPendingForStage(WorkflowStage stage, int limit) {
+        int boundedLimit = Math.max(1, Math.min(limit, 200));
+        return jdbcTemplate.query(BASE_COLUMNS + """
+                LEFT JOIN w_emergency_dispatch_workflow w ON w.event_id = e.c_no
+                WHERE %s AND %s
+                ORDER BY e.event_type ASC, e.guard_time IS NULL, e.guard_time DESC,
+                         w.stage_entered_at DESC, e.c_no DESC
+                LIMIT ?
+                """.formatted(ELIGIBLE, stagePredicate(stage)), this::mapEvent, boundedLimit);
     }
 
     @Override

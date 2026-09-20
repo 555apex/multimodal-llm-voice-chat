@@ -106,6 +106,6 @@ describe('WorkflowHistoryPanel', () => {
     }
     const wrapper = mount(WorkflowHistoryPanel, { props: { history: noDispatch, busy: false } })
     expect(wrapper.text()).toContain('无需调度原因：现场已恢复通行，无需调集资源')
-    expect(wrapper.text()).toContain('一级人工更正事件类型')
+    expect(wrapper.text()).toContain('现场处置人员更正事件类型')
   })
 })

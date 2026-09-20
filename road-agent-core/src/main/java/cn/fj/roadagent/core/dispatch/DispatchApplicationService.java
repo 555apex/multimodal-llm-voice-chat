@@ -157,10 +157,11 @@ public final class DispatchApplicationService implements
                 eventPort.countUnclassified(),
                 eventPort.countClassificationFailures()
         );
-        EmergencyWorkflowView item = eventPort.findNextPendingForStage(stage)
+        var items = eventPort.findPendingForStage(stage, 200).stream()
                 .map(this::viewForEvent)
-                .orElse(null);
-        return new WorkflowInbox(item, counts);
+                .toList();
+        EmergencyWorkflowView item = items.isEmpty() ? null : items.get(0);
+        return new WorkflowInbox(item, items, counts);
     }
 
     @Override

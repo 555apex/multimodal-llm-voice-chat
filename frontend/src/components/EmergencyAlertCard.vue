@@ -129,12 +129,12 @@ function actionText(type: string) {
     GENERATION_COMPLETED: '应急方案生成完成',
     GENERATION_FAILED: '方案生成失败',
     GENERATION_RETRIED: '重新生成方案',
-    EVENT_TYPE_CORRECTED: '一级人工更正事件类型',
-    LEVEL_1_SUBMITTED: '一级确认并上报二级',
-    LEVEL_1_RETURNED: '一级退回AI返工',
-    LEVEL_2_PASSED: '二级专业复核通过',
-    LEVEL_2_RETURNED: '二级退回一级返工',
-    LEVEL_3_RETURNED: '省级退回一级返工',
+    EVENT_TYPE_CORRECTED: '现场处置人员更正事件类型',
+    LEVEL_1_SUBMITTED: '现场确认并提交专业复核',
+    LEVEL_1_RETURNED: '现场处置退回AI返工',
+    LEVEL_2_PASSED: '专业复核通过',
+    LEVEL_2_RETURNED: '专业复核退回现场处置返工',
+    LEVEL_3_RETURNED: '省级决策退回现场处置返工',
     LEVEL_3_PUBLISHED: '省级批准并形成通告',
     RESOURCES_RELEASED: '已调度资源全部归还',
     NO_DISPATCH: '确认无需调度',
@@ -163,7 +163,7 @@ function canRecoverGeneration() {
       <div class="emergency-alert-title">
         <span class="emergency-alert-icon">!</span>
         <div>
-          <strong>{{ stage === 'LEVEL_1' ? '一级现场处置' : stage === 'LEVEL_2' ? '二级专业复核' : '三级省级决策' }}</strong>
+          <strong>{{ stage === 'LEVEL_1' ? '现场处置' : stage === 'LEVEL_2' ? '专业复核' : '省级决策' }}</strong>
           <small>{{ item.workflowStatus }}</small>
         </div>
       </div>
@@ -228,9 +228,9 @@ function canRecoverGeneration() {
       </div>
 
       <div v-if="plan && !item.workflowId" class="dispatch-generating-state">
-        检测到升级前生成的旧版方案，需先建立三级流程记录才能继续上报。
+        检测到升级前生成的旧版方案，需先建立处置流程记录才能继续上报。
         <button :disabled="busy" @click="emit('generate')">
-          {{ busy ? '恢复中…' : '纳入三级流程' }}
+          {{ busy ? '恢复中…' : '纳入处置流程' }}
         </button>
       </div>
 
@@ -288,8 +288,8 @@ function canRecoverGeneration() {
         <label>专业意见<textarea v-model="reviewComment" rows="3" maxlength="500"
           :disabled="busy" placeholder="通过或退回均需填写明确意见。"></textarea></label>
         <div class="workflow-decision-actions">
-          <button class="reject-button" :disabled="busy || !reviewComment.trim()" @click="submitReview('REJECT')">退回一级返工</button>
-          <button class="approve-button" :disabled="busy || !reviewReady" @click="submitReview('APPROVE')">复核通过并上报三级</button>
+          <button class="reject-button" :disabled="busy || !reviewComment.trim()" @click="submitReview('REJECT')">退回现场处置返工</button>
+          <button class="approve-button" :disabled="busy || !reviewReady" @click="submitReview('APPROVE')">复核通过并提交省级决策</button>
         </div>
       </section>
     </template>
@@ -297,7 +297,7 @@ function canRecoverGeneration() {
     <template v-if="isLevel3">
       <DispatchPlanCard v-if="plan" :plan="plan" :busy="busy" :actions-enabled="false" />
       <section v-if="item.professionalReview" class="professional-review-summary">
-        <strong>二级专业复核意见</strong>
+        <strong>专业复核意见</strong>
         <dl>
           <div><dt>事件等级</dt><dd>{{ item.professionalReview.eventSeverity }}</dd></div>
           <div><dt>资源可行性</dt><dd>{{ item.professionalReview.resourceFeasibility }}</dd></div>
@@ -311,7 +311,7 @@ function canRecoverGeneration() {
         <label>省级批示<textarea v-model="commandComment" rows="3" maxlength="500"
           :disabled="busy" :placeholder="hasShortage ? '当前存在资源缺口，批准或退回都必须填写明确批示。' : '批准时可选；退回时必须填写具体修改意见。'"></textarea></label>
         <div class="workflow-decision-actions">
-          <button class="reject-button" :disabled="busy || !commandComment.trim()" @click="submitCommand('REJECT')">退回一级返工</button>
+          <button class="reject-button" :disabled="busy || !commandComment.trim()" @click="submitCommand('REJECT')">退回现场处置返工</button>
           <button class="approve-button" :disabled="busy || (hasShortage && !commandComment.trim())" @click="submitCommand('APPROVE')">最终批准并通告</button>
         </div>
       </section>

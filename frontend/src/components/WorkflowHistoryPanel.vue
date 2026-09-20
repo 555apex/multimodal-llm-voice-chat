@@ -41,10 +41,10 @@ function actionText(type: string) {
   const labels: Record<string, string> = {
     GENERATION_STARTED: '开始生成方案', GENERATION_COMPLETED: '方案生成完成',
     GENERATION_FAILED: '方案生成失败', GENERATION_RETRIED: '重新生成方案',
-    EVENT_TYPE_CORRECTED: '一级人工更正事件类型',
-    LEVEL_1_SUBMITTED: '一级上报二级', LEVEL_1_RETURNED: '一级退回返工',
-    LEVEL_2_PASSED: '二级复核通过', LEVEL_2_RETURNED: '二级退回一级',
-    LEVEL_3_RETURNED: '省级退回一级', LEVEL_3_PUBLISHED: '省级批准并通告',
+    EVENT_TYPE_CORRECTED: '现场处置人员更正事件类型',
+    LEVEL_1_SUBMITTED: '现场处置提交专业复核', LEVEL_1_RETURNED: '现场处置退回返工',
+    LEVEL_2_PASSED: '专业复核通过', LEVEL_2_RETURNED: '专业复核退回现场处置',
+    LEVEL_3_RETURNED: '省级决策退回现场处置', LEVEL_3_PUBLISHED: '省级批准并通告',
     RESOURCES_RELEASED: '已调度资源全部归还',
     NO_DISPATCH: '确认无需调度',
   }
@@ -89,7 +89,7 @@ function actionText(type: string) {
         <div v-if="item.commandDecision.noticeSnapshot.resourceShortages?.length" class="notice-resource-shortage">
           通告包含 {{ item.commandDecision.noticeSnapshot.resourceShortages.length }} 项资源缺口
         </div>
-        <dl><div><dt>二级专业意见</dt><dd>{{ item.commandDecision.noticeSnapshot.professionalOpinion }}</dd></div>
+        <dl><div><dt>专业复核意见</dt><dd>{{ item.commandDecision.noticeSnapshot.professionalOpinion }}</dd></div>
           <div><dt>省级批示</dt><dd>{{ item.commandDecision.noticeSnapshot.commandOpinion || '同意按方案执行' }}</dd></div></dl>
       </section>
       <p v-if="item.resourcesReleased" class="resource-release-result">该工单实际调度资源已全部归还库存。</p>

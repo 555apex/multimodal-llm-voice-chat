@@ -24,6 +24,7 @@ const { messages, running, stage, toolProgress, approvalBusyPlanId } = storeToRe
 const emergencyStore = useEmergencyStore()
 const {
   item: emergencyItem,
+  items: emergencyItems,
   counts: emergencyCounts,
   selectedStage: emergencyStage,
   viewMode: emergencyViewMode,
@@ -49,6 +50,37 @@ const input = ref('')
 const inputElement = ref<HTMLTextAreaElement>()
 const messageList = ref<HTMLElement>()
 const recording = ref(false)
+const emergencyTypeFilter = ref('')
+
+const filteredEmergencyItems = computed(() => {
+  const query = emergencyTypeFilter.value.trim().toLowerCase()
+  return emergencyItems.value.filter(item => !query
+    || item.event.eventType.toLowerCase().includes(query)
+    || (item.event.eventTypeName ?? '').toLowerCase().includes(query))
+})
+const groupedEmergencyItems = computed(() => {
+  const groups = new Map<string, typeof emergencyItems.value>()
+  for (const item of filteredEmergencyItems.value) {
+    const label = item.event.eventTypeName || item.event.eventType || '未分类事件'
+    groups.set(label, [...(groups.get(label) ?? []), item])
+  }
+  return [...groups.entries()]
+})
+
+function formatEmergencyTime(value?: string) {
+  if (!value) return '时间未知'
+  return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    .format(new Date(value))
+}
+
+function workflowStatusLabel(status: string) {
+  return ({
+    WAITING_GENERATION: '待生成方案', GENERATING: '方案生成中',
+    WAITING_LEVEL_1_SUBMISSION: '待现场处置', WAITING_LEVEL_2_REVIEW: '待专业复核',
+    WAITING_LEVEL_3_DECISION: '待省级决策', REVISING: '方案返工中',
+    GENERATION_FAILED: '生成失败', PUBLISHED: '已发布', NO_DISPATCH: '无需调度',
+  } as Record<string, string>)[status] ?? status
+}
 
 const examples = [
   '福建省目前整体交通态势如何？',
@@ -275,9 +307,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
         <div class="workflow-stage-toolbar">
           <label v-if="emergencyViewMode === 'inbox'">事件处理层次
             <select :value="emergencyStage" :disabled="emergencyActionBusy" @change="selectEmergencyStage">
-              <option value="LEVEL_1">一级现场处置（{{ emergencyCounts.level1 }}）</option>
-              <option value="LEVEL_2">二级专业复核（{{ emergencyCounts.level2 }}）</option>
-              <option value="LEVEL_3">三级省级决策（{{ emergencyCounts.level3 }}）</option>
+              <option value="LEVEL_1">现场处置（{{ emergencyCounts.level1 }}）</option>
+              <option value="LEVEL_2">专业复核（{{ emergencyCounts.level2 }}）</option>
+              <option value="LEVEL_3">省级决策（{{ emergencyCounts.level3 }}）</option>
             </select>
           </label>
           <label v-else>办理状态
@@ -306,6 +338,33 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
         </p>
 
         <div class="emergency-workspace-scroll">
+          <div v-if="emergencyViewMode === 'inbox' && !emergencyItem && emergencyItems.length" class="emergency-inbox-list">
+            <label class="emergency-type-search">
+              <span>按事件类型筛选</span>
+              <input v-model="emergencyTypeFilter" type="search" placeholder="输入类型名称或编码" />
+            </label>
+            <section v-for="group in groupedEmergencyItems" :key="group[0]" class="emergency-type-group">
+              <header><strong>{{ group[0] }}</strong><span>{{ group[1].length }} 条</span></header>
+              <button v-for="candidate in group[1]" :key="candidate.event.eventId" type="button"
+                class="emergency-summary-card" @click="emergencyStore.selectItem(candidate)">
+                <span class="emergency-summary-main">
+                  <strong>{{ candidate.event.place || candidate.event.routeName || candidate.event.cityName || '位置待确认' }}</strong>
+                  <small>{{ candidate.event.description }}</small>
+                </span>
+                <span class="emergency-summary-meta">
+                  <i>{{ workflowStatusLabel(candidate.workflowStatus) }}</i>
+                  <time>{{ formatEmergencyTime(candidate.event.occurrenceTime) }}</time>
+                </span>
+              </button>
+            </section>
+            <div v-if="!groupedEmergencyItems.length" class="emergency-query-state empty">
+              <span aria-hidden="true">⌕</span><div><strong>未找到匹配事件</strong><p>请更换事件类型关键词</p></div>
+            </div>
+          </div>
+          <button v-if="emergencyViewMode === 'inbox' && emergencyItem" type="button"
+            class="emergency-detail-back" :disabled="emergencyActionBusy" @click="emergencyStore.closeDetail">
+            ← 返回事件清单
+          </button>
           <EmergencyAlertCard
             v-if="emergencyViewMode === 'inbox' && emergencyItem"
             :item="emergencyItem"
@@ -330,9 +389,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             <span class="progress-dot"></span>
             <div><strong>正在查询待处理事件</strong><p>请稍候…</p></div>
           </div>
-          <div v-else class="emergency-query-state empty" aria-live="polite">
+          <div v-else-if="emergencyViewMode === 'inbox' && !emergencyItems.length" class="emergency-query-state empty" aria-live="polite">
             <span aria-hidden="true">✓</span>
-            <div><strong>当前层次没有待处理事件</strong><p>系统会继续在后台自动查询</p></div>
+            <div><strong>当前阶段没有待处理事件</strong><p>系统会继续在后台自动查询</p></div>
             <button type="button" @click="emergencyStore.refresh">重新查询</button>
           </div>
         </div>

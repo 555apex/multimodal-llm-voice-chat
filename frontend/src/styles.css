@@ -301,6 +301,23 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .classification-status-banner button:disabled { opacity: .55; cursor: not-allowed; }
 .no-dispatch-reason { padding: 9px 11px; border-left: 3px solid #d99531; background: rgba(217, 149, 49, .08); }
 .emergency-workspace-scroll { flex: 1; min-height: 0; padding: 15px 18px 20px; overflow-y: auto; }
+.emergency-inbox-list { display: grid; gap: 13px; }
+.emergency-type-search { position: sticky; top: -15px; z-index: 2; padding: 10px 0; display: grid; gap: 6px; color: #8aadc0; background: #071e38; font-size: 11px; }
+.emergency-type-search input { width: 100%; padding: 9px 11px; color: #d8e8ef; border: 1px solid rgba(51,132,181,.42); border-radius: 9px; outline: 0; background: #092d4f; }
+.emergency-type-search input:focus { border-color: #29a1c8; box-shadow: 0 0 0 2px rgba(41,161,200,.12); }
+.emergency-type-group { display: grid; gap: 7px; }
+.emergency-type-group > header { display: flex; align-items: center; justify-content: space-between; color: #c9dfe9; }
+.emergency-type-group > header span { padding: 2px 7px; color: #8bb5c9; border-radius: 10px; background: rgba(31,111,151,.22); font-size: 11px; }
+.emergency-summary-card { width: 100%; padding: 11px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; border: 1px solid rgba(193,83,78,.34); border-radius: 10px; background: linear-gradient(140deg,rgba(54,28,42,.78),rgba(9,34,57,.92)); cursor: pointer; }
+.emergency-summary-card:hover, .emergency-summary-card:focus-visible { border-color: rgba(235,105,96,.7); transform: translateY(-1px); }
+.emergency-summary-main { min-width: 0; display: grid; gap: 4px; }
+.emergency-summary-main strong { color: #f2c0bb; font-size: 14px; }
+.emergency-summary-main small { max-width: 430px; overflow: hidden; color: #b99a98; font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.emergency-summary-meta { flex: 0 0 auto; display: grid; justify-items: end; gap: 5px; }
+.emergency-summary-meta i { color: #f2b66f; font-size: 11px; font-style: normal; }
+.emergency-summary-meta time { color: #7796a7; font-size: 10px; }
+.emergency-detail-back { margin-bottom: 10px; padding: 7px 10px; color: #92cbe0; border: 1px solid rgba(55,139,178,.36); border-radius: 8px; background: rgba(8,52,82,.65); cursor: pointer; }
+.emergency-detail-back:disabled { opacity: .5; cursor: not-allowed; }
 .emergency-alert-card { width: 100%; padding: 17px; border: 1px solid rgba(220, 88, 79, .58); border-radius: 14px; color: #e9d4d1; background: linear-gradient(145deg, rgba(70, 28, 39, .88), rgba(27, 25, 49, .92)); box-shadow: 0 10px 28px rgba(0, 4, 20, .28), inset 0 0 25px rgba(204, 65, 56, .05); }
 .emergency-alert-header, .emergency-alert-title { display: flex; align-items: center; }
 .emergency-alert-header { justify-content: space-between; gap: 10px; }

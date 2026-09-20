@@ -199,6 +199,7 @@ export interface WorkflowCounts {
 
 export interface WorkflowInbox {
   item: EmergencyWorkflowItem | null
+  items?: EmergencyWorkflowItem[]
   counts: WorkflowCounts
 }
 

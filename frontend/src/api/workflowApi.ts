@@ -53,7 +53,7 @@ export async function decideLevel1Workflow(
       body: actionBody(expectedWorkflowVersion, { decision, comment }),
     },
   )
-  return parseResponse<EmergencyWorkflowItem>(response, '一级应急处置提交失败')
+  return parseResponse<EmergencyWorkflowItem>(response, '现场处置提交失败')
 }
 
 export async function reviewEmergencyWorkflow(
@@ -69,7 +69,7 @@ export async function reviewEmergencyWorkflow(
       body: actionBody(expectedWorkflowVersion, { ...input }),
     },
   )
-  return parseResponse<EmergencyWorkflowItem>(response, '二级专业复核提交失败')
+  return parseResponse<EmergencyWorkflowItem>(response, '专业复核提交失败')
 }
 
 export async function decideCommandWorkflow(
@@ -86,7 +86,7 @@ export async function decideCommandWorkflow(
       body: actionBody(expectedWorkflowVersion, { decision, comment }),
     },
   )
-  return parseResponse<EmergencyWorkflowItem>(response, '三级省级决策提交失败')
+  return parseResponse<EmergencyWorkflowItem>(response, '省级决策提交失败')
 }
 
 export async function fetchWorkflowHistory(

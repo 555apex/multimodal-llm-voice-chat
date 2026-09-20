@@ -34,7 +34,7 @@ describe('EmergencyAlertCard', () => {
     await wrapper.find('.generate-dispatch-button').trigger('click')
 
     expect(wrapper.emitted('generate')).toHaveLength(1)
-    expect(wrapper.text()).toContain('一级现场处置')
+    expect(wrapper.text()).toContain('现场处置')
   })
 
   it('requires a reason and a second confirmation before no-dispatch', async () => {
@@ -60,7 +60,7 @@ describe('EmergencyAlertCard', () => {
         stage: 'LEVEL_1', busy: false, errorMessage: '',
       },
     })
-    expect(wrapper.text()).toContain('纳入三级流程')
+    expect(wrapper.text()).toContain('纳入处置流程')
     expect(wrapper.find('.dispatch-card').exists()).toBe(false)
     await wrapper.find('.dispatch-generating-state button').trigger('click')
     expect(wrapper.emitted('generate')).toHaveLength(1)
@@ -127,7 +127,7 @@ describe('EmergencyAlertCard', () => {
     const wrapper = mount(EmergencyAlertCard, {
       props: { item: level3, stage: 'LEVEL_3', busy: false, errorMessage: '' },
     })
-    expect(wrapper.text()).toContain('三级省级决策')
+    expect(wrapper.text()).toContain('省级决策')
     expect(wrapper.text()).toContain('省级最终批示')
     expect(wrapper.text()).toContain('方案可行')
     await wrapper.find('.approve-button').trigger('click')

@@ -52,6 +52,7 @@ export const useEmergencyStore = defineStore('emergency', {
     selectedStage: 'LEVEL_1' as WorkflowStage,
     viewMode: 'inbox' as EmergencyViewMode,
     item: null as EmergencyWorkflowItem | null,
+    items: [] as EmergencyWorkflowItem[],
     counts: emptyCounts(),
     history: null as WorkflowHistoryPage | null,
     notices: null as NoticePage | null,
@@ -114,6 +115,7 @@ export const useEmergencyStore = defineStore('emergency', {
       this.selectedStage = stage
       this.viewMode = 'inbox'
       this.item = null
+      this.items = []
       await this.refresh()
     },
 
@@ -126,6 +128,17 @@ export const useEmergencyStore = defineStore('emergency', {
       this.invalidateQuery()
       this.viewMode = 'inbox'
       await this.refresh()
+    },
+
+    selectItem(item: EmergencyWorkflowItem) {
+      this.item = item
+      this.errorMessage = ''
+    },
+
+    closeDetail() {
+      if (this.actionBusy) return
+      this.item = null
+      this.errorMessage = ''
     },
 
     async refresh() {
@@ -158,12 +171,17 @@ export const useEmergencyStore = defineStore('emergency', {
         } else {
           const inbox = await fetchWorkflowInbox(stage)
           if (sequence !== this.requestSequence || this.selectedStage !== stage || this.viewMode !== 'inbox') return
-          this.item = inbox.item
+          const listResponse = Array.isArray(inbox.items)
+          this.items = inbox.items ?? (inbox.item ? [inbox.item] : [])
+          const selectedId = this.item?.event.eventId
+          this.item = listResponse
+            ? (selectedId ? this.items.find(candidate => candidate.event.eventId === selectedId) ?? null : null)
+            : inbox.item
           this.counts = inbox.counts
-          this.queryStatus = inbox.item ? 'ready' : 'empty'
+          this.queryStatus = this.items.length ? 'ready' : 'empty'
           this.errorMessage = ''
-          if (staleGeneration(inbox.item)) {
-            const key = generationKey(inbox.item!)
+          if (staleGeneration(this.item)) {
+            const key = generationKey(this.item!)
             if (!this.automaticRecoveryAttempts[key]) {
               this.automaticRecoveryAttempts[key] = true
               shouldRecover = true
@@ -363,7 +381,7 @@ export const useEmergencyStore = defineStore('emergency', {
       if (failure) this.errorMessage = failure
     },
 
-    /** 旧接口只留给兼容测试或迁移诊断，不参与新版三级页面。 */
+    /** 旧接口只留给兼容测试或迁移诊断，不参与新版分阶段处置页面。 */
     async refreshLegacyPending() {
       return fetchNextEmergency()
     },

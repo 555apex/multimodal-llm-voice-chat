@@ -83,11 +83,11 @@ function submitReject() {
     <div v-if="plan.errorMessage" class="dispatch-warning">{{ plan.errorMessage }}</div>
 
     <div v-if="actionsEnabled && plan.status === 'WAITING_APPROVAL'" class="approval-gate">
-      <div><strong>一级现场确认</strong><small>确认后事件和方案将上报市交通应急办复核</small></div>
+      <div><strong>现场处置确认</strong><small>确认后事件和方案将上报市交通应急办复核</small></div>
       <div class="approval-actions">
         <button class="reject-button" :disabled="busy" @click="rejecting = true">退回AI返工</button>
         <button class="approve-button" :disabled="busy" @click="emit('decide', 'APPROVE', '')">
-          {{ busy ? '处理中…' : '确认并上报二级' }}
+          {{ busy ? '处理中…' : '确认并提交专业复核' }}
         </button>
       </div>
     </div>
