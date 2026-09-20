@@ -51,7 +51,7 @@ final class ResponsePlanRenderer {
         }
         matcher.appendTail(output);
         String advice = normalize(supplementalAdvice);
-        if (advice != null) {
+        if (advice != null && !isInternalProcessAdvice(advice)) {
             advice = abbreviate(advice, concise ? 50 : 1500);
             output.append("\n\n补充建议：").append(advice);
         }
@@ -123,8 +123,17 @@ final class ResponsePlanRenderer {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private boolean isInternalProcessAdvice(String value) {
+        return value.contains("原方案超字数")
+                || value.contains("已精简正文")
+                || value.contains("精简至300-400字")
+                || value.contains("字数要求")
+                || value.matches("(?s).*(资源清单|资源需求).*(基于|按照).*(库存|可调度).*(调整|校验|确保可执行).*?");
+    }
+
     private String abbreviate(String value, int limit) {
         if (value.length() <= limit) return value;
         return value.substring(0, limit - 1).replaceAll("[，。；：！？]+$", "") + "…";
     }
+
 }

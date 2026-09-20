@@ -112,6 +112,10 @@ describe('EmergencyAlertCard', () => {
       decision: 'APPROVE', resourceFeasibility: 'FEASIBLE',
       impactAssessment: '预计影响主线交通两小时',
     })
+
+    await selects[0].setValue('ADJUST')
+    expect(wrapper.find<HTMLButtonElement>('.approve-button').element.disabled).toBe(true)
+    expect(wrapper.find<HTMLButtonElement>('.reject-button').element.disabled).toBe(false)
   })
 
   it('shows level two opinion and supports final publish or return', async () => {

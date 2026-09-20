@@ -39,8 +39,10 @@ class ResponsePlanRendererTest {
                 }
                 assertThrows(IllegalArgumentException.class, () -> renderer.render(compact, event(),
                         Map.of("现场事实简述", "长".repeat(51)), ""));
-                String withLongAdvice = renderer.render(compact, event(), Map.of(), "长".repeat(51));
-                assertTrue(withLongAdvice.contains("补充建议：" + "长".repeat(49) + "…"));
+                String withInternalAdvice = renderer.render(compact, event(), Map.of(),
+                        "原方案超字数。已精简正文至300-400字。");
+                assertTrue(!withInternalAdvice.contains("补充建议"));
+                assertTrue(!withInternalAdvice.contains("原方案超字数"));
             }
         }
     }

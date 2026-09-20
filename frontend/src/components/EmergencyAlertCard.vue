@@ -38,7 +38,7 @@ const showingNoDispatch = ref(false)
 const confirmingNoDispatch = ref(false)
 const noDispatchReason = ref('')
 const severity = ref<EventSeverity>(props.assessedSeverity ?? 'GENERAL')
-const modifySeverity = ref(false)
+const severityDecision = ref<'PASS' | 'ADJUST'>('PASS')
 const resourcePlanDecision = ref<'PASS' | 'ADJUST'>('PASS')
 const resourceModification = ref('')
 const impactAssessment = ref('')
@@ -60,7 +60,11 @@ const generationBusy = computed(() =>
 const generationFailed = computed(() =>
   props.item.workflowStatus === 'GENERATION_FAILED' || plan.value?.status === 'FAILED',
 )
-const reviewReady = computed(() => Boolean(impactAssessment.value.trim() && reviewComment.value.trim())
+const commonReviewReady = computed(() => Boolean(impactAssessment.value.trim() && reviewComment.value.trim()))
+const canApproveReview = computed(() => commonReviewReady.value
+  && severityDecision.value === 'PASS' && resourcePlanDecision.value === 'PASS')
+const canReturnReview = computed(() => commonReviewReady.value
+  && (severityDecision.value === 'ADJUST' || resourcePlanDecision.value === 'ADJUST')
   && (resourcePlanDecision.value === 'PASS' || Boolean(resourceModification.value.trim())))
 
 watch(
@@ -70,7 +74,7 @@ watch(
     confirmingNoDispatch.value = false
     noDispatchReason.value = ''
     severity.value = props.assessedSeverity ?? 'GENERAL'
-    modifySeverity.value = false
+    severityDecision.value = 'PASS'
     resourcePlanDecision.value = 'PASS'
     resourceModification.value = ''
     impactAssessment.value = ''
@@ -91,18 +95,23 @@ function confirmNoDispatch() {
   if (reason) emit('noDispatch', reason)
 }
 
-function submitReview() {
+function submitReview(decision: 'APPROVE' | 'REJECT') {
   const comment = reviewComment.value.trim()
-  if (!reviewReady.value) return
+  if (decision === 'APPROVE' ? !canApproveReview.value : !canReturnReview.value) return
   const adjustment = resourceModification.value.trim()
-  const needsAdjustment = resourcePlanDecision.value === 'ADJUST'
+  const severityAdjustment = severityDecision.value === 'ADJUST'
+    ? `事件等级建议调整为${severityLabel(severity.value)}` : ''
+  const resourceAdjustment = resourcePlanDecision.value === 'ADJUST'
+    ? `资源修改意见：${adjustment}` : ''
+  const returnComment = [severityAdjustment, resourceAdjustment, `专业意见：${comment}`]
+    .filter(Boolean).join('；')
   emit('review', {
-    decision: needsAdjustment ? 'REJECT' : 'APPROVE',
+    decision,
     eventSeverity: severity.value,
-    resourceFeasibility: needsAdjustment ? 'NEEDS_ADJUSTMENT' : 'FEASIBLE',
+    resourceFeasibility: resourcePlanDecision.value === 'ADJUST' ? 'NEEDS_ADJUSTMENT' : 'FEASIBLE',
     impactAssessment: impactAssessment.value.trim(),
     coordinationRequirements: '',
-    comment: needsAdjustment ? `资源修改意见：${adjustment}；专业意见：${comment}` : comment,
+    comment: decision === 'REJECT' ? returnComment : comment,
   })
 }
 
@@ -269,12 +278,12 @@ function canRecoverGeneration() {
       <DispatchPlanCard v-if="plan" :plan="plan" :busy="busy" :actions-enabled="false" />
       <section class="workflow-review-form">
         <header><strong>市交通应急办专业会商表</strong><small>请人工填写专业复核结论，提交后全程留痕</small></header>
-        <label>事件等级复核
-          <select v-model="modifySeverity" :disabled="busy">
-            <option :value="false">保持智能研判（{{ severityLabel(assessedSeverity) }}）</option>
-            <option :value="true">需要修改智能研判等级</option>
+        <label>事件研判等级
+          <select v-model="severityDecision" :disabled="busy">
+            <option value="PASS">通过智能研判（{{ severityLabel(assessedSeverity) }}）</option>
+            <option value="ADJUST">需要调整智能研判等级</option>
           </select>
-          <select v-if="modifySeverity" v-model="severity" :disabled="busy">
+          <select v-if="severityDecision === 'ADJUST'" v-model="severity" :disabled="busy">
             <option value="GENERAL">一般</option><option value="LARGER">较大</option>
             <option value="MAJOR">重大</option><option value="ESPECIALLY_MAJOR">特别重大</option>
           </select>
@@ -292,10 +301,10 @@ function canRecoverGeneration() {
         <label>专业意见<textarea v-model="reviewComment" rows="3" :maxlength="resourcePlanDecision === 'ADJUST' ? 250 : 500"
           :disabled="busy" placeholder="通过或退回均需填写明确意见。"></textarea></label>
         <div class="workflow-decision-actions">
-          <button :class="resourcePlanDecision === 'ADJUST' ? 'reject-button' : 'approve-button'"
-            :disabled="busy || !reviewReady" @click="submitReview">
-            {{ resourcePlanDecision === 'ADJUST' ? '提交资源调整意见并退回' : '复核通过并提交省级决策' }}
-          </button>
+          <button class="reject-button" :disabled="busy || !canReturnReview"
+            @click="submitReview('REJECT')">意见返回现场处置</button>
+          <button class="approve-button" :disabled="busy || !canApproveReview"
+            @click="submitReview('APPROVE')">复核通过并提交省级决策</button>
         </div>
       </section>
     </template>
