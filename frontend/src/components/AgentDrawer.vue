@@ -32,6 +32,7 @@ const {
   actionBusy: emergencyActionBusy,
   queryStatus: emergencyQueryStatus,
   errorMessage: emergencyError,
+  severityAssessments: emergencySeverities,
 } = storeToRefs(emergencyStore)
 const facilityStore = useFacilityStore()
 const { counts: facilityCounts, actionBusy: facilityActionBusy } = storeToRefs(facilityStore)
@@ -51,12 +52,16 @@ const inputElement = ref<HTMLTextAreaElement>()
 const messageList = ref<HTMLElement>()
 const recording = ref(false)
 const emergencyTypeFilter = ref('')
+const emergencyTypeOptions = [
+  ['DT01', '崩塌（落石）'], ['DT02', '滑坡（坡体位移）'], ['DT03', '泥石流'],
+  ['DT04', '沉陷与塌陷'], ['DT05', '水毁'], ['ET101', '拥堵'], ['ET102', '明火（火灾）'],
+  ['ET103', '抛撒物'], ['ET104', '设备故障'], ['ET105', '占用应急车道'], ['ET106', '交通事故'],
+  ['ET107', '异常停车'], ['ET108', '浓雾检测'], ['ET109', '路障'], ['ET110', '施工'], ['ET112', '道路积雪'],
+] as const
 
 const filteredEmergencyItems = computed(() => {
-  const query = emergencyTypeFilter.value.trim().toLowerCase()
-  return emergencyItems.value.filter(item => !query
-    || item.event.eventType.toLowerCase().includes(query)
-    || (item.event.eventTypeName ?? '').toLowerCase().includes(query))
+  return emergencyItems.value.filter(item => !emergencyTypeFilter.value
+    || item.event.eventType === emergencyTypeFilter.value)
 })
 const groupedEmergencyItems = computed(() => {
   const groups = new Map<string, typeof emergencyItems.value>()
@@ -80,6 +85,10 @@ function workflowStatusLabel(status: string) {
     WAITING_LEVEL_3_DECISION: '待省级决策', REVISING: '方案返工中',
     GENERATION_FAILED: '生成失败', PUBLISHED: '已发布', NO_DISPATCH: '无需调度',
   } as Record<string, string>)[status] ?? status
+}
+
+function severityLabel(value?: string) {
+  return ({ GENERAL: '一般', LARGER: '较大', MAJOR: '重大', ESPECIALLY_MAJOR: '特别重大' } as Record<string, string>)[value ?? ''] || '待研判'
 }
 
 const examples = [
@@ -341,7 +350,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
           <div v-if="emergencyViewMode === 'inbox' && !emergencyItem && emergencyItems.length" class="emergency-inbox-list">
             <label class="emergency-type-search">
               <span>按事件类型筛选</span>
-              <input v-model="emergencyTypeFilter" type="search" placeholder="输入类型名称或编码" />
+              <select v-model="emergencyTypeFilter">
+                <option value="">全部事件类型</option>
+                <option v-for="option in emergencyTypeOptions" :key="option[0]" :value="option[0]">
+                  {{ option[0] }} · {{ option[1] }}
+                </option>
+              </select>
             </label>
             <section v-for="group in groupedEmergencyItems" :key="group[0]" class="emergency-type-group">
               <header><strong>{{ group[0] }}</strong><span>{{ group[1].length }} 条</span></header>
@@ -352,6 +366,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
                   <small>{{ candidate.event.description }}</small>
                 </span>
                 <span class="emergency-summary-meta">
+                  <b class="event-severity-badge" :class="`severity-${(emergencySeverities[candidate.event.eventId] || 'UNKNOWN').toLowerCase()}`">
+                    {{ severityLabel(emergencySeverities[candidate.event.eventId]) }}
+                  </b>
                   <i>{{ workflowStatusLabel(candidate.workflowStatus) }}</i>
                   <time>{{ formatEmergencyTime(candidate.event.occurrenceTime) }}</time>
                 </span>
@@ -372,6 +389,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleEscape))
             :busy="emergencyActionBusy"
             :elapsed-seconds="emergencyStore.operationStartedAt ? emergencyStore.elapsedSeconds : undefined"
             :error-message="emergencyError"
+            :assessed-severity="emergencySeverities[emergencyItem.event.eventId]"
             @generate="emergencyStore.generate"
             @no-dispatch="emergencyStore.markNoDispatch"
             @level1="emergencyStore.decideLevel1"

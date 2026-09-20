@@ -201,6 +201,7 @@ export interface WorkflowInbox {
   item: EmergencyWorkflowItem | null
   items?: EmergencyWorkflowItem[]
   counts: WorkflowCounts
+  severityAssessments?: Record<string, EventSeverity>
 }
 
 export interface WorkflowHistoryPage {

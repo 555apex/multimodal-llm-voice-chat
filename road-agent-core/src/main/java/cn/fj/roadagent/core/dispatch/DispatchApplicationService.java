@@ -48,6 +48,7 @@ import cn.fj.roadagent.domain.dispatch.EmergencyEventType;
 import cn.fj.roadagent.domain.dispatch.EventClassificationAttempt;
 import cn.fj.roadagent.domain.dispatch.EventClassificationMethod;
 import cn.fj.roadagent.domain.dispatch.EventClassificationStatus;
+import cn.fj.roadagent.domain.dispatch.EventSeverity;
 import cn.fj.roadagent.domain.dispatch.EmergencyResource;
 import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlan;
 import cn.fj.roadagent.domain.dispatch.EmergencyResponsePlanSnapshot;
@@ -74,6 +75,7 @@ import java.util.Set;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 /** 数据库应急事件的三级上报、返工、最终通告和历史追溯编排。 */
 public final class DispatchApplicationService implements
@@ -103,6 +105,7 @@ public final class DispatchApplicationService implements
     private final UnitOfWork unitOfWork;
     private final Clock clock;
     private final Duration staleGeneratingAfter;
+    private final Map<String, EventSeverity> severityAssessmentCache = new ConcurrentHashMap<>();
 
     public DispatchApplicationService(
             AbnormalEventPort eventPort,
@@ -161,8 +164,55 @@ public final class DispatchApplicationService implements
                 .map(this::viewForEvent)
                 .toList();
         EmergencyWorkflowView item = items.isEmpty() ? null : items.get(0);
-        return new WorkflowInbox(item, items, counts);
+        return new WorkflowInbox(item, items, counts, assessSeverities(items));
     }
+
+    private Map<String, EventSeverity> assessSeverities(List<EmergencyWorkflowView> items) {
+        List<EmergencyEvent> missing = items.stream().map(EmergencyWorkflowView::event)
+                .filter(event -> !severityAssessmentCache.containsKey(event.eventId())).toList();
+        if (!missing.isEmpty()) {
+            try {
+                String facts = missing.stream().map(event -> "eventId=" + event.eventId()
+                                + "|type=" + event.eventType() + "|description=" + event.description()
+                                + "|place=" + Optional.ofNullable(event.place()).orElse(""))
+                        .collect(java.util.stream.Collectors.joining("\n"));
+                SeverityAssessmentBatch batch = chatModelPort.generateStructuredStrict(new ModelRequest(
+                        """
+                        你是福建公路应急事件严重等级研判助手。必须仅根据事件事实批量返回严格JSON。
+                        顶层仅包含assessments数组；每项仅包eventId、severity、reason。
+                        severity只能是GENERAL、LARGER、MAJOR、ESPECIALLY_MAJOR。
+                        分别对应一般、较大、重大、特别重大。不得虚构人员伤亡、交通中断或影响范围。
+                        """,
+                        facts, List.of(), 0.0), SeverityAssessmentBatch.class);
+                if (batch != null && batch.assessments() != null) {
+                    Set<String> allowed = missing.stream().map(EmergencyEvent::eventId).collect(java.util.stream.Collectors.toSet());
+                    batch.assessments().stream().filter(value -> value != null && allowed.contains(value.eventId()))
+                            .forEach(value -> severityAssessmentCache.put(value.eventId(),
+                                    EventSeverity.valueOf(value.severity())));
+                }
+            } catch (RuntimeException ignored) {
+                // 研判服务不得阻断应急待办清单，下方使用保守兜底。
+            }
+            missing.forEach(event -> severityAssessmentCache.putIfAbsent(event.eventId(), fallbackSeverity(event)));
+        }
+        Map<String, EventSeverity> result = new LinkedHashMap<>();
+        items.forEach(item -> result.put(item.event().eventId(), severityAssessmentCache.get(item.event().eventId())));
+        return result;
+    }
+
+    private EventSeverity fallbackSeverity(EmergencyEvent event) {
+        String text = event.description() + " " + Optional.ofNullable(event.place()).orElse("");
+        if (List.of("多人伤亡", "多人被困", "桥梁垮塌", "隧道垮塌").stream().anyMatch(text::contains))
+            return EventSeverity.ESPECIALLY_MAJOR;
+        if (List.of("交通中断", "大面积", "泥石流", "水毁").stream().anyMatch(text::contains))
+            return EventSeverity.MAJOR;
+        if (event.eventType().startsWith("DT") || Set.of("ET102", "ET106", "ET112").contains(event.eventType()))
+            return EventSeverity.LARGER;
+        return EventSeverity.GENERAL;
+    }
+
+    private record SeverityAssessmentBatch(List<SeverityAssessmentItem> assessments) { }
+    private record SeverityAssessmentItem(String eventId, String severity, String reason) { }
 
     @Override
     public DispatchPlan get(String planId) {

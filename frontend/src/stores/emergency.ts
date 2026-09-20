@@ -23,6 +23,7 @@ import type {
   WorkflowHistoryPage,
   WorkflowStage,
   NoticePage,
+  EventSeverity,
 } from '../types/dispatch'
 
 export type EmergencyQueryStatus = 'idle' | 'loading' | 'ready' | 'empty' | 'error'
@@ -54,6 +55,7 @@ export const useEmergencyStore = defineStore('emergency', {
     item: null as EmergencyWorkflowItem | null,
     items: [] as EmergencyWorkflowItem[],
     counts: emptyCounts(),
+    severityAssessments: {} as Record<string, EventSeverity>,
     history: null as WorkflowHistoryPage | null,
     notices: null as NoticePage | null,
     completionStatus: 'PENDING' as 'PENDING' | 'COMPLETED',
@@ -178,6 +180,7 @@ export const useEmergencyStore = defineStore('emergency', {
             ? (selectedId ? this.items.find(candidate => candidate.event.eventId === selectedId) ?? null : null)
             : inbox.item
           this.counts = inbox.counts
+          this.severityAssessments = { ...this.severityAssessments, ...(inbox.severityAssessments ?? {}) }
           this.queryStatus = this.items.length ? 'ready' : 'empty'
           this.errorMessage = ''
           if (staleGeneration(this.item)) {

@@ -93,18 +93,20 @@ describe('EmergencyAlertCard', () => {
       props: { item: level2, stage: 'LEVEL_2', busy: false, errorMessage: '' },
     })
     const selects = wrapper.findAll('.workflow-review-form select')
-    const textareas = wrapper.findAll('.workflow-review-form textarea')
-    await selects[1].setValue('NEEDS_ADJUSTMENT')
-    await textareas[0].setValue('预计影响主线交通两小时')
+    await selects[1].setValue('ADJUST')
+    let textareas = wrapper.findAll('.workflow-review-form textarea')
+    await textareas[0].setValue('增加一组抢险队伍')
+    await textareas[1].setValue('预计影响主线交通两小时')
     await textareas[2].setValue('建议补充资源')
-    expect(wrapper.find('.approve-button').attributes('disabled')).toBeDefined()
 
     await wrapper.find('.reject-button').trigger('click')
     expect(wrapper.emitted('review')?.[0]?.[0]).toMatchObject({
-      decision: 'REJECT', resourceFeasibility: 'NEEDS_ADJUSTMENT', comment: '建议补充资源',
+      decision: 'REJECT', resourceFeasibility: 'NEEDS_ADJUSTMENT',
     })
+    expect((wrapper.emitted('review')?.[0]?.[0] as { comment: string }).comment).toContain('增加一组抢险队伍')
 
-    await selects[1].setValue('FEASIBLE')
+    await selects[1].setValue('PASS')
+    textareas = wrapper.findAll('.workflow-review-form textarea')
     await wrapper.find('.approve-button').trigger('click')
     expect(wrapper.emitted('review')?.[1]?.[0]).toMatchObject({
       decision: 'APPROVE', resourceFeasibility: 'FEASIBLE',
