@@ -1,0 +1,133 @@
+name: roadagent-rag-candidate
+
+x-logs: &logs
+  driver: json-file
+  options: { max-size: "100m", max-file: "5" }
+
+services:
+  rag-model:
+    build:
+      context: rag/model-service
+      args:
+        RAG_MODEL_BASE_IMAGE: ${RAG_MODEL_BASE_IMAGE}
+        PIP_INDEX_URL: ${RAG_PIP_INDEX_URL:-https://pypi.org/simple}
+    image: ${ROADAGENT_RAG_MODEL_IMAGE:-roadagent-rag-model:local}
+    gpus: all
+    ipc: host
+    environment:
+      BGE_API_KEY: ${BGE_API_KEY:?BGE_API_KEY is required}
+    volumes:
+      - ${RAG_MODELS_DIR:?RAG_MODELS_DIR is required}:/models:ro
+    networks: [rag-private]
+    restart: unless-stopped
+    security_opt: [no-new-privileges:true]
+    logging: *logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=5).read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 30
+      start_period: 10m
+
+  postgres:
+    image: paradedb/paradedb:v0.22.2-pg17
+    environment:
+      POSTGRES_USER: ${DB_USER:?DB_USER is required}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [rag-private]
+    restart: unless-stopped
+    logging: *logs
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: redis:7.0-alpine
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    networks: [rag-private]
+    restart: unless-stopped
+    logging: *logs
+
+  docreader:
+    image: ${WEKNORA_DOCREADER_IMAGE:?WEKNORA_DOCREADER_IMAGE is required}
+    environment:
+      TZ: Asia/Shanghai
+      DOCREADER_IMAGE_OUTPUT_DIR: /tmp/docreader
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+    volumes: [docreader-tmp:/tmp/docreader]
+    expose: ["50051"]
+    networks: [rag-private]
+    restart: unless-stopped
+    logging: *logs
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      interval: 30s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+
+  weknora-app:
+    image: ${WEKNORA_APP_IMAGE:?WEKNORA_APP_IMAGE is required}
+    env_file: rag/.env
+    environment:
+      DB_DRIVER: postgres
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      DOCREADER_ADDR: docreader:50051
+      SSRF_WHITELIST_EXTRA: rag-model
+      DISABLE_REGISTRATION: "true"
+      TZ: Asia/Shanghai
+    volumes:
+      - data-files:/data/files
+      - docreader-tmp:/tmp/docreader:ro
+      - ${WEKNORA_SOURCE_DIR:?WEKNORA_SOURCE_DIR is required}/config/config.yaml:/app/config/config.yaml:ro
+      - ${WEKNORA_SOURCE_DIR}/skills/preloaded:/app/skills/preloaded:ro
+    expose: ["8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      docreader: { condition: service_healthy }
+      rag-model: { condition: service_healthy }
+    networks: [rag-private]
+    restart: unless-stopped
+    logging: *logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
+  weknora-frontend:
+    image: ${WEKNORA_UI_IMAGE:?WEKNORA_UI_IMAGE is required}
+    environment:
+      APP_HOST: weknora-app
+      APP_PORT: "8080"
+      APP_SCHEME: http
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-50}
+    depends_on:
+      weknora-app: { condition: service_healthy }
+    ports: ["127.0.0.1:18082:80"]
+    networks: [rag-private]
+    restart: unless-stopped
+    logging: *logs
+
+networks:
+  rag-private:
+    name: roadagent-rag
+    internal: true
+
+volumes:
+  postgres-data:
+  data-files:
+  docreader-tmp:

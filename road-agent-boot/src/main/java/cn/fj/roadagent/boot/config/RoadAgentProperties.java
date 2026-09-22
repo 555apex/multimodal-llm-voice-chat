@@ -11,6 +11,7 @@ public class RoadAgentProperties {
     private final Memory memory = new Memory();
     private final Dispatch dispatch = new Dispatch();
     private final Speech speech = new Speech();
+    private final Rag rag = new Rag();
 
     public Traffic getTraffic() {
         return traffic;
@@ -30,6 +31,10 @@ public class RoadAgentProperties {
 
     public Speech getSpeech() {
         return speech;
+    }
+
+    public Rag getRag() {
+        return rag;
     }
 
     public static class Traffic {
@@ -173,6 +178,35 @@ public class RoadAgentProperties {
         public void setClassificationRetrySeconds(long classificationRetrySeconds) {
             this.classificationRetrySeconds = classificationRetrySeconds;
         }
+    }
+
+    public static class Rag {
+        private boolean enabled;
+        private String endpoint = "http://weknora-app:8080";
+        private String apiKey = "";
+        private java.util.List<String> kbIds = java.util.List.of();
+        private int topK = 5;
+        private int connectTimeoutSeconds = 3;
+        private int requestTimeoutSeconds = 15;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getEndpoint() { return endpoint; }
+        public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+        public java.util.List<String> getKbIds() { return kbIds; }
+        public void setKbIds(java.util.List<String> kbIds) {
+            this.kbIds = kbIds == null ? java.util.List.of() : kbIds.stream()
+                    .filter(value -> value != null && !value.isBlank())
+                    .map(String::trim).distinct().toList();
+        }
+        public int getTopK() { return topK; }
+        public void setTopK(int topK) { this.topK = topK; }
+        public int getConnectTimeoutSeconds() { return connectTimeoutSeconds; }
+        public void setConnectTimeoutSeconds(int value) { connectTimeoutSeconds = value; }
+        public int getRequestTimeoutSeconds() { return requestTimeoutSeconds; }
+        public void setRequestTimeoutSeconds(int value) { requestTimeoutSeconds = value; }
     }
 
     public static class Speech {

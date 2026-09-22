@@ -83,6 +83,15 @@ roadagent:
     classification-poll-seconds: ${ROADAGENT_EVENT_CLASSIFICATION_POLL_SECONDS:5}
     classification-retry-seconds: ${ROADAGENT_EVENT_CLASSIFICATION_RETRY_SECONDS:30}
 
+  rag:
+    enabled: ${ROADAGENT_RAG_ENABLED:false}
+    endpoint: ${ROADAGENT_RAG_ENDPOINT:http://weknora-app:8080}
+    api-key: ${ROADAGENT_RAG_API_KEY:}
+    kb-ids: ${ROADAGENT_RAG_KB_IDS:}
+    top-k: ${ROADAGENT_RAG_TOP_K:5}
+    connect-timeout-seconds: ${ROADAGENT_RAG_CONNECT_TIMEOUT_SECONDS:3}
+    request-timeout-seconds: ${ROADAGENT_RAG_REQUEST_TIMEOUT_SECONDS:15}
+
   # ===== Docker语音服务配置 =====
   speech:
     # 容器离线不会阻止Java启动；能力接口会返回不可用

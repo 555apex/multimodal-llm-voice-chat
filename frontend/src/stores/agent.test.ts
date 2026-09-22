@@ -38,6 +38,21 @@ describe('agent store', () => {
     expect(store.messages.at(-1)?.speechText).toBe('精简朗读摘要。详细数据请查看页面。')
   })
 
+  it('stores RAG sources from SSE', () => {
+    const store = useAgentStore()
+    const messageId = crypto.randomUUID()
+    store.messages.push({ id: messageId, role: 'assistant', content: '', status: 'pending' })
+
+    store.applyEvent(messageId, {
+      name: 'result.rag',
+      data: { hitCount: 2, sources: ['公路养护技术标准.pdf', '应急预案.pdf'] },
+    })
+
+    expect(store.findMessage(messageId).rag).toEqual({
+      hitCount: 2, sources: ['公路养护技术标准.pdf', '应急预案.pdf'],
+    })
+  })
+
   it('waits for completion and automatically reads the full multi-paragraph answer', () => {
     const store = useAgentStore()
     const speech = useSpeechStore()

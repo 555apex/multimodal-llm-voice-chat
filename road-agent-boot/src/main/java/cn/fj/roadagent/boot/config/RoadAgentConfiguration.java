@@ -2,6 +2,7 @@ package cn.fj.roadagent.boot.config;
 
 import cn.fj.roadagent.adapters.memory.InMemoryConversationMemoryAdapter;
 import cn.fj.roadagent.adapters.model.openai.OpenAiCompatibleChatModelAdapter;
+import cn.fj.roadagent.adapters.rag.weknora.WeKnoraRagAdapter;
 import cn.fj.roadagent.adapters.speech.http.PythonSpeechServiceAdapter;
 import cn.fj.roadagent.adapters.transaction.SpringUnitOfWork;
 import cn.fj.roadagent.adapters.traffic.mysql.InMemoryHighwayTrafficSnapshotCache;
@@ -24,6 +25,7 @@ import cn.fj.roadagent.application.port.EventClassificationLogPort;
 import cn.fj.roadagent.application.port.FacilityAlertPort;
 import cn.fj.roadagent.application.port.ResourceAllocationPort;
 import cn.fj.roadagent.application.port.ResourceDataPort;
+import cn.fj.roadagent.application.port.RagSearchPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotSource;
 import cn.fj.roadagent.application.port.RoadCapacitySnapshotPort;
@@ -38,6 +40,7 @@ import cn.fj.roadagent.application.port.UnitOfWork;
 import cn.fj.roadagent.core.agent.AgentRuntime;
 import cn.fj.roadagent.core.agent.AgentSkill;
 import cn.fj.roadagent.core.agent.IntentPlanner;
+import cn.fj.roadagent.core.agent.KnowledgeQaSkill;
 import cn.fj.roadagent.core.agent.SkillRegistry;
 import cn.fj.roadagent.core.dispatch.DispatchApplicationService;
 import cn.fj.roadagent.core.dispatch.EmergencyDispatchSkill;
@@ -265,6 +268,27 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
+    @ConditionalOnProperty(prefix = "roadagent.rag", name = "enabled", havingValue = "true")
+    RagSearchPort ragSearchPort(RoadAgentProperties properties, ObjectMapper objectMapper) {
+        RoadAgentProperties.Rag rag = properties.getRag();
+        requireSecret(rag.getApiKey(), "ROADAGENT_RAG_API_KEY is required when RAG is enabled");
+        if (rag.getKbIds().isEmpty()) {
+            throw new IllegalStateException("ROADAGENT_RAG_KB_IDS is required when RAG is enabled");
+        }
+        Duration connectTimeout = Duration.ofSeconds(rag.getConnectTimeoutSeconds());
+        HttpClient client = HttpClient.newBuilder().connectTimeout(connectTimeout).build();
+        return new WeKnoraRagAdapter(client, objectMapper, rag.getEndpoint(), rag.getApiKey(),
+                rag.getKbIds(), Duration.ofSeconds(rag.getRequestTimeoutSeconds()));
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "roadagent.rag", name = "enabled", havingValue = "true")
+    KnowledgeQaSkill knowledgeQaSkill(RagSearchPort ragSearchPort, ChatModelPort chatModelPort,
+                                      RoadAgentProperties properties) {
+        return new KnowledgeQaSkill(ragSearchPort, chatModelPort, properties.getRag().getTopK());
+    }
+
+    @Bean
     FacilityAlertService facilityAlertService(FacilityAlertPort alertPort, Clock clock) {
         return new FacilityAlertService(alertPort, clock);
     }
@@ -385,8 +409,9 @@ public class RoadAgentConfiguration {
     }
 
     @Bean
-    IntentPlanner intentPlanner(ChatModelPort chatModelPort, HighwayTrafficSnapshotPort snapshotPort) {
-        return new IntentPlanner(chatModelPort, snapshotPort);
+    IntentPlanner intentPlanner(ChatModelPort chatModelPort, HighwayTrafficSnapshotPort snapshotPort,
+                                RoadAgentProperties properties) {
+        return new IntentPlanner(chatModelPort, snapshotPort, properties.getRag().isEnabled());
     }
 
     @Bean

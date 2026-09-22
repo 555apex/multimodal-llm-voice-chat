@@ -1,0 +1,75 @@
+name: roadagent-rag-app-candidate
+
+x-log-options: &log-options
+  driver: json-file
+  options: { max-size: "100m", max-file: "5" }
+
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: deploy/dgx/Dockerfile.backend
+      args:
+        JAVA_BUILD_IMAGE: ${JAVA_BUILD_IMAGE:-dockerproxy.net/library/eclipse-temurin:17-jdk-jammy}
+        JAVA_RUNTIME_IMAGE: ${JAVA_RUNTIME_IMAGE:-dockerproxy.net/library/eclipse-temurin:17-jre-jammy}
+    image: ${ROADAGENT_RAG_CANDIDATE_BACKEND_IMAGE:-road-agent-rag-candidate-backend:local}
+    container_name: road-agent-rag-candidate-backend
+    env_file: .env.candidate
+    environment:
+      ROADAGENT_MODEL_ENDPOINT: ${ROADAGENT_MODEL_ENDPOINT:-http://qwen:8000/v1/chat/completions}
+      ROADAGENT_MODEL_NAME: ${ROADAGENT_MODEL_NAME:?ROADAGENT_MODEL_NAME is required}
+      ROADAGENT_MODEL_AUTH_ENABLED: "false"
+      ROADAGENT_MODEL_ENABLE_THINKING: "false"
+      ROADAGENT_MODEL_TIMEOUT_SECONDS: ${ROADAGENT_MODEL_TIMEOUT_SECONDS:-180}
+      ROADAGENT_EVENT_CLASSIFICATION_ENABLED: "false"
+      ROADAGENT_DISPATCH_STALE_GENERATING_SECONDS: "600"
+      ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_POLL_SECONDS:-5}
+      ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS:-30}
+      ROADAGENT_SPEECH_ENABLED: "true"
+      ROADAGENT_SPEECH_SERVICE_URL: http://road-agent-dgx-speech:8091
+      ROADAGENT_RAG_ENABLED: "true"
+      ROADAGENT_RAG_ENDPOINT: http://weknora-app:8080
+      ROADAGENT_RAG_API_KEY: ${ROADAGENT_RAG_API_KEY:?ROADAGENT_RAG_API_KEY is required}
+      ROADAGENT_RAG_KB_IDS: ${ROADAGENT_RAG_KB_IDS:?ROADAGENT_RAG_KB_IDS is required}
+      ROADAGENT_RAG_TOP_K: ${ROADAGENT_RAG_TOP_K:-5}
+      ROADAGENT_RAG_CONNECT_TIMEOUT_SECONDS: ${ROADAGENT_RAG_CONNECT_TIMEOUT_SECONDS:-3}
+      ROADAGENT_RAG_REQUEST_TIMEOUT_SECONDS: ${ROADAGENT_RAG_REQUEST_TIMEOUT_SECONDS:-15}
+    networks: [frontend-private, speech-private, dgx-ai, rag-private]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging: *log-options
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/api/v1/speech/capabilities"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 90s
+
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deploy/dgx/Dockerfile.frontend
+      args:
+        NODE_BUILD_IMAGE: ${NODE_BUILD_IMAGE:-dockerproxy.net/library/node:22-bookworm-slim}
+        NGINX_IMAGE: ${NGINX_IMAGE:-dockerproxy.net/nginxinc/nginx-unprivileged:1.29-alpine}
+    image: ${ROADAGENT_RAG_CANDIDATE_FRONTEND_IMAGE:-road-agent-rag-candidate-frontend:local}
+    container_name: road-agent-rag-candidate-frontend
+    depends_on:
+      backend: { condition: service_healthy }
+    ports: ["127.0.0.1:18083:8080"]
+    networks: [frontend-private]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    logging: *log-options
+
+networks:
+  frontend-private:
+    internal: true
+  speech-private:
+    external: true
+    name: road-agent-dgx_speech-private
+  dgx-ai:
+    external: true
+  rag-private:
+    external: true
+    name: roadagent-rag

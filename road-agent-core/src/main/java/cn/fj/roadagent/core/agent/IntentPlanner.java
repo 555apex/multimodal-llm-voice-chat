@@ -28,14 +28,21 @@ public final class IntentPlanner {
 
     private final ChatModelPort chatModelPort;  // 大模型端口
     private final HighwayTrafficSnapshotPort trafficSnapshotPort;
+    private final boolean knowledgeEnabled;
 
     public IntentPlanner(ChatModelPort chatModelPort) {
-        this(chatModelPort, null);
+        this(chatModelPort, null, false);
     }
 
     public IntentPlanner(ChatModelPort chatModelPort, HighwayTrafficSnapshotPort trafficSnapshotPort) {
+        this(chatModelPort, trafficSnapshotPort, false);
+    }
+
+    public IntentPlanner(ChatModelPort chatModelPort, HighwayTrafficSnapshotPort trafficSnapshotPort,
+                         boolean knowledgeEnabled) {
         this.chatModelPort = chatModelPort;
         this.trafficSnapshotPort = trafficSnapshotPort;
+        this.knowledgeEnabled = knowledgeEnabled;
     }
 
     // 方法：用户信息发送给大模型理解
@@ -48,6 +55,11 @@ public final class IntentPlanner {
             List<ConversationMessage> history,
             AgentDecision latestSuccessfulTrafficDecision
     ) {
+        if (knowledgeEnabled && isKnowledgeQuestion(currentMessage)) {
+            return new AgentDecision("KNOWLEDGE_QA", null, null, null, null, null,
+                    List.of(), null, null, null, null, null, null, null, null, null,
+                    List.of(), null, false, null);
+        }
         boolean followUp = !history.isEmpty() && (currentMessage.matches("(?s).*(它|其中|这些|上述|前面|反方向|再加|加上|去掉|移除|删掉|这两个|这几个|两市|两地|第一张|第二张|只看|只展示|只保留|改为|改成|换成|那|可以|好的|同意|今天|今日|昨天|昨日|前天|日期|\\d{1,2}月\\d{1,2}日|20\\d{2}[-年/]\\d{1,2}).*")
                 || FujianCity.fromName(currentMessage).isPresent());
         var inherited = followUp
@@ -61,9 +73,10 @@ public final class IntentPlanner {
         }
         String systemPrompt = """
                 你是福建公路应急交通Agent的意图规划器。
-                只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、UNSUPPORTED之一。
+                只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、KNOWLEDGE_QA、UNSUPPORTED之一。
                 TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、三至九市跨区域交通联系、城市目的地联系倾向，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
                 EMERGENCY_DISPATCH用于道路塌方、事故、水毁等事件的资源调度。
+                KNOWLEDGE_QA用于法规、政策、规范标准、公路养护、应急制度、办理材料和知识库文档问答。
                 仅提取用户明确提供或会话中已有的信息，不得编造城市、道路、位置和资源。
                 必须输出json对象，字段如下：
                 intent, trafficScope, originCity, destinationCity, routeCode, routeName, selectedCities, analysisCity,
@@ -278,6 +291,14 @@ public final class IntentPlanner {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private boolean isKnowledgeQuestion(String message) {
+        if (message == null || message.isBlank()) return false;
+        String normalized = message.replaceAll("\\s+", "");
+        return List.of("法规", "政策", "规范", "标准", "办法", "条例", "规定", "许可",
+                        "办理材料", "申请材料", "养护", "验收", "应急预案", "知识库", "文件要求")
+                .stream().anyMatch(normalized::contains);
     }
 
     private List<String> effectiveSelectedCities(AgentDecision decision) {

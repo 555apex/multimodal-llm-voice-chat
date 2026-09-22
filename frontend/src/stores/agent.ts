@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { streamAgentMessage } from '../api/agentApi'
 import { decideDispatch } from '../api/dispatchApi'
 import { useSpeechStore } from './speech'
-import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RunFailedData } from '../types/agent'
+import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RagResult, RunFailedData } from '../types/agent'
 import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
 
@@ -83,6 +83,7 @@ export const useAgentStore = defineStore('agent', {
         target.traffic = undefined
         target.trafficResults = undefined
         target.dispatch = undefined
+        target.rag = undefined
         target.speechText = undefined
         target.status = 'failed'
         target.errorMessage = error instanceof Error ? error.message : '流式请求失败'
@@ -116,6 +117,9 @@ export const useAgentStore = defineStore('agent', {
         case 'result.dispatch':
           message.dispatch = event.data as DispatchPlan
           break
+        case 'result.rag':
+          message.rag = event.data as RagResult
+          break
         case 'run.completed':
           message.status = 'completed'
           if ((message.content || message.speechText)
@@ -134,6 +138,7 @@ export const useAgentStore = defineStore('agent', {
           message.traffic = undefined
           message.trafficResults = undefined
           message.dispatch = undefined
+          message.rag = undefined
           message.speechText = undefined
           message.status = 'failed'
           message.errorMessage = `${failed.message}（${failed.code}）`

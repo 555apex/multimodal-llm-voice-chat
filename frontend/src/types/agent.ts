@@ -13,7 +13,13 @@ export interface AgentMessage {
   traffic?: TrafficQueryResult
   trafficResults?: TrafficQueryResult[]
   dispatch?: DispatchPlan
+  rag?: RagResult
   errorMessage?: string
+}
+
+export interface RagResult {
+  hitCount: number
+  sources: string[]
 }
 
 export interface AgentStage {

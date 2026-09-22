@@ -2,6 +2,7 @@
 import type { AgentMessage } from '../types/agent'
 import DispatchPlanCard from './DispatchPlanCard.vue'
 import MessageSpeechButton from './MessageSpeechButton.vue'
+import RagSourcesPanel from './RagSourcesPanel.vue'
 import TrafficResultPanel from './TrafficResultPanel.vue'
 
 defineProps<{ message: AgentMessage; approvalBusyPlanId: string }>()
@@ -34,6 +35,7 @@ const emit = defineEmits<{
         />
       </template>
       <TrafficResultPanel v-else-if="message.traffic" :result="message.traffic" compact />
+      <RagSourcesPanel v-if="message.rag" :result="message.rag" />
       <DispatchPlanCard
         v-if="message.dispatch"
         :plan="message.dispatch"
