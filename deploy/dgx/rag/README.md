@@ -1,5 +1,8 @@
 # DGX RAG candidate build notes
 
+For day-to-day WeKnora access, model/knowledge-base maintenance, and RoadAgent
+user examples, see [OPERATIONS.md](OPERATIONS.md).
+
 The candidate uses WeKnora 0.6.3 at commit
 `7ddac0385fc7ec78b30da0a6f9bc13da7d672517`. The app, UI, and
 docreader images are tagged `0.6.3-7ddac038`; production deployment should
