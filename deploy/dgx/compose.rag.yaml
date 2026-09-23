@@ -91,7 +91,6 @@ services:
       - data-files:/data/files
       - docreader-tmp:/tmp/docreader:ro
       - ${WEKNORA_SOURCE_DIR:?WEKNORA_SOURCE_DIR is required}/config/config.yaml:/app/config/config.yaml:ro
-      - ${WEKNORA_SOURCE_DIR}/skills/preloaded:/app/skills/preloaded:ro
     expose: ["8080"]
     depends_on:
       postgres: { condition: service_healthy }
