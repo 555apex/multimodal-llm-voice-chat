@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
     logging: *logs
     healthcheck:
-      test: ["CMD", "grpc_health_probe", "-addr=localhost:50051"]
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 50051), 5).close()"]
       interval: 30s
       timeout: 10s
       retries: 6
@@ -118,11 +118,12 @@ services:
     depends_on:
       weknora-app: { condition: service_healthy }
     ports: ["127.0.0.1:18082:80"]
-    networks: [rag-private]
+    networks: [ui-ingress, rag-private]
     restart: unless-stopped
     logging: *logs
 
 networks:
+  ui-ingress:
   rag-private:
     name: roadagent-rag
     internal: true

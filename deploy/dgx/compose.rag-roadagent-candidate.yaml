@@ -57,12 +57,13 @@ services:
     depends_on:
       backend: { condition: service_healthy }
     ports: ["127.0.0.1:18083:8080"]
-    networks: [frontend-private]
+    networks: [frontend-ingress, frontend-private]
     security_opt: [no-new-privileges:true]
     restart: unless-stopped
     logging: *log-options
 
 networks:
+  frontend-ingress:
   frontend-private:
     internal: true
   speech-private:
