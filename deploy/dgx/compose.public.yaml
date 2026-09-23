@@ -18,6 +18,13 @@ services:
       ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS: ${ROADAGENT_TRAFFIC_SNAPSHOT_STABLE_SECONDS:-30}
       ROADAGENT_SPEECH_ENABLED: "true"
       ROADAGENT_SPEECH_SERVICE_URL: http://speech-service:8091
+      ROADAGENT_RAG_ENABLED: ${ROADAGENT_RAG_ENABLED:-false}
+      ROADAGENT_RAG_ENDPOINT: ${ROADAGENT_RAG_ENDPOINT:-http://weknora-app:8080}
+      ROADAGENT_RAG_API_KEY: ${ROADAGENT_RAG_API_KEY:-}
+      ROADAGENT_RAG_KB_IDS: ${ROADAGENT_RAG_KB_IDS:-}
+      ROADAGENT_RAG_TOP_K: ${ROADAGENT_RAG_TOP_K:-5}
+      ROADAGENT_RAG_CONNECT_TIMEOUT_SECONDS: ${ROADAGENT_RAG_CONNECT_TIMEOUT_SECONDS:-3}
+      ROADAGENT_RAG_REQUEST_TIMEOUT_SECONDS: ${ROADAGENT_RAG_REQUEST_TIMEOUT_SECONDS:-15}
     depends_on:
       speech-service:
         condition: service_healthy
@@ -25,6 +32,7 @@ services:
       - public-frontend-private
       - speech-private
       - dgx-ai
+      - rag-private
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
@@ -73,3 +81,6 @@ services:
 networks:
   public-frontend-private:
     internal: true
+  rag-private:
+    external: true
+    name: roadagent-rag
