@@ -42,7 +42,8 @@ public final class KnowledgeQaSkill implements AgentSkill {
         }
         sink.emit(new AgentEvent("stage.changed", Map.of("stage", "ANSWERING", "label", "正在依据知识库生成回答")));
         String answer = chatModelPort.generate(new ModelRequest(systemPrompt(),
-                buildUserPrompt(context.command().message(), results), toModelMessages(context.history()), 0.2)).content();
+                buildUserPrompt(context.command().message(), results), toModelMessages(context.history()), 0.2,
+                1536)).content();
         sink.emit(new AgentEvent("answer.delta", Map.of("content", answer)));
         sink.emit(new AgentEvent("result.rag", Map.of("hitCount", results.size(), "sources", sources)));
         return new AgentSkillResult(answer);
