@@ -241,17 +241,18 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .traffic-answer { padding: 12px; border: 1px solid rgba(38, 113, 163, .36); border-radius: 12px; background: rgba(6, 34, 65, .72); }
 .traffic-answer-header, .dispatch-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .eyebrow, .dispatch-card header p { margin: 0 0 3px; color: #39bad7; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
-.traffic-answer h2, .dispatch-card h3 { margin: 0; color: #e3f1f8; font-size: 15px; }
+.traffic-answer { min-width: 0; container-type: inline-size; }
+.traffic-answer h2, .dispatch-card h3 { margin: 0; color: #e3f1f8; font-size: 16px; line-height: 1.45; }
 .scope-caption { display: block; margin-top: 4px; color: #6287a0; font-size: 10px; }
-.traffic-summary { margin: 8px 0 0; color: #99b7ca; line-height: 1.6; font-size: 11px; }
-.traffic-table-wrap { margin-top: 10px; overflow-x: auto; border: 1px solid rgba(43, 113, 159, .34); border-radius: 9px; }
-.traffic-table { width: 100%; border-collapse: collapse; color: #a9c3d3; font-size: 11px; }
-.traffic-table th { padding: 7px 8px; color: #6f98b1; border-bottom: 1px solid rgba(43, 113, 159, .34); background: rgba(10, 54, 91, .8); font-size: 9px; text-align: left; white-space: nowrap; }
+.traffic-summary { margin: 8px 0 0; color: #99b7ca; line-height: 1.7; font-size: 12px; }
+.traffic-table-wrap { max-width: 100%; margin-top: 10px; overflow-x: auto; border: 1px solid rgba(43, 113, 159, .34); border-radius: 9px; }
+.traffic-table { width: 100%; border-collapse: collapse; color: #a9c3d3; font-size: 12px; }
+.traffic-table th { padding: 8px; color: #82a9c0; border-bottom: 1px solid rgba(43, 113, 159, .34); background: rgba(10, 54, 91, .8); font-size: 10px; text-align: left; white-space: nowrap; }
 .traffic-table td { padding: 8px; border-bottom: 1px solid rgba(35, 91, 130, .28); vertical-align: middle; }
 .traffic-table tbody tr:last-child td { border-bottom: 0; }
 .traffic-table tbody tr:hover { background: rgba(23, 78, 112, .24); }
-.regional-pair-table, .regional-channel-table { min-width: 620px; }
-.od-destination-table { min-width: 620px; }
+.regional-pair-table, .regional-channel-table { min-width: 0; }
+.od-destination-table { min-width: 0; }
 .od-matrix-table { min-width: 760px; table-layout: fixed; }
 .od-matrix-table th, .od-matrix-table td { text-align: center; }
 .od-matrix-table th:first-child, .od-matrix-table td:first-child { width: 86px; text-align: left; }
@@ -281,6 +282,20 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .status-dot { display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: currentColor; }
 .traffic-truncated { margin: 9px 0 0; color: #ffd078; font-size: 10px; }
 .empty-result { margin-top: 10px; color: #718fa3; font-size: 10px; }
+
+@container (max-width: 760px) {
+  .traffic-table-wrap:not(:has(.od-matrix-table)) { overflow: visible; border: 0; }
+  .traffic-table:not(.od-matrix-table),
+  .traffic-table:not(.od-matrix-table) tbody { display: block; width: 100%; }
+  .traffic-table:not(.od-matrix-table) thead { display: none; }
+  .traffic-table:not(.od-matrix-table) tbody { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; }
+  .traffic-table:not(.od-matrix-table) tr { display: block; min-width: 0; padding: 10px 12px; border: 1px solid rgba(43, 113, 159, .34); border-radius: 9px; background: rgba(7, 42, 72, .58); }
+  .traffic-table:not(.od-matrix-table) td { display: grid; grid-template-columns: 106px minmax(0, 1fr); gap: 9px; width: auto; min-width: 0; min-height: 0; padding: 5px 0; border: 0; border-bottom: 1px solid rgba(35, 91, 130, .25); overflow-wrap: anywhere; }
+  .traffic-table:not(.od-matrix-table) td:last-child { border-bottom: 0; }
+  .traffic-table:not(.od-matrix-table) td::before { content: attr(data-label); position: static; color: #6f98b1; font-size: 10px; }
+  .traffic-table:not(.od-matrix-table) .row-interpretation,
+  .traffic-table:not(.od-matrix-table) .capacity-value { min-width: 0; white-space: normal; }
+}
 .area-list-tools { margin-top: 10px; display: grid; grid-template-columns: minmax(120px, 1fr) 105px auto; align-items: center; gap: 6px; }
 .area-list-tools input, .area-list-tools select { width: 100%; padding: 7px 8px; color: #b4ccda; border: 1px solid rgba(49, 119, 165, .38); border-radius: 8px; outline: 0; background: #092d4f; font-size: 10px; }
 .area-list-tools > span { color: #63869d; font-size: 8px; text-align: right; }
@@ -625,10 +640,12 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   .area-list-tools > span { grid-column: 1 / -1; text-align: left; }
   .traffic-table thead { display: none; }
   .regional-pair-table, .regional-channel-table { min-width: 0; }
-  .traffic-table, .traffic-table tbody, .traffic-table tr, .traffic-table td { display: block; width: 100%; }
-  .traffic-table tr { padding: 7px 9px; border-bottom: 1px solid rgba(35, 91, 130, .28); }
-  .traffic-table td { position: relative; min-height: 20px; padding: 3px 0 3px 72px; border: 0; }
-  .traffic-table td::before { content: attr(data-label); position: absolute; left: 0; color: #63849a; font-size: 8px; }
+  .traffic-table:not(.od-matrix-table), .traffic-table:not(.od-matrix-table) tbody { display: block; width: 100%; }
+  .traffic-table:not(.od-matrix-table) tbody { display: grid; grid-template-columns: 1fr; gap: 9px; }
+  .traffic-table:not(.od-matrix-table) tr { display: block; width: auto; padding: 9px 10px; border: 1px solid rgba(35, 91, 130, .34); border-radius: 8px; }
+  .traffic-table:not(.od-matrix-table) td { position: static; display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 7px; width: auto; min-height: 0; padding: 4px 0; border: 0; border-bottom: 1px solid rgba(35,91,130,.22); }
+  .traffic-table:not(.od-matrix-table) td:last-child { border-bottom: 0; }
+  .traffic-table:not(.od-matrix-table) td::before { content: attr(data-label); position: static; color: #63849a; font-size: 9px; }
   .od-matrix-table { display: table; width: 760px; min-width: 760px; }
   .od-matrix-table thead { display: table-header-group; }
   .od-matrix-table tbody { display: table-row-group; width: auto; }
