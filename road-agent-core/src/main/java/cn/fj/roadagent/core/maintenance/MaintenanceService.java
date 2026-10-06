@@ -77,7 +77,9 @@ public final class MaintenanceService implements MaintenanceDocumentUseCase {
         }
         String batch = repository.currentBatchId();
         String projectCode = project == null ? null : project.projectCode();
-        Optional<MaintenanceDocument> cached = repository.findSnapshot(type, year, projectCode, batch);
+        int documentVersion = "PREPLAN".equals(type) ? 2 : 1;
+        Optional<MaintenanceDocument> cached = repository.findSnapshot(type, year, projectCode, batch)
+                .filter(existing -> existing.version() >= documentVersion);
         if (cached.isPresent()) return cached.get().withDownloadUrl(downloadUrl(cached.get().documentId()));
 
         List<MaintenanceProject> projects = repository.findActiveProjects();
@@ -93,7 +95,7 @@ public final class MaintenanceService implements MaintenanceDocumentUseCase {
         Narrative narrative = polish(type, year, draft, repository.loadTemplate(type));
         String id = "MD-" + UUID.randomUUID();
         MaintenanceDocument document = new MaintenanceDocument(id, type, year, projectCode, draft.title,
-                narrative.summary, narrative.conclusion, draft.sections, draft.charts, batch, 1,
+                narrative.summary, narrative.conclusion, draft.sections, draft.charts, batch, documentVersion,
                 clock.instant(), downloadUrl(id));
         repository.saveSnapshot(document);
         return document;
@@ -124,7 +126,7 @@ public final class MaintenanceService implements MaintenanceDocumentUseCase {
 
     private Draft preplan(int year, List<MaintenanceProject> projects) {
         BigDecimal total = totalBudget(projects);
-        List<Map<String, Object>> rows = projects.stream().map(this::projectRow).toList();
+        List<Map<String, Object>> rows = projects.stream().map(this::preplanProjectRow).toList();
         String summary = year + "年度共安排" + projects.size() + "项养护工程，计划预算" + total + "万元。"
                 + "项目按照紧急程度、工程类型和施工窗口统筹排序，优先保障紧急项目和交通影响较大的路段。";
         return new Draft(year + "年度福建普通国省干线养护预安排计划", summary,
@@ -246,8 +248,15 @@ public final class MaintenanceService implements MaintenanceDocumentUseCase {
     private Map<String, Object> projectRow(MaintenanceProject p) {
         return row("项目编号", p.projectCode(), "路线", p.routeCode(), "路线名称", p.routeName(), "路段", p.routeSection(),
                 "养护对象", p.facilityType(), "养护类型", p.maintenanceType(), "紧急程度", p.urgency(),
-                "实施时间", p.plannedStartDate().toString(), "工期（天）", p.durationDays(),
+                "计划开始时间", p.plannedStartDate().toString(), "工期（天）", p.durationDays(),
                 "施工单位", p.contractor(), "预算（万元）", p.budgetWan());
+    }
+
+    private Map<String, Object> preplanProjectRow(MaintenanceProject p) {
+        return row("项目编号", p.projectCode(), "路线", p.routeCode(), "路线名称", p.routeName(), "路段", p.routeSection(),
+                "养护对象", p.facilityType(), "养护类型", p.maintenanceType(), "紧急程度", p.urgency(),
+                "计划开始时间", p.plannedStartDate().toString(), "工期（天）", p.durationDays(),
+                "预算（万元）", p.budgetWan());
     }
 
     private Map<String, Object> row(Object... values) {

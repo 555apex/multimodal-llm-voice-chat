@@ -11,6 +11,7 @@ echarts.use([BarChart, GridComponent, TooltipComponent, SVGRenderer])
 const props = defineProps<{ charts: MaintenanceChart[] }>()
 const elements: HTMLElement[] = []
 let instances: ECharts[] = []
+let observer: ResizeObserver | undefined
 function setElement(el: unknown) { if (el instanceof HTMLElement && !elements.includes(el)) elements.push(el) }
 function render() {
   instances.forEach(item => item.dispose()); instances = []
@@ -23,8 +24,8 @@ function render() {
       series: [{ type: 'bar', data: chart.values, itemStyle: { color: '#24b4ca', borderRadius: [5, 5, 0, 0] } }] })
   })
 }
-onMounted(() => nextTick(render)); watch(() => props.charts, () => nextTick(render), { deep: true })
-onBeforeUnmount(() => instances.forEach(item => item.dispose()))
+onMounted(() => { nextTick(render); observer = new ResizeObserver(() => instances.forEach(item => item.resize())); elements.forEach(el => observer?.observe(el)) }); watch(() => props.charts, () => nextTick(render), { deep: true })
+onBeforeUnmount(() => { observer?.disconnect(); instances.forEach(item => item.dispose()) })
 </script>
 <template><div class="chart-grid"><section v-for="chart in charts" :key="chart.title"><h4>{{ chart.title }}</h4><div :ref="setElement" class="chart"></div></section></div></template>
-<style scoped>.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}.chart-grid section{padding:12px;background:#082d4c;border-radius:10px}.chart-grid h4{margin:0 0 8px}.chart{height:280px}</style>
+<style scoped>.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:14px;min-width:0}.chart-grid section{min-width:0;overflow:hidden;padding:12px;background:#082d4c;border-radius:10px}.chart-grid h4{margin:0 0 8px;font-size:15px}.chart{width:100%;height:260px;min-width:0}@media(max-width:520px){.chart{height:230px}}</style>
