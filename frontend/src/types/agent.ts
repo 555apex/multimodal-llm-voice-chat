@@ -1,5 +1,6 @@
 import type { DispatchPlan } from './dispatch'
 import type { TrafficQueryResult } from './traffic'
+import type { MaintenanceDocument, MaintenanceProjectResult } from './maintenance'
 
 export type AgentRole = 'user' | 'assistant'
 export type AgentMessageStatus = 'pending' | 'completed' | 'failed'
@@ -14,6 +15,8 @@ export interface AgentMessage {
   trafficResults?: TrafficQueryResult[]
   dispatch?: DispatchPlan
   rag?: RagResult
+  maintenanceProjects?: MaintenanceProjectResult
+  maintenanceDocument?: MaintenanceDocument
   errorMessage?: string
 }
 

@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/root/.m2 printf 'timeout=30\ntries=2\ninet4_only=
 FROM ${JAVA_RUNTIME_IMAGE} AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && apt-get install -y --no-install-recommends curl ca-certificates fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 roadagent \
     && useradd --create-home --uid 10001 --gid 10001 roadagent

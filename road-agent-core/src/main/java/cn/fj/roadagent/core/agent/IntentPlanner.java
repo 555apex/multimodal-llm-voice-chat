@@ -55,6 +55,10 @@ public final class IntentPlanner {
             List<ConversationMessage> history,
             AgentDecision latestSuccessfulTrafficDecision
     ) {
+        var maintenance = classifyMaintenance(currentMessage);
+        if (maintenance.isPresent()) {
+            return maintenance.get();
+        }
         if (knowledgeEnabled && isKnowledgeQuestion(currentMessage)) {
             return new AgentDecision("KNOWLEDGE_QA", null, null, null, null, null,
                     List.of(), null, null, null, null, null, null, null, null, null,
@@ -73,8 +77,9 @@ public final class IntentPlanner {
         }
         String systemPrompt = """
                 你是福建公路应急交通Agent的意图规划器。
-                只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、KNOWLEDGE_QA、UNSUPPORTED之一。
+                只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、MAINTENANCE_PROJECT_LIST、MAINTENANCE_PREPLAN、MAINTENANCE_SCHEME_COMPARISON、MAINTENANCE_REPORT、KNOWLEDGE_QA、UNSUPPORTED之一。
                 TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、三至九市跨区域交通联系、城市目的地联系倾向，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
+                MAINTENANCE_PROJECT_LIST用于养护项目清单和按路线、类型、紧急程度筛选；MAINTENANCE_PREPLAN用于全部养护项目的时间、单位和预算预安排；MAINTENANCE_SCHEME_COMPARISON用于某一个具体养护项目的多方案比选；MAINTENANCE_REPORT用于五类养护统计或考核报告。一般养护法规、标准和管理办法解释仍选择KNOWLEDGE_QA。
                 EMERGENCY_DISPATCH用于道路塌方、事故、水毁等事件的资源调度。
                 KNOWLEDGE_QA用于法规、政策、规范标准、公路养护、应急制度、办理材料和知识库文档问答。
                 仅提取用户明确提供或会话中已有的信息，不得编造城市、道路、位置和资源。
@@ -124,6 +129,30 @@ public final class IntentPlanner {
         );
         // 返回结构化JSON，并映射到AgentDecision.class
         return chatModelPort.generateStructured(request, AgentDecision.class);
+    }
+
+    private java.util.Optional<AgentDecision> classifyMaintenance(String message) {
+        String text = message == null ? "" : message.replaceAll("\\s+", "");
+        AgentIntent intent = null;
+        if (text.contains("年度养护统计") || text.contains("养护统计分析")
+                || text.contains("路网病害分布") || text.contains("病害分布分析")
+                || (text.contains("大中修") && (text.contains("考核") || text.contains("评估")))
+                || (text.contains("日常养护") && (text.contains("量化") || text.contains("评分") || text.contains("考核")))
+                || ((text.contains("服务区") || text.contains("服务站"))
+                    && (text.contains("满意度") || text.contains("服务质量")))) {
+            intent = AgentIntent.MAINTENANCE_REPORT;
+        } else if (text.matches(".*(方案比选|方案比较|比较.*方案|最优方案|推荐方案|养护方案).*")) {
+            intent = AgentIntent.MAINTENANCE_SCHEME_COMPARISON;
+        } else if (text.matches(".*(预安排|预排计划|养护计划|项目排期|施工单位|工期安排|年度安排).*")) {
+            intent = AgentIntent.MAINTENANCE_PREPLAN;
+        } else if (text.matches(".*(养护项目|养护清单|需要养护|待养护|养护情况|紧急养护|修复养护项目).*")) {
+            intent = AgentIntent.MAINTENANCE_PROJECT_LIST;
+        }
+        if (intent == null) return java.util.Optional.empty();
+        return java.util.Optional.of(new AgentDecision(
+                intent.name(), null, null, null, null, null,
+                null, null, null, null, List.of(), null
+        ));
     }
 
     private java.util.Optional<AgentDecision> inheritTrafficContext(

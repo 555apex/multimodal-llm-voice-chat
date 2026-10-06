@@ -5,9 +5,10 @@ import { useSpeechStore } from './speech'
 import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RagResult, RunFailedData } from '../types/agent'
 import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
+import type { MaintenanceDocument, MaintenanceProjectResult } from '../types/maintenance'
 
 const SESSION_KEY = 'roadagent-chat-session-v5'
-const WELCOME_MESSAGE = '您好，我是路智通，专注于福建省路网运行监测、设施预警与应急处置。\n\n我可以研判福建普通国省干线交通态势和短时趋势，查询拥堵路段、指定路线状态、通行能力与瓶颈路线；也可以分析三市及以上的城市对交通联系压力与重要跨市路线、单城市目的地联系倾向和多城市联系矩阵，以及福州、厦门的车型结构、24小时出行规律和工作日周末特征，同时提供基础设施异常预警、应急调度辅助与语音交互。'
+const WELCOME_MESSAGE = '您好，我是路智通，专注于福建省路网运行监测、设施预警、应急处置与公路养护。\n\n我可以研判福建普通国省干线交通态势和短时趋势，查询拥堵路段、指定路线状态、通行能力与瓶颈路线；也可以分析跨市交通联系、城市目的地联系倾向和车型出行特征，查询养护项目清单、生成养护预安排与单项目方案比选，并提供养护统计评估报告、基础设施异常预警、应急调度辅助与语音交互。'
 
 interface StoredSession {
   conversationId: string
@@ -84,6 +85,8 @@ export const useAgentStore = defineStore('agent', {
         target.trafficResults = undefined
         target.dispatch = undefined
         target.rag = undefined
+        target.maintenanceProjects = undefined
+        target.maintenanceDocument = undefined
         target.speechText = undefined
         target.status = 'failed'
         target.errorMessage = error instanceof Error ? error.message : '流式请求失败'
@@ -120,6 +123,12 @@ export const useAgentStore = defineStore('agent', {
         case 'result.rag':
           message.rag = event.data as RagResult
           break
+        case 'result.maintenance-projects':
+          message.maintenanceProjects = event.data as MaintenanceProjectResult
+          break
+        case 'result.maintenance-document':
+          message.maintenanceDocument = event.data as MaintenanceDocument
+          break
         case 'run.completed':
           message.status = 'completed'
           if ((message.content || message.speechText)
@@ -139,6 +148,8 @@ export const useAgentStore = defineStore('agent', {
           message.trafficResults = undefined
           message.dispatch = undefined
           message.rag = undefined
+          message.maintenanceProjects = undefined
+          message.maintenanceDocument = undefined
           message.speechText = undefined
           message.status = 'failed'
           message.errorMessage = `${failed.message}（${failed.code}）`

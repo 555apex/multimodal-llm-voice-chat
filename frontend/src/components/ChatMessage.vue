@@ -4,6 +4,8 @@ import DispatchPlanCard from './DispatchPlanCard.vue'
 import MessageSpeechButton from './MessageSpeechButton.vue'
 import RagSourcesPanel from './RagSourcesPanel.vue'
 import TrafficResultPanel from './TrafficResultPanel.vue'
+import MaintenanceProjectPanel from './MaintenanceProjectPanel.vue'
+import MaintenanceDocumentPanel from './MaintenanceDocumentPanel.vue'
 
 defineProps<{ message: AgentMessage; approvalBusyPlanId: string }>()
 const emit = defineEmits<{
@@ -36,6 +38,8 @@ const emit = defineEmits<{
       </template>
       <TrafficResultPanel v-else-if="message.traffic" :result="message.traffic" compact />
       <RagSourcesPanel v-if="message.rag" :result="message.rag" />
+      <MaintenanceProjectPanel v-if="message.maintenanceProjects" :result="message.maintenanceProjects" />
+      <MaintenanceDocumentPanel v-if="message.maintenanceDocument" :document="message.maintenanceDocument" />
       <DispatchPlanCard
         v-if="message.dispatch"
         :plan="message.dispatch"

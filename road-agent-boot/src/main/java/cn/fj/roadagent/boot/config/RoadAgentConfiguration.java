@@ -1,6 +1,8 @@
 package cn.fj.roadagent.boot.config;
 
 import cn.fj.roadagent.adapters.memory.InMemoryConversationMemoryAdapter;
+import cn.fj.roadagent.adapters.maintenance.docx.PoiMaintenanceDocumentRenderer;
+import cn.fj.roadagent.adapters.maintenance.mysql.MysqlMaintenanceRepository;
 import cn.fj.roadagent.adapters.model.openai.OpenAiCompatibleChatModelAdapter;
 import cn.fj.roadagent.adapters.rag.weknora.WeKnoraRagAdapter;
 import cn.fj.roadagent.adapters.speech.http.PythonSpeechServiceAdapter;
@@ -28,6 +30,8 @@ import cn.fj.roadagent.application.port.ResourceDataPort;
 import cn.fj.roadagent.application.port.RagSearchPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotPort;
 import cn.fj.roadagent.application.port.HighwayTrafficSnapshotSource;
+import cn.fj.roadagent.application.port.MaintenanceDocumentRenderer;
+import cn.fj.roadagent.application.port.MaintenanceRepository;
 import cn.fj.roadagent.application.port.RoadCapacitySnapshotPort;
 import cn.fj.roadagent.application.port.RoadCapacitySnapshotSource;
 import cn.fj.roadagent.application.port.RegionalTrafficDataPort;
@@ -42,6 +46,8 @@ import cn.fj.roadagent.core.agent.AgentSkill;
 import cn.fj.roadagent.core.agent.IntentPlanner;
 import cn.fj.roadagent.core.agent.KnowledgeQaSkill;
 import cn.fj.roadagent.core.agent.SkillRegistry;
+import cn.fj.roadagent.core.maintenance.MaintenanceService;
+import cn.fj.roadagent.core.maintenance.MaintenanceSkill;
 import cn.fj.roadagent.core.dispatch.DispatchApplicationService;
 import cn.fj.roadagent.core.dispatch.EmergencyDispatchSkill;
 import cn.fj.roadagent.core.dispatch.EmergencyEventClassificationService;
@@ -120,6 +126,57 @@ public class RoadAgentConfiguration {
         return new MysqlHighwayTrafficSnapshotSource(
                 jdbcTemplate, new TransactionTemplate(transactionManager), clock
         );
+    }
+
+    @Bean
+    MaintenanceRepository maintenanceRepository(
+            JdbcTemplate jdbcTemplate,
+            PlatformTransactionManager transactionManager,
+            ObjectMapper objectMapper
+    ) {
+        return new MysqlMaintenanceRepository(
+                jdbcTemplate, new TransactionTemplate(transactionManager), objectMapper
+        );
+    }
+
+    @Bean
+    MaintenanceDocumentRenderer maintenanceDocumentRenderer() {
+        return new PoiMaintenanceDocumentRenderer();
+    }
+
+    @Bean
+    MaintenanceService maintenanceService(
+            MaintenanceRepository repository,
+            MaintenanceDocumentRenderer renderer,
+            ChatModelPort chatModelPort,
+            Clock clock
+    ) {
+        return new MaintenanceService(repository, renderer, chatModelPort, clock);
+    }
+
+    @Bean(initMethod = "start")
+    MaintenanceProjectRefresher maintenanceProjectRefresher(MaintenanceRepository repository) {
+        return new MaintenanceProjectRefresher(repository);
+    }
+
+    @Bean
+    MaintenanceSkill maintenanceProjectListSkill(MaintenanceService service) {
+        return new MaintenanceSkill(cn.fj.roadagent.application.agent.AgentIntent.MAINTENANCE_PROJECT_LIST, service);
+    }
+
+    @Bean
+    MaintenanceSkill maintenancePreplanSkill(MaintenanceService service) {
+        return new MaintenanceSkill(cn.fj.roadagent.application.agent.AgentIntent.MAINTENANCE_PREPLAN, service);
+    }
+
+    @Bean
+    MaintenanceSkill maintenanceSchemeSkill(MaintenanceService service) {
+        return new MaintenanceSkill(cn.fj.roadagent.application.agent.AgentIntent.MAINTENANCE_SCHEME_COMPARISON, service);
+    }
+
+    @Bean
+    MaintenanceSkill maintenanceReportSkill(MaintenanceService service) {
+        return new MaintenanceSkill(cn.fj.roadagent.application.agent.AgentIntent.MAINTENANCE_REPORT, service);
     }
 
     @Bean(initMethod = "start", destroyMethod = "close")
