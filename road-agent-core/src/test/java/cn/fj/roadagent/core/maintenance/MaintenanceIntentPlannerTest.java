@@ -16,6 +16,16 @@ class MaintenanceIntentPlannerTest {
     @Test void recognizesProjectList() {
         assertEquals(AgentIntent.MAINTENANCE_PROJECT_LIST,
                 planner.plan("目前有哪些需要养护的国省道路段？", List.of()).parsedIntent());
+        assertEquals(AgentIntent.MAINTENANCE_PROJECT_LIST,
+                planner.plan("查看当前养护工程项目", List.of()).parsedIntent());
+        assertEquals(AgentIntent.MAINTENANCE_PROJECT_LIST,
+                planner.plan("查询现有养护项目清单", List.of()).parsedIntent());
+        assertEquals(AgentIntent.MAINTENANCE_PROJECT_LIST,
+                planner.plan("当前养护工程项目有哪些？", List.of()).parsedIntent());
+        assertEquals(AgentIntent.MAINTENANCE_PROJECT_LIST,
+                planner.plan("查看养护工程项目库", List.of()).parsedIntent());
+        assertEquals(AgentIntent.MAINTENANCE_PROJECT_LIST,
+                planner.plan("筛选紧急程度较高的修复养护项目", List.of()).parsedIntent());
     }
 
     @Test void recognizesPreplan() {
@@ -39,6 +49,12 @@ class MaintenanceIntentPlannerTest {
     @Test void leavesMaintenancePolicyToRag() {
         assertEquals(AgentIntent.KNOWLEDGE_QA,
                 planner.plan("公路养护工程管理办法对设计有什么要求？", List.of()).parsedIntent());
+        assertEquals(AgentIntent.KNOWLEDGE_QA,
+                planner.plan("什么是公路养护工程项目？", List.of()).parsedIntent());
+        assertEquals(AgentIntent.KNOWLEDGE_QA,
+                planner.plan("养护工程项目的管理流程是什么？", List.of()).parsedIntent());
+        assertEquals(AgentIntent.KNOWLEDGE_QA,
+                planner.plan("预防养护和修复养护有什么区别？", List.of()).parsedIntent());
     }
 
     private static final class FailingModel implements ChatModelPort {

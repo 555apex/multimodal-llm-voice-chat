@@ -79,7 +79,7 @@ public final class IntentPlanner {
                 你是福建公路应急交通Agent的意图规划器。
                 只能选择TRAFFIC_QUERY、EMERGENCY_DISPATCH、MAINTENANCE_PROJECT_LIST、MAINTENANCE_PREPLAN、MAINTENANCE_SCHEME_COMPARISON、MAINTENANCE_REPORT、KNOWLEDGE_QA、UNSUPPORTED之一。
                 TRAFFIC_QUERY支持福建省普通国道、省道及交调站划分路段的交通状态、国省道通行能力、三至九市跨区域交通联系、城市目的地联系倾向，以及福州或厦门的车型出行特征分析；不支持城市道路、区县道路和高速公路。
-                MAINTENANCE_PROJECT_LIST用于养护项目清单和按路线、类型、紧急程度筛选；MAINTENANCE_PREPLAN用于全部养护项目的时间、单位和预算预安排；MAINTENANCE_SCHEME_COMPARISON用于某一个具体养护项目的多方案比选；MAINTENANCE_REPORT用于五类养护统计或考核报告。一般养护法规、标准和管理办法解释仍选择KNOWLEDGE_QA。
+                MAINTENANCE_PROJECT_LIST用于查看当前/现有养护工程项目、养护项目库、项目清单，以及按路线、类型、紧急程度筛选；MAINTENANCE_PREPLAN用于全部养护项目的时间、单位和预算预安排；MAINTENANCE_SCHEME_COMPARISON用于某一个具体养护项目的多方案比选；MAINTENANCE_REPORT用于五类养护统计或考核报告。一般养护法规、标准、定义、分类和管理办法解释仍选择KNOWLEDGE_QA。
                 EMERGENCY_DISPATCH用于道路塌方、事故、水毁等事件的资源调度。
                 KNOWLEDGE_QA用于法规、政策、规范标准、公路养护、应急制度、办理材料和知识库文档问答。
                 仅提取用户明确提供或会话中已有的信息，不得编造城市、道路、位置和资源。
@@ -145,7 +145,7 @@ public final class IntentPlanner {
             intent = AgentIntent.MAINTENANCE_SCHEME_COMPARISON;
         } else if (text.matches(".*(预安排|预排计划|养护计划|项目排期|施工单位|工期安排|年度安排).*")) {
             intent = AgentIntent.MAINTENANCE_PREPLAN;
-        } else if (text.matches(".*(养护项目|养护清单|需要养护|待养护|养护情况|紧急养护|修复养护项目).*")) {
+        } else if (isMaintenanceProjectListQuestion(text)) {
             intent = AgentIntent.MAINTENANCE_PROJECT_LIST;
         }
         if (intent == null) return java.util.Optional.empty();
@@ -153,6 +153,20 @@ public final class IntentPlanner {
                 intent.name(), null, null, null, null, null,
                 null, null, null, null, List.of(), null
         ));
+    }
+
+    private boolean isMaintenanceProjectListQuestion(String text) {
+        if (text == null || text.isBlank()) return false;
+
+        boolean explicitListRequest = text.matches(".*(查看|查询|列出|展示|筛选|检索|统计|汇总).*")
+                || text.matches(".*(当前|目前|现有|本批|本期).*")
+                || text.matches(".*(有哪些|多少个|多少项|清单|列表|项目库|台账|明细|概况).*");
+        boolean projectSubject = text.matches(".*养护(工程)?项目(库|清单|列表|台账|明细|概况)?.*")
+                || text.matches(".*(需要养护|待养护|养护清单|养护项目库|养护情况).*")
+                || text.matches(".*(紧急|较高|高优先级|修复|预防|专项|应急)养护(工程)?项目.*");
+        boolean knowledgeExplanation = text.matches(".*(什么是|是什么意思|如何定义|如何分类|管理流程|管理办法|规范|标准|规定|依据|原则|制度|政策|要求|区别).*");
+
+        return projectSubject && explicitListRequest && !knowledgeExplanation;
     }
 
     private java.util.Optional<AgentDecision> inheritTrafficContext(
