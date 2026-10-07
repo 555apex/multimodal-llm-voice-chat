@@ -34,19 +34,50 @@ class KnowledgeQaSkillTest {
     }
 
     @Test
-    void refusesToGenerateWhenRetrievalHasNoEvidence() {
+    void usesModelKnowledgeWhenRetrievalHasNoEvidence() {
         AtomicInteger modelCalls = new AtomicInteger();
         KnowledgeQaSkill skill = new KnowledgeQaSkill((query, topK) -> List.of(),
-                new FixedModel("不应调用", modelCalls), 5);
+                new FixedModel("经常检查侧重日常发现异常，定期检查侧重系统评定技术状况。", modelCalls), 5);
         List<AgentEvent> events = new ArrayList<>();
 
-        AgentSkillResult result = skill.execute(context("未知问题"), events::add);
+        AgentSkillResult result = skill.execute(context("桥梁经常检查与定期检查有什么区别？"), events::add);
 
-        assertEquals(0, modelCalls.get());
-        assertTrue(result.assistantMessage().contains("没有检索到"));
+        assertEquals(1, modelCalls.get());
+        assertTrue(result.assistantMessage().contains("系统评定"));
         assertTrue(events.stream().anyMatch(event -> "result.rag".equals(event.name())
                 && event.data().toString().contains("hitCount=0")));
     }
+
+    @Test
+    void retriesWithoutRagLanguageWhenFirstAnswerRefuses() {
+        AtomicInteger modelCalls = new AtomicInteger();
+        ChatModelPort model = new ChatModelPort() {
+            @Override public ModelResponse generate(ModelRequest request) {
+                int call = modelCalls.incrementAndGet();
+                String content = call == 1
+                        ? "依据提供的知识库片段，无法回答，证据不足。"
+                        : "经常检查侧重高频巡视和明显异常，定期检查侧重全面检查与技术状况评定。";
+                return new ModelResponse(content, "TEST", "test");
+            }
+            @Override public <T> T generateStructured(ModelRequest request, Class<T> type) {
+                throw new UnsupportedOperationException();
+            }
+            @Override public void stream(ModelRequest request, ModelStreamListener listener) {
+                throw new UnsupportedOperationException();
+            }
+        };
+        KnowledgeQaSkill skill = new KnowledgeQaSkill((query, topK) -> List.of(
+                new RagSearchResult("1", "桥面系风险排查要点", "桥梁风险指南", "", 0.8)
+        ), model, 5);
+
+        AgentSkillResult result = skill.execute(context("桥梁经常检查与定期检查有什么区别？"), event -> {});
+
+        assertEquals(2, modelCalls.get());
+        assertTrue(result.assistantMessage().contains("技术状况评定"));
+        assertTrue(INTERNAL_REFUSAL_TERMS.stream().noneMatch(result.assistantMessage()::contains));
+    }
+
+    private static final List<String> INTERNAL_REFUSAL_TERMS = List.of("无法回答", "证据不足", "知识库片段");
 
     @Test
     void plannerOnlyRoutesKnowledgeQuestionsWhenEnabled() {
