@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 import asyncio
 import logging
 import base64
@@ -61,6 +61,26 @@ def create_app(
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:
         application.state.ready = False
+        application.state.tts_retry_task = None
+
+        async def retry_tts_load() -> None:
+            while not application.state.tts_ready:
+                await asyncio.sleep(resolved_settings.tts_retry_seconds)
+                try:
+                    await load_tts(resolved_tts)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:
+                    LOGGER.warning(
+                        "TTS is still unavailable; retrying in %.1f seconds",
+                        resolved_settings.tts_retry_seconds,
+                    )
+                else:
+                    application.state.tts_ready = True
+                    application.state.ready = True
+                    LOGGER.info("TTS recovered after background retry")
+                    return
+
         if load_model:
             LOGGER.info(
                 "Loading faster-whisper model=%s device=%s compute_type=%s",
@@ -86,13 +106,21 @@ def create_app(
                 application.state.tts_ready = True
             except Exception:
                 LOGGER.exception('TTS loading failed; ASR remains independently available')
+                application.state.tts_retry_task = asyncio.create_task(retry_tts_load())
         if not load_model:
             application.state.asr_ready = True
             application.state.tts_ready = True
         application.state.ready = application.state.asr_ready or application.state.tts_ready
-        yield
-        application.state.ready = False
-        if hasattr(resolved_tts, 'close'): resolved_tts.close()
+        try:
+            yield
+        finally:
+            application.state.ready = False
+            retry_task = application.state.tts_retry_task
+            if retry_task is not None:
+                retry_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await retry_task
+            if hasattr(resolved_tts, 'close'): resolved_tts.close()
 
     application = FastAPI(
         title="Road Agent Speech Service",

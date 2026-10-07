@@ -9,6 +9,13 @@ def _positive_int(name: str, default: int) -> int:
     return value
 
 
+def _positive_float(name: str, default: float) -> float:
+    value = float(os.getenv(name, str(default)))
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     asr_model: str
@@ -38,6 +45,7 @@ class Settings:
     tts_sample_rate: int = 24000
     tts_reference_audio: str = ""
     tts_reference_text: str = ""
+    tts_retry_seconds: float = 10.0
 
     @classmethod
     def from_environment(cls) -> "Settings":
@@ -82,4 +90,5 @@ class Settings:
             tts_sample_rate=_positive_int("SPEECH_TTS_SAMPLE_RATE", 24000),
             tts_reference_audio=os.getenv("SPEECH_TTS_REFERENCE_AUDIO", "").strip(),
             tts_reference_text=os.getenv("SPEECH_TTS_REFERENCE_TEXT", "").strip(),
+            tts_retry_seconds=_positive_float("SPEECH_TTS_RETRY_SECONDS", 10.0),
         )

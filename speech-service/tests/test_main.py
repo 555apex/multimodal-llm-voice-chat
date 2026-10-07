@@ -1,3 +1,6 @@
+from dataclasses import replace
+import time
+
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -127,6 +130,28 @@ def test_tts_load_failure_keeps_asr_available():
         response=test_client.post('/v1/asr/transcriptions',files={'audio':('recording.webm',b'fake-audio','audio/webm')})
         assert response.status_code==200
         assert test_client.post('/v1/tts/speech',json={'text':'测试'}).status_code==503
+
+
+def test_tts_recovers_after_background_retry():
+    class RecoveringTts(FakeTts):
+        attempts = 0
+
+        def load(self):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise RuntimeError('TTS dependency is still starting')
+
+    engine = RecoveringTts()
+    retry_settings = replace(settings(), tts_retry_seconds=0.01)
+    with TestClient(create_app(retry_settings, FakeAsr(), engine)) as test_client:
+        deadline = time.monotonic() + 1
+        health = test_client.get('/health/ready').json()
+        while not health['ttsAvailable'] and time.monotonic() < deadline:
+            time.sleep(0.02)
+            health = test_client.get('/health/ready').json()
+        assert health['asrAvailable'] is True
+        assert health['ttsAvailable'] is True
+        assert engine.attempts >= 2
 
 def test_no_speech_and_decode_failure_have_distinct_statuses():
     from app.engines import InvalidAudioError
