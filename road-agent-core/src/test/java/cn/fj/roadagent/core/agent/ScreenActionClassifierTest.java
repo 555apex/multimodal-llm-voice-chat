@@ -13,6 +13,10 @@ class ScreenActionClassifierTest {
         var command = ScreenActionClassifier.classify("打开福州南监控").orElseThrow();
         assertEquals("OPEN_MONITOR", command.action());
         assertEquals("福州南", command.params().get("name"));
+        var quoted = ScreenActionClassifier.classify("打开福州南监控”").orElseThrow();
+        assertEquals("OPEN_MONITOR", quoted.action());
+        assertEquals("福州南", quoted.params().get("name"));
+        assertEquals("OPEN_MONITOR", ScreenActionClassifier.classify("“打开福州南监控？”").orElseThrow().action());
         assertFalse(ScreenActionClassifier.classify("福州南监控有多少台？").isPresent());
     }
 
@@ -42,5 +46,12 @@ class ScreenActionClassifierTest {
         assertFalse(ScreenActionClassifier.classify("如何打开现场指挥界面？").isPresent());
         assertFalse(ScreenActionClassifier.classify("不要打开现场指挥界面").isPresent());
         assertFalse(ScreenActionClassifier.classify("能否显示桥梁资源？").isPresent());
+    }
+
+    @Test
+    void capabilityQuestionExplainsTheCallbackWithoutExecuting() {
+        var decision = ScreenActionClassifier.classify("大屏跳转功能你是否具备?").orElseThrow();
+        assertNull(decision.action());
+        assertTrue(decision.clarification().contains("操作回调"));
     }
 }

@@ -27,8 +27,15 @@ final class ScreenActionClassifier {
 
     static Optional<Decision> classify(String message) {
         if (message == null || message.isBlank()) return Optional.empty();
-        String text = message.replaceAll("\\s+", "").replace('？', ' ').trim();
+        String text = message.replaceAll("[\\s“”‘’「」『』。！？?!]+", "")
+                .replace("\"", "").replace("'", "");
         if (text.length() > 120) return Optional.empty();
+        if (isCapabilityQuestion(text)) {
+            return Optional.of(new Decision(null, Map.of(),
+                    "我可以识别并提交大屏跳转指令，例如打开指定监控、现场指挥或物资界面。"
+                            + "实际跳转需要当前页面接入大屏方的操作回调；直接打开私有域名的普通网页通常没有这个回调，"
+                            + "可在已接入的大屏页面验证。"));
+        }
         // Explanatory, permission and negated questions are not execution orders.
         if (text.matches(".*(?:如何|怎么|怎样|为什么|是否|能否|可不可以|可以吗|不要|别|无需|不必|禁止).*")) {
             return Optional.empty();
@@ -92,6 +99,11 @@ final class ScreenActionClassifier {
 
     private static Decision action(String name, Map<String, Object> params) {
         return new Decision(name, params, null);
+    }
+
+    private static boolean isCapabilityQuestion(String text) {
+        return text.matches(".*(?:大屏跳转|大屏.*(?:操作|调度|控制)|(?:监控|叫应|物资).*跳转).*")
+                && text.matches(".*(?:是否|能否|能不能|有没有|有无|具备吗|支持吗|可以吗|能吗|你.*支持.*吗|你.*具备.*吗).*");
     }
 
     record Decision(String action, Map<String, Object> params, String clarification) { }
