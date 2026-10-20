@@ -49,6 +49,23 @@ public final class AgentRuntime implements ConverseWithAgentUseCase {
         try {
             List<ConversationMessage> history = memoryPort.load(command.conversationId()); // 加载历史记录
             emitStage(sink, "UNDERSTANDING", "正在理解问题"); // 前端显示：正在理解问题
+            var screenAction = ScreenActionClassifier.classify(command.message());
+            if (screenAction.isPresent()) {
+                var proposed = screenAction.get();
+                memoryPort.append(command.conversationId(),
+                        new ConversationMessage("user", command.message(), clock.instant()));
+                if (proposed.action() == null) {
+                    completeWithoutSkill(command, sink, runId, proposed.clarification());
+                } else {
+                    emit(sink, "intent.recognized", Map.of("intent", "SCREEN_ACTION"));
+                    emit(sink, "result.screen-action", Map.of(
+                            "action", proposed.action(), "params", proposed.params()));
+                    memoryPort.append(command.conversationId(), new ConversationMessage(
+                            "assistant", "大屏操作请求已交由页面处理，结果以页面回执为准。", clock.instant()));
+                    emit(sink, "run.completed", Map.of("runId", runId));
+                }
+                return;
+            }
             // （历史信息+用户信息）传递给大模型
             AgentDecision decision = intentPlanner.plan(
                     command.message(), history, latestTrafficContext(command.conversationId()));
