@@ -2,7 +2,7 @@
 
 > 当前页面位于历史master分支；请使用[roadagent-v2部署分支](https://github.com/555apex/multimodal-llm-voice-chat/tree/roadagent-v2)获取当前源码和工具。下文命令均克隆该部署分支。
 
-部署分支：**`roadagent-v2`**。2026-10-20核对DGX：提交`fc256088c21d517163238b5951c78ec577e52daf`，新增大屏操作白名单回调协议，并保留此前RAG补充回答、青绿色界面和nginx预检配置。GitHub同时保留迁移文档及部署工具，提交号与DGX基线可能不同。源码一致不等于构建出的镜像与现网镜像字节一致。
+部署分支：**`roadagent-v2`**。2026-10-20核对DGX：提交`d5b4d50769ed4afaba4cbc961f99acbe1eeb14b5`，包含大屏白名单回调、带引号命令识别及中性能力说明；保留此前RAG补充回答、青绿色界面和nginx预检配置。GitHub同时保留迁移文档及部署工具，提交号与DGX基线可能不同。源码一致不等于构建出的镜像与现网镜像字节一致。
 
 RoadAgent提供交通数据查询、设施预警、应急方案生成与三级审批、知识库RAG、ASR和流式TTS。Java负责事实统计、状态与库存约束，LLM负责意图和文本生成。默认数据库不自动初始化。
 
