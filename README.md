@@ -200,3 +200,7 @@ npm run dev -- --host 127.0.0.1
 GitHub可以帮助工程师远程获取最新代码、安装步骤、配置与校验工具；要完成全链路部署，仍需硬件支持组合、模型来源、数据副本、访问权限和现场验收。CPU BGE/ASR及两类加速器模板是移植工具，本次未在福州新机实测，不能称为已认证部署成品。
 
 参考（2026-10-20核对）：[vLLM Ascend模型支持](https://docs.vllm.ai/projects/ascend/en/latest/user_guide/support_matrix/supported_models.html)、[NVIDIA容器工具](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)、[Tailscale普通SSH](https://tailscale.com/docs/reference/ssh-over-tailscale)、[Tailscale SSH](https://tailscale.com/docs/features/tailscale-ssh)。
+
+## 11 大屏宿主回调验收
+
+新版提供五类白名单操作协议。宿主须注册处理器并返回匹配requestId的回执；独立页面未接入宿主时应提示执行条件，不宣称已完成。accepted不等于completed；超时、异常及非法回执都应显示失败或未确认。带引号明确指令、能力询问的中性解释及五类操作按[大屏验收清单](deploy/site/resources/samples/大屏回调验收清单.md)检查，现场范围含大屏时必须完成实际页面变化验证。
