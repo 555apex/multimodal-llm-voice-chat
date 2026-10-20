@@ -1,0 +1,9 @@
+ARG BASE_IMAGE=python:3.12-slim-bookworm
+FROM ${BASE_IMAGE}
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTHONUNBUFFERED=1
+RUN pip install --no-cache-dir torch==2.8.0 --index-url https://download.pytorch.org/whl/cpu && \
+    pip install --no-cache-dir fastapi==0.116.1 uvicorn==0.35.0 transformers==4.57.6 sentencepiece==0.2.1 safetensors==0.6.2
+WORKDIR /app
+COPY bge_cpu_service.py /app/bge_cpu_service.py
+EXPOSE 8001
+CMD ["python","bge_cpu_service.py","--device","cpu","--host","0.0.0.0","--port","8001","--embedding-model","/models/bge-m3-ft-final","--rerank-model","/models/bge-reranker-v2-m3-ft-final"]

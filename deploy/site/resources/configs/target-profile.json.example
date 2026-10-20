@@ -1,0 +1,17 @@
+{
+  "approved": false,
+  "reviewer": "",
+  "reviewed_at": "",
+  "os_id": "",
+  "os_version_id": "",
+  "architecture": "aarch64",
+  "npu_model": "",
+  "npu_count": 8,
+  "driver_version": "",
+  "cann_version": "",
+  "compatibility_evidence": "",
+  "npu_compose_sha256": "",
+  "images": {},
+  "llm_weights": {"path": "", "revision": "", "format": "", "manifest_sha256": ""},
+  "tts_validation": ""
+}

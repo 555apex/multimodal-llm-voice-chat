@@ -665,3 +665,86 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Host-screen teal palette. Keep portrait artwork and alert severity colors intact. */
+:root {
+  --screen-teal: #0aa6a2;
+  --screen-teal-bright: #25d4ca;
+  --screen-teal-line: rgba(38, 198, 194, .48);
+  --screen-surface: #062538;
+  --screen-surface-raised: #0a3142;
+}
+
+.command-header {
+  border-bottom-color: var(--screen-teal-line);
+  background: linear-gradient(90deg, rgba(3, 92, 100, .94), rgba(4, 115, 116, .87), rgba(3, 59, 80, .94));
+  box-shadow: 0 6px 30px rgba(0, 30, 42, .5), inset 0 -1px rgba(74, 233, 215, .2);
+}
+.command-header::after { background: linear-gradient(90deg, transparent, #36d7cb 22%, #78f1df 50%, #36d7cb 78%, transparent); box-shadow: 0 0 17px #17bdb1; }
+.command-brand-mark, .drawer-title-icon, .message-avatar {
+  border-color: rgba(96, 234, 220, .62);
+  background: linear-gradient(145deg, #087f98, #16b9a9);
+  box-shadow: 0 0 16px rgba(24, 197, 185, .22);
+}
+.agent-drawer {
+  border-color: rgba(50, 191, 187, .78);
+  background: rgba(4, 29, 47, .97);
+  box-shadow: -24px 0 70px rgba(0, 13, 29, .62), inset 0 0 42px rgba(23, 161, 160, .07);
+}
+.drawer-titlebar {
+  border-bottom-color: rgba(45, 188, 181, .42);
+  background: linear-gradient(90deg, rgba(6, 72, 85, .91), rgba(5, 40, 62, .65));
+}
+.drawer-titlebar small, .human-identity small, .chat-section-toolbar small { color: #8bbdc4; }
+.drawer-close:hover { background: rgba(49, 186, 175, .19); }
+.human-panel {
+  border-bottom-color: rgba(43, 188, 181, .39);
+  background: radial-gradient(circle at 20% 42%, rgba(16, 139, 153, .35), transparent 34%), linear-gradient(110deg, rgba(6, 57, 75, .96), rgba(4, 35, 56, .9));
+}
+.human-panel::before { background-image: linear-gradient(rgba(102, 224, 212, .24) 1px, transparent 1px), linear-gradient(90deg, rgba(102, 224, 212, .24) 1px, transparent 1px); }
+.human-details { border-color: rgba(51, 177, 176, .43); background: rgba(5, 39, 57, .68); }
+.human-capabilities li span { color: #36d9ca; text-shadow: 0 0 8px #36d9ca; }
+.human-state { color: #9ae4dc; border-color: rgba(48, 189, 183, .44); background: rgba(4, 50, 65, .75); }
+.agent-mode-tabs { border-bottom-color: rgba(44, 174, 172, .39); background: rgba(3, 29, 47, .93); }
+.agent-mode-tabs button { color: #8bb8c6; }
+.agent-mode-tabs button > span { color: #89d6d4; border-color: rgba(67, 183, 184, .46); }
+.agent-mode-tabs button.active { background: linear-gradient(180deg, rgba(16, 121, 123, .43), rgba(9, 70, 85, .34)); box-shadow: inset 0 -2px var(--screen-teal-bright); }
+.agent-mode-tabs button.active > span { border-color: #54dacf; background: #087f93; box-shadow: 0 0 10px rgba(36, 203, 191, .35); }
+.drawer-content { background: rgba(3, 28, 46, .88); }
+.chat-section-toolbar, .workflow-stage-toolbar, .facility-warning-toolbar { border-bottom-color: rgba(44, 178, 175, .29); background: rgba(6, 43, 60, .77); }
+.message-list::-webkit-scrollbar-thumb, .emergency-workspace-scroll::-webkit-scrollbar-thumb, .facility-warning-scroll::-webkit-scrollbar-thumb { background: #227b83; }
+.chat-message.user .message-avatar { border-color: rgba(83, 162, 165, .38); background: #164354; }
+.message-bubble { border-color: rgba(55, 151, 161, .44); background: rgba(10, 54, 73, .78); }
+.chat-message.user .message-bubble { border-color: rgba(67, 199, 187, .54); background: linear-gradient(135deg, rgba(12, 125, 143, .94), rgba(8, 99, 109, .94)); }
+.chat-composer { border-color: rgba(55, 172, 176, .59); background: rgba(7, 48, 66, .94); }
+.chat-composer:focus-within { border-color: var(--screen-teal-bright); box-shadow: 0 0 0 2px rgba(32, 201, 192, .14), 0 8px 24px rgba(0, 8, 26, .3); }
+.chat-composer textarea::placeholder { color: #81aeb9; }
+.chat-section-toolbar button, .example-prompts button, .message-speech-control button, .emergency-detail-back {
+  color: #a1dcda; border-color: rgba(59, 181, 182, .46); background: rgba(9, 74, 88, .55);
+}
+.example-prompts button:hover { color: #e3fffb; border-color: var(--screen-teal-bright); }
+.emergency-type-search { background: #062538; }
+.workflow-stage-toolbar select, .workflow-review-form select, .workflow-review-form textarea, .emergency-type-search select,
+.facility-warning-toolbar select, .facility-warning-toolbar button, .area-list-tools input, .area-list-tools select {
+  border-color: rgba(55, 161, 170, .49); background: #0a3a4b;
+}
+.workflow-stage-toolbar button, .area-pagination button { color: #a4d7d7; border-color: rgba(55, 161, 170, .42); background: rgba(8, 60, 78, .8); }
+.workflow-stage-toolbar button.active, .facility-warning-toolbar button.active { border-color: #31c8bd; background: #087f82; }
+.workflow-review-form, .professional-review-summary, .workflow-history-card, .emergency-query-state { border-color: rgba(51, 156, 163, .4); background: rgba(7, 49, 67, .75); }
+.online-dot, .progress-dot { background: #3ce4c4; box-shadow: 0 0 11px rgba(45, 226, 195, .58); }
+.chat-composer > button { border-color: #4ad8cf; background: linear-gradient(135deg, #0c8b9b, #0da995); box-shadow: 0 6px 16px rgba(10, 141, 148, .27); }
+.chat-composer .voice-input-button { color: #97e8e4; border-color: rgba(70, 192, 188, .53); background: rgba(11, 75, 88, .83); }
+.voice-input-control[data-status='recording'] .voice-input-button { border-color: #d9554d; background: #bf4039; }
+.voice-input-control[data-status='transcribing'] .voice-input-button { background: #614a23; }
+.traffic-answer, .dispatch-card, .facility-alert-card, .facility-action-form { border-color: rgba(50, 159, 165, .43); background: rgba(7, 45, 63, .78); }
+.facility-alert-card { background: linear-gradient(145deg, rgba(8, 54, 70, .92), rgba(5, 35, 56, .95)); }
+.facility-alert-card[data-level='EMERGENCY'] { border-color: rgba(217, 78, 68, .55); }
+.traffic-table-wrap { border-color: rgba(51, 153, 157, .42); }
+.traffic-table th { color: #a2d6d7; border-bottom-color: rgba(51, 153, 157, .42); background: rgba(10, 70, 82, .84); }
+.traffic-table td { border-bottom-color: rgba(51, 120, 132, .29); }
+.traffic-table tbody tr:hover { background: rgba(20, 107, 112, .25); }
+.facility-alert-fact > div, .facility-alert-remark { background: rgba(4, 35, 53, .74); }
+.facility-alert-remark { border-left-color: #3cb6ae; }
+.facility-status { color: #9be0d9; border-color: rgba(65, 180, 175, .45); }
+.facility-status[data-status='CONFIRMED'] { color: #ffcf79; border-color: rgba(215, 155, 55, .42); }
+.facility-confirm-button { border-color: #22bdb5; background: #0b858d; }

@@ -1,0 +1,10 @@
+{
+  "hardware_review": {"approved": false, "evidence": ""},
+  "artifacts": [
+    {"role": "base-images", "name": "ARM64 base images", "file": "images-base-arm64.tar", "sha256": ""},
+    {"role": "reviewed-extra-images", "name": "Reviewed MySQL CPU NPU images", "file": "images-extra-reviewed.tar", "sha256": ""},
+    {"role": "speech-retrieval-weights", "name": "ASR TTS BGE weights", "file": "models-asr-tts-bge.tar", "sha256": ""},
+    {"role": "llm-weights", "name": "Supported LLM weights", "file": "llm-reviewed-weights.tar", "sha256": ""},
+    {"role": "encrypted-data", "name": "Encrypted database and KB backup", "file": "site-data.tar.gpg", "sha256": ""}
+  ]
+}

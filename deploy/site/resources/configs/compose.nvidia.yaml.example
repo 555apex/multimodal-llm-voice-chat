@@ -1,0 +1,21 @@
+# Review the GPU architecture, driver, CUDA/runtime, exact model and VRAM plan first.
+# This template is deliberately blocked until a qualified engineer replaces commands.
+services:
+  qwen:
+    image: ${LLM_IMAGE:?}
+    gpus: all
+    ipc: host
+    command: ["REPLACE_WITH_REVIEWED_LLM_COMMAND"]
+    environment: {HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1"}
+    volumes: ["${DATA_ROOT}/models:/models:ro"]
+    networks: [private]
+    restart: unless-stopped
+  tts:
+    image: ${TTS_IMAGE:?}
+    gpus: all
+    ipc: host
+    command: ["REPLACE_WITH_REVIEWED_TTS_COMMAND"]
+    environment: {HF_HUB_OFFLINE: "1", TRANSFORMERS_OFFLINE: "1"}
+    volumes: ["${DATA_ROOT}/models:/models:ro"]
+    networks: [private]
+    restart: unless-stopped

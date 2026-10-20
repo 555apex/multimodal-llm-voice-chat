@@ -1,0 +1,14 @@
+# Build on an Internet-connected ARM64 host before departure; freeze resulting ID.
+ARG BASE_IMAGE=python:3.12-slim-bookworm
+FROM ${BASE_IMAGE}
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY speech-service/requirements.txt /tmp/requirements.txt
+# No qwen-tts/PyTorch/CUDA is needed for remote vLLM-Omni TTS mode.
+RUN sed '/^qwen-tts==/d' /tmp/requirements.txt > /tmp/cpu.txt && pip install --no-cache-dir -r /tmp/cpu.txt
+COPY speech-service/app /app/app
+RUN groupadd -g 10001 speech && useradd -u 10001 -g speech -m speech
+USER speech
+EXPOSE 8091
+CMD ["uvicorn","app.main:create_app","--factory","--host","0.0.0.0","--port","8091"]

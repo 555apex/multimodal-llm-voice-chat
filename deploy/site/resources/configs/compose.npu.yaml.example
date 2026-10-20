@@ -1,0 +1,20 @@
+# NOT READY TO EXECUTE. Replace image locks, command arrays and device mappings
+# using the vendor-approved profile for the exact NPU/OS/CANN combination.
+# Copy to SITE_ROOT/compose.npu.yaml only after review; gate also checks its SHA256.
+services:
+  qwen:
+    image: ${LLM_IMAGE:?set vendor-validated image}
+    command: ["REPLACE_WITH_REVIEWED_LLM_COMMAND"]
+    devices: ["/dev/REPLACE_WITH_VALIDATED_NPU_DEVICE"]
+    volumes: ["${DATA_ROOT}/models:/models:ro", "/usr/local/Ascend/driver:/usr/local/Ascend/driver:ro"]
+    networks: [private]
+    restart: unless-stopped
+    shm_size: 16gb
+  tts:
+    image: ${TTS_IMAGE:?set vendor-validated vLLM-Omni NPU image}
+    command: ["REPLACE_WITH_REVIEWED_TTS_COMMAND"]
+    devices: ["/dev/REPLACE_WITH_VALIDATED_NPU_DEVICE"]
+    volumes: ["${DATA_ROOT}/models:/models:ro", "/usr/local/Ascend/driver:/usr/local/Ascend/driver:ro"]
+    networks: [private]
+    restart: unless-stopped
+    shm_size: 8gb
