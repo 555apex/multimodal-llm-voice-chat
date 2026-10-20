@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { streamAgentMessage } from '../api/agentApi'
 import { decideDispatch } from '../api/dispatchApi'
 import { useSpeechStore } from './speech'
+import { submitScreenAction } from '../utils/screenAction'
 import type { AgentEvent, AgentMessage, AgentStage, AgentToolProgress, RagResult, RunFailedData } from '../types/agent'
 import type { DispatchPlan } from '../types/dispatch'
 import type { TrafficQueryResult } from '../types/traffic'
@@ -74,9 +75,25 @@ export const useAgentStore = defineStore('agent', {
       this.persist()
 
       try {
+        let screenAction: unknown
         await streamAgentMessage(this.conversationId, userMessage.content, (event) => {
+          if (event.name === 'result.screen-action') {
+            screenAction = event.data
+            return
+          }
           this.applyEvent(assistantMessage.id, event)
         })
+        if (screenAction !== undefined) {
+          const receipt = await submitScreenAction(screenAction)
+          const target = this.findMessage(assistantMessage.id)
+          target.content = receipt.message
+          target.speechText = receipt.message
+          target.status = 'completed'
+          if (useSpeechStore().autoReadEnabled && useSpeechStore().surfaceActive) {
+            this.autoSpokenMessageId = target.id
+            void useSpeechStore().speak(target.id, receipt.message)
+          }
+        }
       } catch (error) {
         useSpeechStore().stop()
         const target = this.findMessage(assistantMessage.id)
