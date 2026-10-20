@@ -33,8 +33,7 @@ final class ScreenActionClassifier {
         if (isCapabilityQuestion(text)) {
             return Optional.of(new Decision(null, Map.of(),
                     "我可以识别并提交大屏跳转指令，例如打开指定监控、现场指挥或物资界面。"
-                            + "实际跳转需要当前页面接入大屏方的操作回调；直接打开私有域名的普通网页通常没有这个回调，"
-                            + "可在已接入的大屏页面验证。"));
+                            + "此操作在已接入的大屏页面执行。"));
         }
         // Explanatory, permission and negated questions are not execution orders.
         if (text.matches(".*(?:如何|怎么|怎样|为什么|是否|能否|可不可以|可以吗|不要|别|无需|不必|禁止).*")) {

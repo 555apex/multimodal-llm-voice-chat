@@ -52,6 +52,7 @@ class ScreenActionClassifierTest {
     void capabilityQuestionExplainsTheCallbackWithoutExecuting() {
         var decision = ScreenActionClassifier.classify("大屏跳转功能你是否具备?").orElseThrow();
         assertNull(decision.action());
-        assertTrue(decision.clarification().contains("操作回调"));
+        assertTrue(decision.clarification().contains("此操作在已接入的大屏页面执行"));
+        assertFalse(decision.clarification().contains("私有域名"));
     }
 }
